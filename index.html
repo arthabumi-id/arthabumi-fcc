@@ -818,7 +818,7 @@ function renderMaster() {
       <button class="btn-primary" style="margin-bottom:12px" onclick="openDrawer('bank')"><i class="ti ti-plus"></i> Tambah Rekening</button>
       ${state.banks.map(b => {
         const r = getSaldo(b.NAMA);
-        return `<div class="card acct-card" style="margin-bottom:8px;padding:10px 12px" onclick="openAccountDetail('bank','${esc(b.NAMA)}')">
+        return `<div class="card acct-card" style="margin-bottom:8px;padding:10px 12px" data-acctype="bank" data-accnama="${esc(b.NAMA)}">
           <div style="display:flex;align-items:center;justify-content:space-between">
             <div style="flex:1;min-width:0">
               <div style="font-size:13px;font-weight:600">${esc(b.NAMA)}</div>
@@ -843,7 +843,7 @@ function renderMaster() {
       ${state.ccs.map(c => {
         const out = getCCOut(c.NAMA), res = state.reserveFunds[c.NAMA] || 0;
         const txnCount = state.txns.filter(t=>t.REKENING===c.NAMA).length;
-        return `<div class="card acct-card" style="margin-bottom:8px;padding:10px 12px" onclick="openAccountDetail('cc','${esc(c.NAMA)}')">
+        return `<div class="card acct-card" style="margin-bottom:8px;padding:10px 12px" data-acctype="cc" data-accnama="${esc(c.NAMA)}">
           <div style="display:flex;align-items:center;justify-content:space-between">
             <div style="flex:1;min-width:0">
               <div style="font-size:13px;font-weight:600">${esc(c.NAMA)}</div>
@@ -993,6 +993,17 @@ function switchMasterTab(tab) {
   document.getElementById('mTab-' + tab).classList.add('active');
   renderMaster();
 }
+
+// Event delegation untuk klik akun detail (lebih reliable dari onclick di template)
+document.getElementById('masterContent').addEventListener('click', function(e) {
+  const card = e.target.closest('.acct-card');
+  if (!card) return;
+  // Jangan trigger kalau klik tombol Edit/Hapus
+  if (e.target.closest('button')) return;
+  const type = card.dataset.acctype;
+  const nama = card.dataset.accnama;
+  if (type && nama) openAccountDetail(type, nama);
+});
 
 // ── TRANSFER PAGE ─────────────────────────────────────
 function renderTransferPage() {
@@ -1279,4 +1290,4 @@ document.querySelector('.topbar-title').addEventListener('touchend',()=>clearTim
 document.querySelector('.topbar-title').addEventListener('click',()=>openDrawer('settings'));
 </script>
 </body>
-</html>
+</html>                                                                                                                                                                                                                                         
