@@ -963,7 +963,7 @@ function openAccountDetail(type, nama) {
 
   // Bind filter changes
   ['ad_from','ad_to'].forEach(id => {
-    document.getElementById(id).addEventListener('change', acctFilter);
+    document.getElementById(id).addEventListener('change', () => { if(typeof acctFilter==='function') acctFilter(); });
   });
 
   window._acctJenis = '';
@@ -1186,7 +1186,7 @@ function openDrawer(mode, editId = null) {
       </div>
       <div class="form-group"><label class="form-label">Nilai Kontrak (Rp)</label><input class="form-input" type="number" id="fp_nilai" value="${t?t.NILAI_CONTRACT:''}" placeholder="0" inputmode="numeric"></div>
       <button class="btn-primary" onclick="saveDrawer()"><i class="ti ti-device-floppy"></i> Simpan</button>
-      ${eid?`<button class="btn-secondary" onclick="deleteItem('projects','${eid}','MASTER_PROJECT');closeDrawer()">Hapus Project</button>`:''}
+      ${editId?`<button class="btn-secondary" onclick="deleteItem('projects','${editId}','MASTER_PROJECT');closeDrawer()">Hapus Project</button>`:''}
     `;
   } else if (mode === 'bank') {
     const b = editId ? state.banks.find(x=>x.ID===editId) : null;
@@ -1197,7 +1197,7 @@ function openDrawer(mode, editId = null) {
         <div class="form-group"><label class="form-label">Tipe</label><select class="form-input" id="fb_tipe"><option ${!b||b.TIPE==='Bank'?'selected':''}>Bank</option><option ${b&&b.TIPE==='Kas'?'selected':''}>Kas</option></select></div>
       </div>
       <button class="btn-primary" onclick="saveDrawer()"><i class="ti ti-device-floppy"></i> Simpan</button>
-      ${eid?`<button class="btn-secondary" onclick="deleteItem('banks','${eid}','MASTER_BANK');closeDrawer()">Hapus Rekening</button>`:''}
+      ${editId?`<button class="btn-secondary" onclick="deleteItem('banks','${editId}','MASTER_BANK');closeDrawer()">Hapus Rekening</button>`:''}
     `;
   } else if (mode === 'cc') {
     const c = editId ? state.ccs.find(x=>x.ID===editId) : null;
@@ -1209,7 +1209,7 @@ function openDrawer(mode, editId = null) {
       </div>
       <div class="form-group"><label class="form-label">Limit (Rp)</label><input class="form-input" type="number" id="fc_limit" value="${c?c.LIMIT:0}" placeholder="0" inputmode="numeric"></div>
       <button class="btn-primary" onclick="saveDrawer()"><i class="ti ti-device-floppy"></i> Simpan</button>
-      ${eid?`<button class="btn-secondary" onclick="deleteItem('ccs','${eid}','MASTER_CC');closeDrawer()">Hapus Kartu</button>`:''}
+      ${editId?`<button class="btn-secondary" onclick="deleteItem('ccs','${editId}','MASTER_CC');closeDrawer()">Hapus Kartu</button>`:''}
     `;
   } else if (mode === 'kat') {
     const k = editId ? state.kategori.find(x=>x.ID===editId) : null;
@@ -1220,7 +1220,7 @@ function openDrawer(mode, editId = null) {
         <div class="form-group"><label class="form-label">Tipe</label><select class="form-input" id="fk_tipe"><option ${!k||k.TIPE==='Pemasukan'?'selected':''}>Pemasukan</option><option ${k&&k.TIPE==='Pengeluaran'?'selected':''}>Pengeluaran</option></select></div>
       </div>
       <button class="btn-primary" onclick="saveDrawer()"><i class="ti ti-device-floppy"></i> Simpan</button>
-      ${eid?`<button class="btn-secondary" onclick="deleteItem('kategori','${eid}','MASTER_KATEGORI');closeDrawer()">Hapus Kategori</button>`:''}
+      ${editId?`<button class="btn-secondary" onclick="deleteItem('kategori','${editId}','MASTER_KATEGORI');closeDrawer()">Hapus Kategori</button>`:''}
     `;
   } else if (mode === 'settings') {
     document.getElementById('drawerBody').innerHTML = `
@@ -1284,13 +1284,4 @@ function editCC(id){openDrawer('cc',id);}
 function editKat(id){openDrawer('kat',id);}
 function setApiUrl(){const url=prompt('API URL:',API_URL);if(url!==null){API_URL=url.trim();localStorage.setItem('fcc_api_url',API_URL);showToast('API URL disimpan','success');closeDrawer();syncAll();}}
 function showToast(msg,type){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(type||'success');setTimeout(()=>t.classList.add('show'),10);setTimeout(()=>t.classList.remove('show'),2800);}
-function goPage(page){state.currentPage=page;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+page).classList.add('active');document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));const idx=['dashboard','transaksi','transfer','project','master'].indexOf(page);if(idx>=0)document.querySelectorAll('.nav-item')[idx].classList.add('active');document.getElementById('content').scrollTop=0;if(page==='master')renderMaster();if(page==='transfer')renderTransferPage();}
-function renderAll(){renderDashboard();filterTxn();renderProject();if(state.currentPage==='master')renderMaster();if(state.currentPage==='transfer')renderTransferPage();}
-if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{});}
-let logoTimer;
-document.querySelector('.topbar-title').addEventListener('touchstart',()=>{logoTimer=setTimeout(()=>openDrawer('settings'),800);});
-document.querySelector('.topbar-title').addEventListener('touchend',()=>clearTimeout(logoTimer));
-document.querySelector('.topbar-title').addEventListener('click',()=>openDrawer('settings'));
-</script>
-</body>
-</html>                                                                                                                                                                                                                                         
+function goPage(pa
