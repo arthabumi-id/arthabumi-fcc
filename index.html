@@ -919,7 +919,7 @@ function openAccountDetail(type, nama) {
         </div>
         <div class="detail-sum-item">
           <div class="detail-sum-label">${isCC?'Tagihan':'Saldo'}</div>
-          <div class="detail-sum-val" style="color:${isCC?(saldo<0?'var(--green)':'var(--red)'):(saldo>=0?'var(--green)':'var(--red)'}">
+          <div class="detail-sum-val" style="color:${isCC?(saldo<0?'var(--green)':'var(--red)'):(saldo>=0?'var(--green)':'var(--red)')}">
             ${isCC?fmtS(Math.abs(saldo)):fmtS(saldo)}
           </div>
         </div>
@@ -1164,7 +1164,7 @@ function openDrawer(mode, editId = null) {
       <button class="btn-primary" onclick="saveDrawer()">Simpan ke Sheets</button>
       ${editId ? `<button class="btn-secondary" style="color:var(--red)" onclick="deleteItem('txns','${editId}','TRANSAKSI')">Hapus Transaksi</button>` : ''}
     `;
-  } } else if (mode === 'proj') {
+  } else if (mode === 'proj') {
     const t = editId ? state.projects.find(x=>x.ID===editId) : null;
     document.getElementById('drawerBody').innerHTML = `
       <div class="form-group"><label class="form-label">Nama Project</label><input class="form-input" id="fp_nama" value="${t?esc(t.NAMA):''}" placeholder="Nama project..."></div>
@@ -1271,7 +1271,6 @@ function editKat(id){openDrawer('kat',id);}
 function setApiUrl(){const url=prompt('API URL:',API_URL);if(url!==null){API_URL=url.trim();localStorage.setItem('fcc_api_url',API_URL);showToast('API URL disimpan','success');closeDrawer();syncAll();}}
 function showToast(msg,type){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(type||'success');setTimeout(()=>t.classList.add('show'),10);setTimeout(()=>t.classList.remove('show'),2800);}
 function goPage(page){state.currentPage=page;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+page).classList.add('active');document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));const idx=['dashboard','transaksi','transfer','project','master'].indexOf(page);if(idx>=0)document.querySelectorAll('.nav-item')[idx].classList.add('active');document.getElementById('content').scrollTop=0;if(page==='master')renderMaster();if(page==='transfer')renderTransferPage();}
-let drawerMode=null,drawerEditId=null;
 function renderAll(){renderDashboard();filterTxn();renderProject();if(state.currentPage==='master')renderMaster();if(state.currentPage==='transfer')renderTransferPage();}
 if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{});}
 let logoTimer;
