@@ -267,3 +267,70 @@ function json(obj) {
     .createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
 }
+
+// ── JALANKAN SEKALI untuk force-insert master data ──────────
+function forceSeedMaster() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const now = new Date().toISOString();
+
+  // MASTER_BANK
+  const bankSheet = ss.getSheetByName('MASTER_BANK');
+  if (bankSheet.getLastRow() <= 1) {
+    [['RK01','BCA 082','Bank','BCA',0,now],
+     ['RK02','BCA 552','Bank','BCA',0,now],
+     ['RK03','SEABANK-EDDY','Bank','SeaBank',0,now],
+     ['RK04','SEABANK-RONAH','Bank','SeaBank',0,now],
+     ['RK05','CASH','Kas','Cash',0,now]
+    ].forEach(r => bankSheet.appendRow(r));
+    Logger.log('Bank: seeded');
+  } else {
+    Logger.log('Bank: sudah ada ' + (bankSheet.getLastRow()-1) + ' rows');
+  }
+
+  // MASTER_CC
+  const ccSheet = ss.getSheetByName('MASTER_CC');
+  if (ccSheet.getLastRow() <= 1) {
+    [['RK06','CC-BCA-KRIS','BCA',20000000,25,now],
+     ['RK07','CC-BCA-JCB','BCA',30000000,25,now],
+     ['RK08','CC-CIMB-JCB','CIMB',15000000,25,now],
+     ['RK09','CC-CIMB-ACCOR','CIMB',10000000,25,now],
+     ['RK10','CC-CIMB-WORLD','CIMB',0,25,now],
+     ['RK11','CC-HSBC-7118','HSBC',0,25,now],
+     ['RK12','CC-HSBC-VISA','HSBC',0,25,now],
+     ['RK13','CC-MAYBANK-BMW','MAYBANK',0,25,now],
+     ['RK14','CC-MAYBANK-INFINITE','MAYBANK',0,25,now],
+     ['RK15','CC-BNI-JCB','BNI',0,25,now],
+     ['RK16','CC-DANAMON-JCB','DANAMON',0,25,now]
+    ].forEach(r => ccSheet.appendRow(r));
+    Logger.log('CC: seeded');
+  } else {
+    Logger.log('CC: sudah ada ' + (ccSheet.getLastRow()-1) + ' rows');
+  }
+
+  // MASTER_KATEGORI
+  const katSheet = ss.getSheetByName('MASTER_KATEGORI');
+  if (katSheet.getLastRow() <= 1) {
+    [['K01','PEMASUKAN','DP Project','Pemasukan',now],
+     ['K02','PEMASUKAN','Pelunasan','Pemasukan',now],
+     ['K03','PEMASUKAN','Fee Konsultasi','Pemasukan',now],
+     ['K04','PEMASUKAN','Bunga','Pemasukan',now],
+     ['K05','PEMASUKAN','Kas dari Novi','Pemasukan',now],
+     ['K06','PROJECT','Material','Pengeluaran',now],
+     ['K07','PROJECT','Gaji Tim','Pengeluaran',now],
+     ['K08','PROJECT','Gaji Herman','Pengeluaran',now],
+     ['K09','PROJECT','Transport','Pengeluaran',now],
+     ['K10','PROJECT','Subkontraktor','Pengeluaran',now],
+     ['K11','OPERASIONAL','Bensin Fino','Pengeluaran',now],
+     ['K12','OPERASIONAL','Internet','Pengeluaran',now],
+     ['K13','PRIBADI','Makan','Pengeluaran',now],
+     ['K14','PRIBADI','Asuransi','Pengeluaran',now],
+     ['K15','FINANCIAL','Pajak','Pengeluaran',now],
+     ['K16','FINANCIAL','Admin Bank','Pengeluaran',now]
+    ].forEach(r => katSheet.appendRow(r));
+    Logger.log('Kategori: seeded');
+  } else {
+    Logger.log('Kategori: sudah ada ' + (katSheet.getLastRow()-1) + ' rows');
+  }
+
+  Logger.log('Done. Cek Execution Log untuk hasilnya.');
+}
