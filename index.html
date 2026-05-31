@@ -315,8 +315,8 @@ const SHEET_ID = '1BYXyk0XlyeuelrIa6KKch8A79z7yvOG3_RjSxft7JTo';
 // sha256pin('PIN_KAMU').then(h => console.log(h))
 const VALID_PIN_HASHES = [
   '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4', // 1234
-  'ef797c8118f02dfb649607dd5d3f8c7623048c9c063d532cc95c5ed7a898a64f', // 5678
-  '1bf5f394b74ff0f07e02b52568c1e8f93b1ac3b614e90faa3b6e09d13b3a1f98', // 9999
+  'f8638b979b2f4f793ddb6dbd197e0ee25a7a6ea32b0ae22f5e3c5d119d839e75', // 5678
+  '888df25ae35772424a560c7152a1de794440e0ea5cfee62828333a456a506e05',  // 9999
 ];
 async function sha256pin(pin) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pin));
