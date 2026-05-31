@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="theme-color" content="#0f0f13">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="FCC Arthabumi">
+<title>FCC Arthabumi</title>
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<style>
+:root{
+  --bg:#0f0f13;--bg2:#16161d;--bg3:#1e1e28;--bg4:#252532;
+  --border:#2e2e3e;--border2:#3a3a4e;
+  --text:#e8e8f0;--text2:#9090a8;--text3:#5a5a72;
+  --green:#2dd4a0;--red:#f06a6a;--blue:#5b9cf6;--amber:#f5a623;--purple:#a78bfa;
+  --radius:10px;--radius-lg:14px;
+  --font:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;overflow:hidden}
+body{display:flex;flex-direction:column}
+
+/* LOGIN */
+#loginScreen{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:1.5rem;padding:2rem}
+.login-logo{font-size:48px;margin-bottom:.5rem}
+.login-title{font-size:22px;font-weight:700;color:var(--text);letter-spacing:-.5px}
+.login-sub{font-size:13px;color:var(--text2);text-align:center}
+.pin-input{background:var(--bg3);border:1.5px solid var(--border2);border-radius:var(--radius);padding:14px 20px;font-size:24px;color:var(--text);text-align:center;width:200px;letter-spacing:8px;outline:none;font-family:monospace}
+.pin-input:focus{border-color:var(--green)}
+.pin-btn{background:var(--green);color:#0f0f13;border:none;border-radius:var(--radius);padding:14px 32px;font-size:15px;font-weight:700;cursor:pointer;width:200px}
+.pin-btn:active{opacity:.85}
+.pin-err{color:var(--red);font-size:12px;min-height:18px}
+
+/* MAIN APP */
+#app{display:none;flex-direction:column;height:100%;overflow:hidden}
+
+/* TOPBAR */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0}
+.topbar-title{font-size:16px;font-weight:700;color:var(--text)}
+.topbar-sub{font-size:10px;color:var(--text2)}
+.topbar-right{display:flex;align-items:center;gap:10px}
+.sync-btn{background:transparent;border:1px solid var(--border2);border-radius:8px;padding:6px 10px;color:var(--text2);cursor:pointer;font-size:12px;display:flex;align-items:center;gap:4px}
+.sync-btn:active{background:var(--bg3)}
+.online-dot{width:7px;height:7px;border-radius:50%;background:var(--green);flex-shrink:0}
+
+/* CONTENT */
+.content{flex:1;overflow-y:auto;overflow-x:hidden;padding:0 0 80px;-webkit-overflow-scrolling:touch}
+.page{display:none;padding:16px}
+.page.active{display:block}
+
+/* BOTTOM NAV */
+.bottom-nav{display:flex;background:var(--bg2);border-top:1px solid var(--border);flex-shrink:0;padding-bottom:env(safe-area-inset-bottom)}
+.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;padding:8px 4px;cursor:pointer;gap:3px;border:none;background:transparent;color:var(--text3);font-family:var(--font)}
+.nav-item.active{color:var(--green)}
+.nav-item i{font-size:20px}
+.nav-item span{font-size:10px;font-weight:500}
+
+/* CARDS */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;margin-bottom:12px}
+.card-title{font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px}
+.metric-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.metric{background:var(--bg3);border-radius:var(--radius);padding:12px}
+.metric-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px}
+.metric-value{font-size:20px;font-weight:700;color:var(--text);line-height:1}
+.metric-sub{font-size:10px;color:var(--text2);margin-top:4px}
+.metric.wide{grid-column:1/-1}
+
+/* TABLES */
+.table-wrap{overflow-x:auto;margin:-2px}
+table{width:100%;border-collapse:collapse;font-size:12px;min-width:400px}
+th{color:var(--text3);font-weight:600;padding:8px;text-align:left;border-bottom:1px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.3px}
+td{padding:9px 8px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+
+/* BADGES */
+.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600}
+.badge-green{background:#1a3d31;color:var(--green)}
+.badge-red{background:#3d1a1a;color:var(--red)}
+.badge-blue{background:#1a2d4d;color:var(--blue)}
+.badge-amber{background:#3d2d0a;color:var(--amber)}
+.badge-purple{background:#2a1a4d;color:var(--purple)}
+
+/* AMOUNTS */
+.pos{color:var(--green)!important}
+.neg{color:var(--red)!important}
+.info{color:var(--blue)!important}
+.warn{color:var(--amber)!important}
+
+/* FAB */
+.fab{position:fixed;right:20px;bottom:90px;width:52px;height:52px;border-radius:50%;background:var(--green);border:none;color:#0f0f13;font-size:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(45,212,160,.35);z-index:50}
+.fab:active{transform:scale(.92)}
+
+/* MODAL / DRAWER */
+.drawer-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;backdrop-filter:blur(4px)}
+.drawer-bg.open{display:flex;align-items:flex-end}
+.drawer{background:var(--bg2);border-radius:18px 18px 0 0;width:100%;max-height:90vh;overflow-y:auto;padding:20px 16px;padding-bottom:calc(20px + env(safe-area-inset-bottom))}
+.drawer-handle{width:36px;height:4px;background:var(--border2);border-radius:2px;margin:0 auto 16px}
+.drawer-title{font-size:16px;font-weight:700;margin-bottom:16px;color:var(--text)}
+.form-group{margin-bottom:14px}
+.form-label{font-size:11px;color:var(--text2);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;display:block}
+.form-input{width:100%;background:var(--bg3);border:1.5px solid var(--border);border-radius:var(--radius);padding:11px 13px;font-size:14px;color:var(--text);font-family:var(--font);outline:none;-webkit-appearance:none}
+.form-input:focus{border-color:var(--green)}
+select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24'%3E%3Cpath fill='%239090a8' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:36px;cursor:pointer}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn-primary{width:100%;background:var(--green);color:#0f0f13;border:none;border-radius:var(--radius);padding:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font);margin-top:6px}
+.btn-primary:active{opacity:.85}
+.btn-secondary{width:100%;background:transparent;color:var(--text2);border:1.5px solid var(--border2);border-radius:var(--radius);padding:12px;font-size:14px;cursor:pointer;font-family:var(--font);margin-top:8px}
+.btn-danger{background:#3d1a1a;color:var(--red);border:1px solid #5a2a2a;border-radius:8px;padding:5px 10px;font-size:11px;cursor:pointer;font-family:var(--font)}
+
+/* ALERT TOAST */
+.toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:var(--bg4);border:1px solid var(--border2);border-radius:10px;padding:10px 18px;font-size:13px;font-weight:500;z-index:200;white-space:nowrap;opacity:0;transition:opacity .2s}
+.toast.show{opacity:1}
+.toast.success{border-color:#2dd4a050;color:var(--green)}
+.toast.error{border-color:#f06a6a50;color:var(--red)}
+
+/* TRANSFER PAGE */
+.transfer-tabs{display:flex;background:var(--bg3);border-radius:var(--radius);padding:3px;margin-bottom:16px}
+.ttab{flex:1;padding:8px;text-align:center;font-size:12px;font-weight:600;color:var(--text2);border-radius:8px;cursor:pointer;border:none;background:transparent;font-family:var(--font)}
+.ttab.active{background:var(--bg4);color:var(--text);border:1px solid var(--border)}
+.preview-box{background:var(--bg3);border-radius:var(--radius);padding:12px;margin-top:10px;border-left:3px solid var(--green)}
+.preview-row{display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px;color:var(--text2)}
+.preview-row:last-child{margin-bottom:0}
+.preview-row strong{color:var(--text)}
+
+/* LIST ITEMS */
+.list-item{display:flex;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)}
+.list-item:last-child{border-bottom:none}
+.list-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;margin-right:12px}
+.list-body{flex:1;min-width:0}
+.list-title{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.list-sub{font-size:11px;color:var(--text2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.list-right{text-align:right;flex-shrink:0;margin-left:10px}
+
+/* SETTINGS */
+.settings-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)}
+.settings-row:last-child{border-bottom:none}
+.settings-label{font-size:13px;color:var(--text)}
+.settings-sub{font-size:11px;color:var(--text3);margin-top:2px}
+
+/* RESERVE PROGRESS */
+.res-bar-wrap{height:4px;background:var(--border);border-radius:2px;margin-top:8px;overflow:hidden}
+.res-bar{height:100%;border-radius:2px;transition:width .4s}
+
+/* LOADING */
+.loading{display:flex;align-items:center;justify-content:center;padding:2rem;color:var(--text2);font-size:13px;gap:10px}
+.spin{width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+.empty{text-align:center;padding:2rem;color:var(--text3);font-size:13px}
+
+/* PULL TO REFRESH INDICATOR */
+.ptr{text-align:center;padding:8px;font-size:11px;color:var(--text3)}
+</style>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div id="loginScreen">
+  <div class="login-logo">🏗</div>
+  <div>
+    <div class="login-title" style="text-align:center">FCC Arthabumi</div>
+    <div class="login-sub" style="margin-top:4px">Financial Control Center</div>
+  </div>
+  <input class="pin-input" type="password" id="pinInput" maxlength="4" placeholder="••••" inputmode="numeric" pattern="[0-9]*">
+  <button class="pin-btn" onclick="doLogin()">Masuk</button>
+  <div class="pin-err" id="pinErr"></div>
+  <div style="font-size:11px;color:var(--text3);text-align:center;max-width:240px">
+    Masukkan PIN Anda. Hubungi Eddy untuk mendapatkan PIN akses.
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app">
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div>
+      <div class="topbar-title">🏗 FCC Arthabumi</div>
+      <div class="topbar-sub" id="topbarSub">Memuat data...</div>
+    </div>
+    <div class="topbar-right">
+      <div class="online-dot" id="onlineDot" style="background:var(--text3)"></div>
+      <button class="sync-btn" onclick="syncAll()"><i class="ti ti-refresh"></i> Sync</button>
+    </div>
+  </div>
+
+  <!-- CONTENT -->
+  <div class="content" id="content">
+    <!-- DASHBOARD -->
+    <div class="page active" id="page-dashboard">
+      <div id="dashMetrics"></div>
+      <div id="dashSaldo"></div>
+      <div id="dashCC"></div>
+      <div id="dashRecent"></div>
+    </div>
+
+    <!-- TRANSAKSI -->
+    <div class="page" id="page-transaksi">
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <input class="form-input" style="flex:1;padding:9px 12px;font-size:13px" id="txnSearch" placeholder="🔍 Cari project / notes..." oninput="filterTxn()">
+        <select class="form-input" style="width:auto;padding:9px 30px 9px 10px;font-size:12px" id="txnTipeFilter" onchange="filterTxn()">
+          <option value="">Semua</option><option>Pemasukan</option><option>Pengeluaran</option><option>Transfer</option><option>Reserve</option>
+        </select>
+      </div>
+      <div id="txnList"></div>
+    </div>
+
+    <!-- TRANSFER -->
+    <div class="page" id="page-transfer">
+      <div class="transfer-tabs">
+        <button class="ttab active" onclick="switchTTab('antar')">Antar Rekening</button>
+        <button class="ttab" onclick="switchTTab('reserve')">Reserve Fund CC</button>
+      </div>
+      <div id="tab-antar">
+        <div class="card">
+          <div class="card-title">Transfer Antar Rekening</div>
+          <div class="form-group"><label class="form-label">Dari rekening</label><select class="form-input" id="tr_dari" onchange="previewTransfer()"></select></div>
+          <div class="form-group"><label class="form-label">Ke rekening</label><select class="form-input" id="tr_ke" onchange="previewTransfer()"></select></div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Nominal (Rp)</label><input class="form-input" type="number" id="tr_nominal" placeholder="0" oninput="previewTransfer()"></div>
+            <div class="form-group"><label class="form-label">Tanggal</label><input class="form-input" type="date" id="tr_tgl"></div>
+          </div>
+          <div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="tr_notes" placeholder="Keterangan..."></div>
+          <div class="preview-box" id="trPreview" style="display:none"></div>
+          <button class="btn-primary" onclick="doTransfer()"><i class="ti ti-arrows-exchange"></i> Proses Transfer</button>
+        </div>
+        <div class="card" id="transferHistCard">
+          <div class="card-title">Riwayat Transfer</div>
+          <div id="transferHistList"></div>
+        </div>
+      </div>
+      <div id="tab-reserve" style="display:none">
+        <div class="card">
+          <div class="card-title">Setor ke Reserve Fund CC</div>
+          <div class="form-group"><label class="form-label">Dari rekening bank</label><select class="form-input" id="res_dari" onchange="previewReserve()"></select></div>
+          <div class="form-group"><label class="form-label">Reserve untuk kartu</label><select class="form-input" id="res_kartu" onchange="previewReserve()"></select></div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Nominal (Rp)</label><input class="form-input" type="number" id="res_nominal" placeholder="0" oninput="previewReserve()"></div>
+            <div class="form-group"><label class="form-label">Tanggal</label><input class="form-input" type="date" id="res_tgl"></div>
+          </div>
+          <div class="form-group"><label class="form-label">Keterangan</label><input class="form-input" id="res_notes" placeholder="Opsional..."></div>
+          <div class="preview-box" id="resPreview" style="display:none"></div>
+          <button class="btn-primary" onclick="doReserve()"><i class="ti ti-shield-check"></i> Sisihkan ke Reserve</button>
+        </div>
+        <div class="card">
+          <div class="card-title">Reserve Fund per Kartu</div>
+          <div id="reserveDetailList"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PROJECT -->
+    <div class="page" id="page-project">
+      <div id="projList"></div>
+    </div>
+
+    <!-- MASTER -->
+    <div class="page" id="page-master">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+        <button class="ttab active" onclick="switchMasterTab('bank')" id="mTab-bank" style="flex:none;padding:8px 14px;border-radius:20px;border:1px solid var(--border2);font-size:12px">Bank</button>
+        <button class="ttab" onclick="switchMasterTab('cc')" id="mTab-cc" style="flex:none;padding:8px 14px;border-radius:20px;border:1px solid var(--border2);font-size:12px">Kartu Kredit</button>
+        <button class="ttab" onclick="switchMasterTab('kat')" id="mTab-kat" style="flex:none;padding:8px 14px;border-radius:20px;border:1px solid var(--border2);font-size:12px">Kategori</button>
+      </div>
+      <div id="masterContent"></div>
+    </div>
+  </div>
+
+  <!-- BOTTOM NAV -->
+  <nav class="bottom-nav">
+    <button class="nav-item active" onclick="goPage('dashboard')"><i class="ti ti-layout-dashboard"></i><span>Dashboard</span></button>
+    <button class="nav-item" onclick="goPage('transaksi')"><i class="ti ti-list"></i><span>Transaksi</span></button>
+    <button class="nav-item" onclick="goPage('transfer')"><i class="ti ti-transfer"></i><span>Transfer</span></button>
+    <button class="nav-item" onclick="goPage('project')"><i class="ti ti-hammer"></i><span>Project</span></button>
+    <button class="nav-item" onclick="goPage('master')"><i class="ti ti-settings"></i><span>Master</span></button>
+  </nav>
+
+  <!-- FAB -->
+  <button class="fab" id="fab" onclick="openFAB()"><i class="ti ti-plus"></i></button>
+</div>
+
+<!-- DRAWER -->
+<div class="drawer-bg" id="drawerBg" onclick="closeDrawer()">
+  <div class="drawer" onclick="event.stopPropagation()" id="drawerContent">
+    <div class="drawer-handle"></div>
+    <div class="drawer-title" id="drawerTitle">Form</div>
+    <div id="drawerBody"></div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ── CONFIG ────────────────────────────────────────────
+// GANTI URL INI setelah deploy Apps Script!
+let API_URL = localStorage.getItem('fcc_api_url') || '';
+const SHEET_ID = '1BYXyk0XlyeuelrIa6KKch8A79z7yvOG3_RjSxft7JTo';
+const VALID_PINS = ['1234','5678','9999'];
+
+// ── STATE ─────────────────────────────────────────────
+let state = {
+  pin: '',
+  user: 'Eddy',
+  banks: [], ccs: [], projects: [], kategori: [],
+  txns: [], transfers: [], reserves: [],
+  reserveFunds: {}, // computed: cc_name -> total
+  online: false,
+  currentPage: 'dashboard',
+  currentMasterTab: 'bank',
+};
+
+// ── UTILS ─────────────────────────────────────────────
+const fmt = n => 'Rp ' + Math.round(Math.abs(n)).toLocaleString('id-ID');
+const fmtS = n => {
+  const a = Math.abs(n);
+  if(a >= 1e9) return (a/1e9).toFixed(1) + 'M';
+  if(a >= 1e6) return (a/1e6).toFixed(0) + 'jt';
+  if(a >= 1e3) return (a/1e3).toFixed(0) + 'rb';
+  return Math.round(a).toString();
+};
+const uid = () => 'ID' + Date.now().toString(36).toUpperCase();
+const today = () => new Date().toISOString().slice(0, 10);
+const esc = s => String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+// ── LOGIN ─────────────────────────────────────────────
+document.getElementById('pinInput').addEventListener('keydown', e => { if(e.key === 'Enter') doLogin(); });
+
+function doLogin() {
+  const pin = document.getElementById('pinInput').value;
+  if (!VALID_PINS.includes(pin)) {
+    document.getElementById('pinErr').textContent = 'PIN salah. Coba lagi.';
+    document.getElementById('pinInput').value = '';
+    return;
+  }
+  state.pin = pin;
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  loadOfflineData();
+  syncAll();
+}
+
+// ── LOCAL STORAGE (offline cache) ────────────────────
+function saveLocal() {
+  localStorage.setItem('fcc_data', JSON.stringify({
+    banks: state.banks, ccs: state.ccs, projects: state.projects,
+    kategori: state.kategori, txns: state.txns, transfers: state.transfers,
+    reserves: state.reserves
+  }));
+}
+
+function loadOfflineData() {
+  const saved = localStorage.getItem('fcc_data');
+  if (saved) {
+    const d = JSON.parse(saved);
+    Object.assign(state, d);
+    computeReserve();
+    renderAll();
+    showToast('Data offline dimuat', 'success');
+  } else {
+    seedLocalData();
+  }
+}
+
+function seedLocalData() {
+  state.banks = [
+    {ID:'RK01',NAMA:'BCA 082',TIPE:'Bank',BANK:'BCA',SALDO_AWAL:0},
+    {ID:'RK02',NAMA:'BCA 552',TIPE:'Bank',BANK:'BCA',SALDO_AWAL:0},
+    {ID:'RK03',NAMA:'SEABANK-EDDY',TIPE:'Bank',BANK:'SeaBank',SALDO_AWAL:0},
+    {ID:'RK04',NAMA:'SEABANK-RONAH',TIPE:'Bank',BANK:'SeaBank',SALDO_AWAL:0},
+    {ID:'RK05',NAMA:'CASH',TIPE:'Kas',BANK:'Cash',SALDO_AWAL:0},
+  ];
+  state.ccs = [
+    {ID:'RK06',NAMA:'CC-BCA-KRIS',BANK:'BCA',LIMIT:20000000,JATUH_TEMPO:25},
+    {ID:'RK07',NAMA:'CC-BCA-JCB',BANK:'BCA',LIMIT:30000000,JATUH_TEMPO:25},
+    {ID:'RK08',NAMA:'CC-CIMB-JCB',BANK:'CIMB',LIMIT:15000000,JATUH_TEMPO:25},
+    {ID:'RK09',NAMA:'CC-CIMB-ACCOR',BANK:'CIMB',LIMIT:10000000,JATUH_TEMPO:25},
+    {ID:'RK10',NAMA:'CC-CIMB-WORLD',BANK:'CIMB',LIMIT:0,JATUH_TEMPO:25},
+    {ID:'RK11',NAMA:'CC-HSBC-7118',BANK:'HSBC',LIMIT:0,JATUH_TEMPO:25},
+    {ID:'RK12',NAMA:'CC-HSBC-VISA',BANK:'HSBC',LIMIT:0,JATUH_TEMPO:25},
+    {ID:'RK13',NAMA:'CC-MAYBANK-BMW',BANK:'MAYBANK',LIMIT:0,JATUH_TEMPO:25},
+    {ID:'RK14',NAMA:'CC-MAYBANK-INFINITE',BANK:'MAYBANK',LIMIT:0,JATUH_TEMPO:25},
+    {ID:'RK15',NAMA:'CC-BNI-JCB',BANK:'BNI',LIMIT:0,JATUH_TEMPO:25},
+    {ID:'RK16',NAMA:'CC-DANAMON-JCB',BANK:'DANAMON',LIMIT:0,JATUH_TEMPO:25},
+  ];
+  state.projects = [
+    {ID:'PR001',NAMA:'PROJ BU NITA - KANOPI',KLIEN:'Bu Nita',TGL_MULAI:'2026-05-29',STATUS:'Jalan',NILAI_CONTRACT:6800000},
+    {ID:'PR002',NAMA:'PROJ BU VONNY - CERMIN',KLIEN:'Bu Vonny',TGL_MULAI:'',STATUS:'Selesai',NILAI_CONTRACT:0},
+    {ID:'PR003',NAMA:'PROJ BU VONNY - FIBER PAGAR',KLIEN:'Bu Vonny',TGL_MULAI:'',STATUS:'Selesai',NILAI_CONTRACT:0},
+    {ID:'PR004',NAMA:'PROJ ORTU WISHNU - ATAP RUMAH',KLIEN:'Wishnu',TGL_MULAI:'',STATUS:'Jalan',NILAI_CONTRACT:166000000},
+    {ID:'PR005',NAMA:'PROJ KO MICHACEL PIK2 - WATERPROOFING',KLIEN:'Ko Michael',TGL_MULAI:'',STATUS:'Selesai',NILAI_CONTRACT:20000000},
+    {ID:'PR006',NAMA:'PROJ KO JOHAN PIK2 - BOCOR',KLIEN:'Ko Johan',TGL_MULAI:'',STATUS:'Selesai',NILAI_CONTRACT:0},
+  ];
+  state.kategori = [
+    {ID:'K01',KELOMPOK:'PEMASUKAN',NAMA:'DP Project',TIPE:'Pemasukan'},
+    {ID:'K02',KELOMPOK:'PEMASUKAN',NAMA:'Pelunasan',TIPE:'Pemasukan'},
+    {ID:'K03',KELOMPOK:'PEMASUKAN',NAMA:'Fee Konsultasi',TIPE:'Pemasukan'},
+    {ID:'K04',KELOMPOK:'PEMASUKAN',NAMA:'Bunga',TIPE:'Pemasukan'},
+    {ID:'K05',KELOMPOK:'PEMASUKAN',NAMA:'Kas dari Novi',TIPE:'Pemasukan'},
+    {ID:'K06',KELOMPOK:'PROJECT',NAMA:'Material',TIPE:'Pengeluaran'},
+    {ID:'K07',KELOMPOK:'PROJECT',NAMA:'Gaji Tim',TIPE:'Pengeluaran'},
+    {ID:'K08',KELOMPOK:'PROJECT',NAMA:'Gaji Herman',TIPE:'Pengeluaran'},
+    {ID:'K09',KELOMPOK:'PROJECT',NAMA:'Transport',TIPE:'Pengeluaran'},
+    {ID:'K10',KELOMPOK:'PROJECT',NAMA:'Subkontraktor',TIPE:'Pengeluaran'},
+    {ID:'K11',KELOMPOK:'OPERASIONAL',NAMA:'Bensin Fino',TIPE:'Pengeluaran'},
+    {ID:'K12',KELOMPOK:'OPERASIONAL',NAMA:'Internet',TIPE:'Pengeluaran'},
+    {ID:'K13',KELOMPOK:'PRIBADI',NAMA:'Makan',TIPE:'Pengeluaran'},
+    {ID:'K14',KELOMPOK:'PRIBADI',NAMA:'Asuransi',TIPE:'Pengeluaran'},
+    {ID:'K15',KELOMPOK:'FINANCIAL',NAMA:'Pajak',TIPE:'Pengeluaran'},
+    {ID:'K16',KELOMPOK:'FINANCIAL',NAMA:'Admin Bank',TIPE:'Pengeluaran'},
+  ];
+  state.txns = [
+    {ID:'T001',TANGGAL:'2026-05-28',JENIS:'Pemasukan',PROJECT:'PROJ BU NITA - KANOPI',REKENING:'BCA 082',KATEGORI:'DP Project',NOMINAL:3400000,NOTES:'DP 50%',TIPE_LOG:'Pemasukan'},
+    {ID:'T002',TANGGAL:'2026-05-28',JENIS:'Pengeluaran',PROJECT:'PROJ BU NITA - KANOPI',REKENING:'BCA 082',KATEGORI:'Material',NOMINAL:4140000,NOTES:'Sinar Aster',TIPE_LOG:'Pengeluaran'},
+    {ID:'T003',TANGGAL:'2026-05-28',JENIS:'Pemasukan',PROJECT:'PROJ BU NITA - KANOPI',REKENING:'BCA 082',KATEGORI:'Pelunasan',NOMINAL:3537200,NOTES:'Pelunasan',TIPE_LOG:'Pemasukan'},
+    {ID:'T004',TANGGAL:'2026-05-23',JENIS:'Pengeluaran',PROJECT:'PROJ ORTU WISHNU - ATAP RUMAH',REKENING:'SEABANK-EDDY',KATEGORI:'Gaji Tim',NOMINAL:6560000,NOTES:'potong kasbon 1.5jt',TIPE_LOG:'Pengeluaran'},
+    {ID:'T005',TANGGAL:'2026-05-19',JENIS:'Pemasukan',PROJECT:'',REKENING:'SEABANK-EDDY',KATEGORI:'Kas dari Novi',NOMINAL:30000000,NOTES:'10jt refund mami, 20jt ke jepang',TIPE_LOG:'Pemasukan'},
+  ];
+  computeReserve();
+  saveLocal();
+  renderAll();
+}
+
+// ── COMPUTED ──────────────────────────────────────────
+function getSaldo(namaRek) {
+  const m = state.txns.filter(t => t.REKENING === namaRek && t.JENIS === 'Pemasukan').reduce((s,t) => s + Number(t.NOMINAL), 0);
+  const k = state.txns.filter(t => t.REKENING === namaRek && t.JENIS === 'Pengeluaran').reduce((s,t) => s + Number(t.NOMINAL), 0);
+  return { masuk: m, keluar: k, saldo: m - k };
+}
+
+function getCCOut(namaCC) {
+  const tag = state.txns.filter(t => t.REKENING === namaCC && t.JENIS === 'Pengeluaran').reduce((s,t) => s + Number(t.NOMINAL), 0);
+  const bay = state.txns.filter(t => t.REKENING === namaCC && t.JENIS === 'Pemasukan').reduce((s,t) => s + Number(t.NOMINAL), 0);
+  return tag - bay;
+}
+
+function getProjCF(nama) {
+  const m = state.txns.filter(t => t.PROJECT === nama && t.JENIS === 'Pemasukan').reduce((s,t) => s + Number(t.NOMINAL), 0);
+  const k = state.txns.filter(t => t.PROJECT === nama && t.JENIS === 'Pengeluaran').reduce((s,t) => s + Number(t.NOMINAL), 0);
+  return { masuk: m, keluar: k, sisa: m - k };
+}
+
+function computeReserve() {
+  state.reserveFunds = {};
+  state.reserves.forEach(r => {
+    const cc = r.UNTUK_CC;
+    state.reserveFunds[cc] = (state.reserveFunds[cc] || 0) + Number(r.NOMINAL);
+  });
+}
+
+// ── API CALLS ─────────────────────────────────────────
+async function apiGet(params) {
+  if (!API_URL) return null;
+  try {
+    const url = API_URL + '?' + new URLSearchParams({...params, pin: state.pin});
+    const res = await fetch(url);
+    return await res.json();
+  } catch { return null; }
+}
+
+async function apiPost(body) {
+  if (!API_URL) return null;
+  try {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      body: JSON.stringify({...body, pin: state.pin, USER: state.user})
+    });
+    return await res.json();
+  } catch { return null; }
+}
+
+async function syncAll() {
+  const btn = document.querySelector('.sync-btn');
+  btn.innerHTML = '<div class="spin" style="width:12px;height:12px;border-width:2px"></div>';
+  
+  if (!API_URL) {
+    state.online = false;
+    updateOnlineStatus();
+    btn.innerHTML = '<i class="ti ti-refresh"></i> Sync';
+    showToast('API URL belum diset. Buka Settings → Set API URL', 'error');
+    return;
+  }
+  
+  const data = await apiGet({ action: 'getAll' });
+  btn.innerHTML = '<i class="ti ti-refresh"></i> Sync';
+  
+  if (data && !data.error) {
+    state.banks = data.banks || state.banks;
+    state.ccs = data.ccs || state.ccs;
+    state.projects = data.projects || state.projects;
+    state.kategori = data.kategori || state.kategori;
+    state.txns = data.txns || state.txns;
+    state.transfers = data.transfers || state.transfers;
+    state.reserves = data.reserves || state.reserves;
+    computeReserve();
+    saveLocal();
+    renderAll();
+    state.online = true;
+    document.getElementById('topbarSub').textContent = 'Sync ' + new Date().toLocaleTimeString('id-ID', {hour:'2-digit',minute:'2-digit'});
+    showToast('Data berhasil disync dari Sheets ✓', 'success');
+  } else {
+    state.online = false;
+    showToast('Gagal sync. Mode offline.', 'error');
+  }
+  updateOnlineStatus();
+}
+
+function updateOnlineStatus() {
+  document.getElementById('onlineDot').style.background = state.online ? 'var(--green)' : 'var(--red)';
+}
+
+// ── RENDER DASHBOARD ──────────────────────────────────
+function renderDashboard() {
+  const totBank = state.banks.reduce((s,b) => s + getSaldo(b.NAMA).saldo, 0);
+  const totCC = state.ccs.reduce((s,c) => s + getCCOut(c.NAMA), 0);
+  const totRes = Object.values(state.reserveFunds).reduce((s,v) => s + v, 0);
+  const projAktif = state.projects.filter(p => p.STATUS === 'Jalan').length;
+
+  document.getElementById('dashMetrics').innerHTML = `
+    <div class="metric-grid">
+      <div class="metric wide" style="background:linear-gradient(135deg,#0a2a1e,#0d1f2d);border:1px solid #2dd4a030">
+        <div class="metric-label">Net Cash Position</div>
+        <div class="metric-value" style="font-size:28px;color:${totBank-totRes >= 0?'var(--green)':'var(--red)'}">Rp ${fmtS(totBank-totRes)}</div>
+        <div class="metric-sub">Bank (${fmt(totBank)}) − Reserve (${fmt(totRes)})</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Total Saldo Bank</div>
+        <div class="metric-value pos">Rp ${fmtS(totBank)}</div>
+        <div class="metric-sub">${state.banks.length} rekening</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Outstanding CC</div>
+        <div class="metric-value ${totCC > 0?'neg':'pos'}">Rp ${fmtS(totCC)}</div>
+        <div class="metric-sub">${state.ccs.length} kartu</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Reserve CC</div>
+        <div class="metric-value info">Rp ${fmtS(totRes)}</div>
+        <div class="metric-sub">Dana tersisihkan</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Project Aktif</div>
+        <div class="metric-value warn">${projAktif}</div>
+        <div class="metric-sub">dari ${state.projects.length} total</div>
+      </div>
+    </div>
+  `;
+
+  // Saldo rekening
+  document.getElementById('dashSaldo').innerHTML = `
+    <div class="card">
+      <div class="card-title">Saldo Rekening</div>
+      ${state.banks.map(b => {
+        const r = getSaldo(b.NAMA);
+        return `<div class="list-item">
+          <div class="list-icon" style="background:${b.TIPE==='Kas'?'#2a1a0a':'#0a2040'}">
+            <i class="ti ti-${b.TIPE==='Kas'?'cash':'building-bank'}" style="color:${b.TIPE==='Kas'?'var(--amber)':'var(--blue)'}"></i>
+          </div>
+          <div class="list-body">
+            <div class="list-title">${esc(b.NAMA)}</div>
+            <div class="list-sub">${esc(b.BANK)} · ${b.TIPE}</div>
+          </div>
+          <div class="list-right">
+            <div style="font-size:14px;font-weight:700;color:${r.saldo>=0?'var(--green)':'var(--red)'}">${fmt(r.saldo)}</div>
+            <div style="font-size:10px;color:var(--text3)">+${fmtS(r.masuk)} / -${fmtS(r.keluar)}</div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+
+  // CC status
+  const ccTagihan = state.ccs.filter(c => getCCOut(c.NAMA) > 0);
+  document.getElementById('dashCC').innerHTML = `
+    <div class="card">
+      <div class="card-title">Kartu Kredit ${ccTagihan.length > 0 ? `<span class="badge badge-red" style="margin-left:6px">${ccTagihan.length} tagihan</span>` : '<span class="badge badge-green" style="margin-left:6px">semua lunas</span>'}</div>
+      ${state.ccs.map(c => {
+        const out = getCCOut(c.NAMA);
+        const res = state.reserveFunds[c.NAMA] || 0;
+        const pct = out > 0 ? Math.min(100, Math.round(res/out*100)) : 100;
+        return out > 0 || res > 0 ? `<div class="list-item">
+          <div class="list-icon" style="background:#2a0a2a"><i class="ti ti-credit-card" style="color:var(--purple)"></i></div>
+          <div class="list-body">
+            <div class="list-title" style="font-size:12px">${esc(c.NAMA)}</div>
+            <div class="list-sub">${c.BANK} · jth tgl ${c.JATUH_TEMPO}</div>
+            ${out > 0 ? `<div class="res-bar-wrap"><div class="res-bar" style="width:${pct}%;background:${pct>=100?'var(--green)':'var(--amber)'}"></div></div>` : ''}
+          </div>
+          <div class="list-right">
+            <div style="font-size:13px;font-weight:700;color:var(--red)">${out > 0?fmt(out):'—'}</div>
+            ${res > 0 ? `<div style="font-size:10px;color:var(--blue)">res: ${fmtS(res)} (${pct}%)</div>` : ''}
+          </div>
+        </div>` : '';
+      }).join('') || '<div class="empty">Semua kartu lunas ✓</div>'}
+    </div>
+  `;
+
+  // Recent txns
+  const recent = [...state.txns].sort((a,b) => String(b.TANGGAL).localeCompare(String(a.TANGGAL))).slice(0, 8);
+  document.getElementById('dashRecent').innerHTML = `
+    <div class="card">
+      <div class="card-title">Aktivitas Terbaru</div>
+      ${recent.map(t => {
+        const isTr = t.TIPE_LOG === 'Transfer', isRes = t.TIPE_LOG === 'Reserve';
+        return `<div class="list-item">
+          <div class="list-icon" style="background:${t.JENIS==='Pemasukan'?'#0a2a1a':isTr?'#0a1a3a':isRes?'#1a0a3a':'#2a0a0a'}">
+            <i class="ti ti-${t.JENIS==='Pemasukan'?'arrow-down-left':isTr?'arrows-exchange':isRes?'shield-check':'arrow-up-right'}" style="color:${t.JENIS==='Pemasukan'?'var(--green)':isTr?'var(--blue)':isRes?'var(--purple)':'var(--red)'}"></i>
+          </div>
+          <div class="list-body">
+            <div class="list-title">${esc(t.PROJECT||t.KATEGORI||'—')}</div>
+            <div class="list-sub">${esc(t.REKENING)} · ${String(t.TANGGAL).slice(0,10)}</div>
+          </div>
+          <div class="list-right">
+            <div style="font-size:13px;font-weight:700;color:${t.JENIS==='Pemasukan'?'var(--green)':'var(--red)'}">${t.JENIS==='Pemasukan'?'+':'-'}${fmt(Number(t.NOMINAL))}</div>
+          </div>
+        </div>`;
+      }).join('') || '<div class="empty">Belum ada transaksi</div>'}
+    </div>
+  `;
+}
+
+// ── RENDER TRANSAKSI ──────────────────────────────────
+function renderTxn(filtered) {
+  const data = (filtered || [...state.txns]).sort((a,b) => String(b.TANGGAL).localeCompare(String(a.TANGGAL)));
+  document.getElementById('txnList').innerHTML = data.length ? data.map(t => {
+    const isTr = t.TIPE_LOG === 'Transfer', isRes = t.TIPE_LOG === 'Reserve';
+    return `<div class="card" style="padding:10px 12px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;background:${t.JENIS==='Pemasukan'?'#0a2a1a':isTr?'#0a1a3a':isRes?'#1a0a3a':'#2a0a0a'};flex-shrink:0">
+          <i class="ti ti-${t.JENIS==='Pemasukan'?'arrow-down-left':isTr?'arrows-exchange':isRes?'shield-check':'arrow-up-right'}" style="font-size:15px;color:${t.JENIS==='Pemasukan'?'var(--green)':isTr?'var(--blue)':isRes?'var(--purple)':'var(--red)'}"></i>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.PROJECT||t.KATEGORI||'—')}</div>
+          <div style="font-size:11px;color:var(--text2)">${esc(t.REKENING)} · ${esc(t.KATEGORI)} · ${String(t.TANGGAL).slice(0,10)}</div>
+          ${t.NOTES ? `<div style="font-size:10px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.NOTES)}</div>` : ''}
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:14px;font-weight:700;color:${t.JENIS==='Pemasukan'?'var(--green)':'var(--red)'}">${t.JENIS==='Pemasukan'?'+':'-'}${fmtS(Number(t.NOMINAL))}</div>
+          ${(!isTr&&!isRes) ? `<button style="font-size:10px;margin-top:3px;background:transparent;border:none;color:var(--text3);cursor:pointer" onclick="editTxn('${t.ID}')">edit</button>` : '<div style="font-size:10px;color:var(--text3)">auto</div>'}
+        </div>
+      </div>
+    </div>`;
+  }).join('') : '<div class="empty">Tidak ada transaksi</div>';
+}
+
+function filterTxn() {
+  const q = document.getElementById('txnSearch').value.toLowerCase();
+  const tipe = document.getElementById('txnTipeFilter').value;
+  let data = [...state.txns];
+  if (q) data = data.filter(t => (String(t.PROJECT)+String(t.NOTES)+String(t.KATEGORI)).toLowerCase().includes(q));
+  if (tipe) data = data.filter(t => t.TIPE_LOG === tipe || t.JENIS === tipe);
+  renderTxn(data);
+}
+
+// ── RENDER PROJECT ────────────────────────────────────
+function renderProject() {
+  document.getElementById('projList').innerHTML = state.projects.map(p => {
+    const cf = getProjCF(p.NAMA);
+    const pct = p.NILAI_CONTRACT > 0 ? Math.min(100, Math.round(cf.masuk/p.NILAI_CONTRACT*100)) : 0;
+    return `<div class="card">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.NAMA)}</div>
+          <div style="font-size:11px;color:var(--text2);margin-top:2px">${esc(p.KLIEN)} · ${String(p.TGL_MULAI||'').slice(0,10)||'—'}</div>
+        </div>
+        <span class="badge ${p.STATUS==='Jalan'?'badge-amber':'badge-green'}" style="margin-left:10px;flex-shrink:0">${p.STATUS}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">
+        <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Nilai</div><div style="font-size:12px;font-weight:600">${p.NILAI_CONTRACT?fmtS(p.NILAI_CONTRACT):'—'}</div></div>
+        <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Masuk</div><div style="font-size:12px;font-weight:600;color:var(--green)">+${fmtS(cf.masuk)}</div></div>
+        <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Sisa CF</div><div style="font-size:12px;font-weight:600;color:${cf.sisa>=0?'var(--green)':'var(--red)'}">${cf.sisa>=0?'+':'-'}${fmtS(cf.sisa)}</div></div>
+      </div>
+      <div class="res-bar-wrap"><div class="res-bar" style="width:${pct}%;background:${p.STATUS==='Jalan'?'var(--amber)':'var(--green)'}"></div></div>
+      <div style="display:flex;justify-content:space-between;margin-top:6px">
+        <span style="font-size:10px;color:var(--text3)">${pct}% terbayar</span>
+        <button style="font-size:11px;color:var(--text2);background:transparent;border:1px solid var(--border);border-radius:6px;padding:3px 8px;cursor:pointer" onclick="editProj('${p.ID}')">Edit</button>
+      </div>
+    </div>`;
+  }).join('') || '<div class="empty">Belum ada project</div>';
+}
+
+// ── RENDER MASTER ─────────────────────────────────────
+function renderMaster() {
+  const tab = state.currentMasterTab;
+  if (tab === 'bank') {
+    document.getElementById('masterContent').innerHTML = `
+      <button class="btn-primary" style="margin-bottom:12px" onclick="openDrawer('bank')"><i class="ti ti-plus"></i> Tambah Rekening</button>
+      ${state.banks.map(b => {
+        const r = getSaldo(b.NAMA);
+        return `<div class="card" style="margin-bottom:8px;padding:10px 12px">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div><div style="font-size:13px;font-weight:600">${esc(b.NAMA)}</div><div style="font-size:11px;color:var(--text2)">${b.BANK} · ${b.TIPE}</div></div>
+            <div style="text-align:right">
+              <div style="font-size:14px;font-weight:700;color:${r.saldo>=0?'var(--green)':'var(--red)'}">${fmt(r.saldo)}</div>
+              <div style="display:flex;gap:5px;margin-top:4px;justify-content:flex-end">
+                <button class="btn-danger" onclick="editBank('${b.ID}')">Edit</button>
+                <button class="btn-danger" onclick="deleteItem('banks','${b.ID}','MASTER_BANK')">Hapus</button>
+              </div>
+            </div>
+          </div>
+        </div>`;
+      }).join('')}
+    `;
+  } else if (tab === 'cc') {
+    document.getElementById('masterContent').innerHTML = `
+      <button class="btn-primary" style="margin-bottom:12px" onclick="openDrawer('cc')"><i class="ti ti-plus"></i> Tambah Kartu Kredit</button>
+      ${state.ccs.map(c => {
+        const out = getCCOut(c.NAMA), res = state.reserveFunds[c.NAMA] || 0;
+        return `<div class="card" style="margin-bottom:8px;padding:10px 12px">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div><div style="font-size:13px;font-weight:600">${esc(c.NAMA)}</div><div style="font-size:11px;color:var(--text2)">${c.BANK} · Limit ${c.LIMIT?fmtS(c.LIMIT):'—'} · Jth tgl ${c.JATUH_TEMPO}</div></div>
+            <div style="text-align:right">
+              <span class="badge ${out>0?'badge-red':'badge-green'}">${out>0?'Tagihan':'Lunas'}</span>
+              ${out>0?`<div style="font-size:12px;font-weight:700;color:var(--red);margin-top:3px">${fmt(out)}</div>`:''}
+              ${res>0?`<div style="font-size:10px;color:var(--blue)">res: ${fmtS(res)}</div>`:''}
+              <div style="display:flex;gap:5px;margin-top:4px;justify-content:flex-end">
+                <button class="btn-danger" onclick="editCC('${c.ID}')">Edit</button>
+                <button class="btn-danger" onclick="deleteItem('ccs','${c.ID}','MASTER_CC')">Hapus</button>
+              </div>
+            </div>
+          </div>
+        </div>`;
+      }).join('')}
+    `;
+  } else if (tab === 'kat') {
+    const groups = [...new Set(state.kategori.map(k => k.KELOMPOK))];
+    document.getElementById('masterContent').innerHTML = `
+      <button class="btn-primary" style="margin-bottom:12px" onclick="openDrawer('kat')"><i class="ti ti-plus"></i> Tambah Kategori</button>
+      ${groups.map(g => `
+        <div class="card" style="margin-bottom:8px">
+          <div class="card-title">${g}</div>
+          ${state.kategori.filter(k=>k.KELOMPOK===g).map(k => `
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">
+              <div><div style="font-size:13px">${esc(k.NAMA)}</div><div style="font-size:10px;color:var(--text3)">${k.TIPE}</div></div>
+              <div style="display:flex;gap:5px">
+                <button class="btn-danger" onclick="editKat('${k.ID}')">Edit</button>
+                <button class="btn-danger" onclick="deleteItem('kategori','${k.ID}','MASTER_KATEGORI')">Hapus</button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `).join('')}
+    `;
+  }
+}
+
+function switchMasterTab(tab) {
+  state.currentMasterTab = tab;
+  document.querySelectorAll('[id^="mTab-"]').forEach(b => b.classList.remove('active'));
+  document.getElementById('mTab-' + tab).classList.add('active');
+  renderMaster();
+}
+
+// ── TRANSFER PAGE ─────────────────────────────────────
+function renderTransferPage() {
+  const allRek = [...state.banks.map(b=>b.NAMA), ...state.ccs.map(c=>c.NAMA)];
+  const bankOnly = state.banks.map(b=>b.NAMA);
+  ['tr_dari','tr_ke'].forEach(id => {
+    document.getElementById(id).innerHTML = allRek.map(n=>`<option>${n}</option>`).join('');
+  });
+  document.getElementById('res_dari').innerHTML = bankOnly.map(n=>`<option>${n}</option>`).join('');
+  document.getElementById('res_kartu').innerHTML = state.ccs.map(c=>`<option>${c.NAMA}</option>`).join('');
+  document.getElementById('tr_tgl').value = today();
+  document.getElementById('res_tgl').value = today();
+  renderTransferHist();
+  renderReserveDetail();
+}
+
+function switchTTab(t) {
+  document.querySelectorAll('.ttab').forEach((b,i) => b.classList.toggle('active', ['antar','reserve'][i] === t));
+  document.getElementById('tab-antar').style.display = t==='antar'?'block':'none';
+  document.getElementById('tab-reserve').style.display = t==='reserve'?'block':'none';
+}
+
+function previewTransfer() {
+  const dari = document.getElementById('tr_dari').value;
+  const ke = document.getElementById('tr_ke').value;
+  const nominal = parseFloat(document.getElementById('tr_nominal').value) || 0;
+  const prev = document.getElementById('trPreview');
+  if (!nominal || dari === ke) { prev.style.display='none'; return; }
+  const sD = getSaldo(dari).saldo, sK = getSaldo(ke).saldo;
+  prev.style.display = 'block';
+  prev.innerHTML = `
+    <div class="preview-row"><span>Keluar dari <strong>${dari}</strong></span><span class="neg">-${fmt(nominal)}</span></div>
+    <div class="preview-row"><span>Saldo ${dari} sesudah</span><span style="color:${sD-nominal>=0?'var(--green)':'var(--red)'}">${fmt(sD-nominal)}</span></div>
+    <div class="preview-row" style="margin-top:6px"><span>Masuk ke <strong>${ke}</strong></span><span class="pos">+${fmt(nominal)}</span></div>
+    <div class="preview-row"><span>Saldo ${ke} sesudah</span><span class="pos">${fmt(sK+nominal)}</span></div>
+    <div style="font-size:10px;color:var(--text3);margin-top:6px">Net cash tidak berubah — hanya posisi berpindah</div>
+  `;
+}
+
+function previewReserve() {
+  const dari = document.getElementById('res_dari').value;
+  const kartu = document.getElementById('res_kartu').value;
+  const nominal = parseFloat(document.getElementById('res_nominal').value) || 0;
+  const prev = document.getElementById('resPreview');
+  if (!nominal) { prev.style.display='none'; return; }
+  const sD = getSaldo(dari).saldo, out = getCCOut(kartu), resLama = state.reserveFunds[kartu]||0;
+  const pct = out > 0 ? Math.min(100, Math.round((resLama+nominal)/out*100)) : 100;
+  prev.style.display = 'block';
+  prev.innerHTML = `
+    <div class="preview-row"><span>Saldo ${dari} sesudah</span><span style="color:${sD-nominal>=0?'var(--green)':'var(--red)'}">${fmt(sD-nominal)}</span></div>
+    <div class="preview-row"><span>Reserve ${kartu} sesudah</span><span class="info">${fmt(resLama+nominal)}</span></div>
+    ${out>0?`<div class="preview-row"><span>Coverage tagihan</span><span style="color:${pct>=100?'var(--green)':'var(--amber)'}">${pct}%</span></div>`:''}
+  `;
+}
+
+async function doTransfer() {
+  const dari = document.getElementById('tr_dari').value;
+  const ke = document.getElementById('tr_ke').value;
+  const nominal = parseFloat(document.getElementById('tr_nominal').value) || 0;
+  const tgl = document.getElementById('tr_tgl').value;
+  const notes = document.getElementById('tr_notes').value;
+  if (!nominal || !tgl) { showToast('Nominal dan tanggal wajib diisi', 'error'); return; }
+  if (dari === ke) { showToast('Rekening asal dan tujuan sama!', 'error'); return; }
+  const refId = 'TR' + Date.now();
+  const now = new Date().toISOString();
+  const t1 = {ID:uid(),TANGGAL:tgl,JENIS:'Pengeluaran',PROJECT:'',REKENING:dari,KATEGORI:'Transfer Keluar',NOMINAL:nominal,NOTES:`[${refId}] → ${ke} ${notes}`,TIPE_LOG:'Transfer',CREATED_AT:now};
+  const t2 = {ID:uid(),TANGGAL:tgl,JENIS:'Pemasukan',PROJECT:'',REKENING:ke,KATEGORI:'Transfer Masuk',NOMINAL:nominal,NOTES:`[${refId}] ← ${dari} ${notes}`,TIPE_LOG:'Transfer',CREATED_AT:now};
+  const tr = {ID:uid(),TANGGAL:tgl,DARI:dari,KE:ke,NOMINAL:nominal,NOTES:notes,REF_ID:refId,CREATED_BY:state.user,CREATED_AT:now};
+  state.txns.unshift(t1, t2);
+  state.transfers.unshift(tr);
+  saveLocal();
+  if (API_URL) {
+    await apiPost({ action: 'addTransfer', data: {TANGGAL:tgl,DARI:dari,KE:ke,NOMINAL:nominal,NOTES:notes,USER:state.user} });
+  }
+  document.getElementById('tr_nominal').value = '';
+  document.getElementById('tr_notes').value = '';
+  document.getElementById('trPreview').style.display = 'none';
+  renderDashboard(); renderTxn(); renderTransferHist();
+  showToast(`Transfer ${fmt(nominal)} berhasil ✓`, 'success');
+}
+
+async function doReserve() {
+  const dari = document.getElementById('res_dari').value;
+  const kartu = document.getElementById('res_kartu').value;
+  const nominal = parseFloat(document.getElementById('res_nominal').value) || 0;
+  const tgl = document.getElementById('res_tgl').value;
+  const notes = document.getElementById('res_notes').value;
+  if (!nominal || !tgl) { showToast('Nominal dan tanggal wajib diisi', 'error'); return; }
+  const now = new Date().toISOString();
+  const t1 = {ID:uid(),TANGGAL:tgl,JENIS:'Pengeluaran',PROJECT:'',REKENING:dari,KATEGORI:'Reserve CC',NOMINAL:nominal,NOTES:`[RESERVE → ${kartu}] ${notes}`,TIPE_LOG:'Reserve',CREATED_AT:now};
+  const r1 = {ID:uid(),TANGGAL:tgl,DARI_REKENING:dari,UNTUK_CC:kartu,NOMINAL:nominal,NOTES:notes,CREATED_BY:state.user,CREATED_AT:now};
+  state.txns.unshift(t1);
+  state.reserves.unshift(r1);
+  state.reserveFunds[kartu] = (state.reserveFunds[kartu]||0) + nominal;
+  saveLocal();
+  if (API_URL) {
+    await apiPost({ action: 'addReserve', data: {TANGGAL:tgl,DARI_REKENING:dari,UNTUK_CC:kartu,NOMINAL:nominal,NOTES:notes,USER:state.user} });
+  }
+  document.getElementById('res_nominal').value = '';
+  document.getElementById('res_notes').value = '';
+  document.getElementById('resPreview').style.display = 'none';
+  renderDashboard(); renderTxn(); renderReserveDetail();
+  showToast(`Reserve ${fmt(nominal)} untuk ${kartu} ✓`, 'success');
+}
+
+function renderTransferHist() {
+  document.getElementById('transferHistList').innerHTML = state.transfers.length ?
+    [...state.transfers].sort((a,b) => String(b.TANGGAL).localeCompare(String(a.TANGGAL))).slice(0,10).map(t => `
+      <div class="list-item">
+        <div class="list-icon" style="background:#0a1a3a"><i class="ti ti-arrows-exchange" style="color:var(--blue)"></i></div>
+        <div class="list-body"><div class="list-title">${esc(t.DARI)} → ${esc(t.KE)}</div><div class="list-sub">${String(t.TANGGAL).slice(0,10)} · ${esc(t.NOTES||'')}</div></div>
+        <div class="list-right"><div style="font-size:13px;font-weight:700;color:var(--blue)">${fmt(Number(t.NOMINAL))}</div></div>
+      </div>
+    `).join('') : '<div class="empty">Belum ada transfer</div>';
+}
+
+function renderReserveDetail() {
+  document.getElementById('reserveDetailList').innerHTML = state.ccs.map(c => {
+    const out = getCCOut(c.NAMA), res = state.reserveFunds[c.NAMA] || 0;
+    const pct = out > 0 ? Math.min(100, Math.round(res/out*100)) : 100;
+    return `<div class="list-item">
+      <div class="list-icon" style="background:#1a0a3a"><i class="ti ti-shield-check" style="color:var(--purple)"></i></div>
+      <div class="list-body">
+        <div class="list-title" style="font-size:12px">${esc(c.NAMA)}</div>
+        <div class="list-sub">Tagihan: ${out>0?fmtS(out):'—'} · Reserve: ${res>0?fmtS(res):'—'}</div>
+        ${out > 0 ? `<div class="res-bar-wrap"><div class="res-bar" style="width:${pct}%;background:${pct>=100?'var(--green)':'var(--amber)'}"></div></div>` : ''}
+      </div>
+      <div class="list-right">
+        <span class="badge ${pct>=100?'badge-green':'badge-amber'}">${pct}%</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── DRAWER / FORM ─────────────────────────────────────
+let drawerMode = '', drawerEditId = null;
+
+function openFAB() {
+  const page = state.currentPage;
+  if (page === 'transaksi' || page === 'dashboard') openDrawer('txn');
+  else if (page === 'project') openDrawer('proj');
+  else if (page === 'master') {
+    if (state.currentMasterTab === 'bank') openDrawer('bank');
+    else if (state.currentMasterTab === 'cc') openDrawer('cc');
+    else openDrawer('kat');
+  } else openDrawer('txn');
+}
+
+function openDrawer(mode, editId = null) {
+  drawerMode = mode; drawerEditId = editId;
+  const titleMap = { txn: editId?'Edit Transaksi':'Tambah Transaksi', proj: editId?'Edit Project':'Tambah Project', bank: editId?'Edit Rekening':'Tambah Rekening', cc: editId?'Edit Kartu Kredit':'Tambah Kartu Kredit', kat: editId?'Edit Kategori':'Tambah Kategori', settings: 'Settings' };
+  document.getElementById('drawerTitle').textContent = titleMap[mode] || 'Form';
+  const allRek = [...state.banks.map(b=>b.NAMA), ...state.ccs.map(c=>c.NAMA)];
+
+  if (mode === 'txn') {
+    const t = editId ? state.txns.find(x=>x.ID===editId) : null;
+    document.getElementById('drawerBody').innerHTML = `
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Tanggal</label><input class="form-input" type="date" id="f_tgl" value="${t?String(t.TANGGAL).slice(0,10):today()}"></div>
+        <div class="form-group"><label class="form-label">Jenis</label><select class="form-input" id="f_jenis"><option ${!t||t.JENIS==='Pemasukan'?'selected':''}>Pemasukan</option><option ${t&&t.JENIS==='Pengeluaran'?'selected':''}>Pengeluaran</option></select></div>
+      </div>
+      <div class="form-group"><label class="form-label">Project</label><select class="form-input" id="f_proj"><option value="">— Tidak ada —</option>${state.projects.map(p=>`<option ${t&&t.PROJECT===p.NAMA?'selected':''}>${p.NAMA}</option>`).join('')}</select></div>
+      <div class="form-group"><label class="form-label">Rekening</label><select class="form-input" id="f_rek">${allRek.map(n=>`<option ${t&&t.REKENING===n?'selected':''}>${n}</option>`).join('')}</select></div>
+      <div class="form-group"><label class="form-label">Kategori</label><select class="form-input" id="f_kat">${state.kategori.map(k=>`<option ${t&&t.KATEGORI===k.NAMA?'selected':''}>${k.NAMA}</option>`).join('')}</select></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Nominal (Rp)</label><input class="form-input" type="number" id="f_nominal" value="${t?t.NOMINAL:''}" placeholder="0" inputmode="numeric"></div>
+        <div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="f_notes" value="${t?esc(t.NOTES||''):''}" placeholder="Opsional"></div>
+      </div>
+      <button class="btn-primary" onclick="saveDrawer()">Simpan ke Sheets</button>
+      ${editId ? `<button class="btn-secondary" style="color:var(--red)" onclick="deleteItem('txns','${editId}','TRANSAKSI')">Hapus Transaksi</button>` : ''}
+    `;
+  } else if (mode === 'proj') {
+    const p = editId ? state.projects.find(x=>x.ID===editId) : null;
+    document.getElementById('drawerBody').innerHTML = `
+      <div class="form-group"><label class="form-label">Nama Project</label><input class="form-input" id="f_nama" value="${p?esc(p.NAMA):''}" placeholder="PROJ NAMA - TIPE" style="text-transform:uppercase"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Klien</label><input class="form-input" id="f_klien" value="${p?esc(p.KLIEN||''):''}" placeholder="Nama klien"></div>
+        <div class="form-group"><label class="form-label">Tgl Mulai</label><input class="form-input" type="date" id="f_tglmulai" value="${p?String(p.TGL_MULAI||'').slice(0,10):''}"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Status</label><select class="form-input" id="f_status"><option ${!p||p.STATUS==='Jalan'?'selected':''}>Jalan</option><option ${p&&p.STATUS==='Selesai'?'selected':''}>Selesai</option><option ${p&&p.STATUS==='Hold'?'selected':''}>Hold</option></select></div>
+        <div class="form-group"><label class="form-label">Nilai Contract</label><input class="form-input" type="number" id="f_nilai" value="${p?p.NILAI_CONTRACT:''}" placeholder="0" inputmode="numeric"></div>
+      </div>
+      <button class="btn-primary" onclick="saveDrawer()">Simpan</button>
+      ${editId ? `<button class="btn-secondary" style="color:var(--red)" onclick="deleteItem('projects','${editId}','MASTER_PROJECT')">Hapus Project</button>` : ''}
+    `;
+  } else if (mode === 'bank') {
+    const b = editId ? state.banks.find(x=>x.ID===editId) : null;
+    document.getElementById('drawerBody').innerHTML = `
+      <div class="form-group"><label class="form-label">Nama Rekening</label><input class="form-input" id="f_nama" value="${b?esc(b.NAMA):''}" placeholder="Contoh: BCA 123"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Tipe</label><select class="form-input" id="f_tipe"><option ${!b||b.TIPE==='Bank'?'selected':''}>Bank</option><option ${b&&b.TIPE==='Kas'?'selected':''}>Kas</option><option ${b&&b.TIPE==='E-Wallet'?'selected':''}>E-Wallet</option></select></div>
+        <div class="form-group"><label class="form-label">Bank</label><input class="form-input" id="f_bank" value="${b?esc(b.BANK):''}" placeholder="BCA / SeaBank..."></div>
+      </div>
+      <div class="form-group"><label class="form-label">Saldo Awal (Rp)</label><input class="form-input" type="number" id="f_saldo" value="${b?b.SALDO_AWAL:0}" inputmode="numeric"></div>
+      <button class="btn-primary" onclick="saveDrawer()">Simpan</button>
+      ${editId ? `<button class="btn-secondary" style="color:var(--red)" onclick="deleteItem('banks','${editId}','MASTER_BANK')">Hapus Rekening</button>` : ''}
+    `;
+  } else if (mode === 'cc') {
+    const c = editId ? state.ccs.find(x=>x.ID===editId) : null;
+    document.getElementById('drawerBody').innerHTML = `
+      <div class="form-group"><label class="form-label">Nama Kartu</label><input class="form-input" id="f_nama" value="${c?esc(c.NAMA):''}" placeholder="CC-BANK-TYPE"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Bank Penerbit</label><input class="form-input" id="f_bank" value="${c?esc(c.BANK):''}" placeholder="BCA / CIMB..."></div>
+        <div class="form-group"><label class="form-label">Limit (Rp)</label><input class="form-input" type="number" id="f_limit" value="${c?c.LIMIT:''}" placeholder="0" inputmode="numeric"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Jatuh Tempo (tanggal berapa tiap bulan)</label><input class="form-input" type="number" id="f_jt" value="${c?c.JATUH_TEMPO:25}" min="1" max="31" inputmode="numeric"></div>
+      <button class="btn-primary" onclick="saveDrawer()">Simpan</button>
+      ${editId ? `<button class="btn-secondary" style="color:var(--red)" onclick="deleteItem('ccs','${editId}','MASTER_CC')">Hapus Kartu</button>` : ''}
+    `;
+  } else if (mode === 'kat') {
+    const k = editId ? state.kategori.find(x=>x.ID===editId) : null;
+    document.getElementById('drawerBody').innerHTML = `
+      <div class="form-group"><label class="form-label">Nama Kategori</label><input class="form-input" id="f_nama" value="${k?esc(k.NAMA):''}" placeholder="Nama kategori"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Kelompok</label><select class="form-input" id="f_kelompok">${['PEMASUKAN','PROJECT','OPERASIONAL','PRIBADI','FINANCIAL'].map(g=>`<option ${k&&k.KELOMPOK===g?'selected':''}>${g}</option>`).join('')}</select></div>
+        <div class="form-group"><label class="form-label">Tipe</label><select class="form-input" id="f_tipe"><option ${!k||k.TIPE==='Pemasukan'?'selected':''}>Pemasukan</option><option ${k&&k.TIPE==='Pengeluaran'?'selected':''}>Pengeluaran</option></select></div>
+      </div>
+      <button class="btn-primary" onclick="saveDrawer()">Simpan</button>
+      ${editId ? `<button class="btn-secondary" style="color:var(--red)" onclick="deleteItem('kategori','${editId}','MASTER_KATEGORI')">Hapus Kategori</button>` : ''}
+    `;
+  } else if (mode === 'settings') {
+    document.getElementById('drawerBody').innerHTML = `
+      <div class="form-group">
+        <label class="form-label">Google Apps Script URL</label>
+        <input class="form-input" id="f_apiurl" value="${API_URL}" placeholder="https://script.google.com/macros/s/.../exec">
+        <div style="font-size:11px;color:var(--text3);margin-top:5px">Dapatkan URL ini setelah deploy Apps Script. Lihat panduan di bawah.</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nama User (untuk log)</label>
+        <input class="form-input" id="f_user" value="${state.user}" placeholder="Eddy">
+      </div>
+      <button class="btn-primary" onclick="saveSettings()">Simpan Settings</button>
+      <div style="margin-top:16px;padding:12px;background:var(--bg3);border-radius:var(--radius);font-size:11px;color:var(--text2);line-height:1.7">
+        <strong style="color:var(--text)">Cara setup Google Sheets:</strong><br>
+        1. Buka Google Sheets ID: <code style="color:var(--green);font-size:10px">${SHEET_ID}</code><br>
+        2. Klik Extensions → Apps Script<br>
+        3. Paste isi file <strong>Code.gs</strong> yang sudah diberikan<br>
+        4. Klik Deploy → New deployment<br>
+        5. Type: Web app · Execute as: Me · Access: Anyone<br>
+        6. Copy URL → paste di field di atas<br>
+        7. Klik Save → Sync
+      </div>
+    `;
+  }
+  document.getElementById('drawerBg').classList.add('open');
+}
+
+async function saveDrawer() {
+  const mode = drawerMode, eid = drawerEditId;
+  const now = new Date().toISOString();
+
+  if (mode === 'txn') {
+    const tgl = document.getElementById('f_tgl').value;
+    const jenis = document.getElementById('f_jenis').value;
+    const proj = document.getElementById('f_proj').value;
+    const rek = document.getElementById('f_rek').value;
+    const kat = document.getElementById('f_kat').value;
+    const nominal = parseFloat(document.getElementById('f_nominal').value) || 0;
+    const notes = document.getElementById('f_notes').value;
+    if (!tgl || !rek || !kat || !nominal) { showToast('Tanggal, rekening, kategori, nominal wajib diisi', 'error'); return; }
+    const obj = {ID:eid||uid(),TANGGAL:tgl,JENIS:jenis,PROJECT:proj,REKENING:rek,KATEGORI:kat,NOMINAL:nominal,NOTES:notes,TIPE_LOG:jenis,CREATED_BY:state.user,CREATED_AT:now};
+    if (eid) { const i = state.txns.findIndex(x=>x.ID===eid); state.txns[i] = obj; }
+    else state.txns.unshift(obj);
+    if (API_URL) await apiPost({ action: eid?'updateRow':'addTxn', data: eid?{sheet:'TRANSAKSI',id:eid,updates:obj}:obj });
+    renderDashboard(); renderTxn(); showToast(eid?'Transaksi diperbarui ✓':'Transaksi tersimpan ✓', 'success');
+  } else if (mode === 'proj') {
+    const nama = document.getElementById('f_nama').value.trim().toUpperCase();
+    if (!nama) { showToast('Nama project wajib diisi', 'error'); return; }
+    const obj = {ID:eid||uid(),NAMA:nama,KLIEN:document.getElementById('f_klien').value.trim(),TGL_MULAI:document.getElementById('f_tglmulai').value,STATUS:document.getElementById('f_status').value,NILAI_CONTRACT:parseFloat(document.getElementById('f_nilai').value)||0,CREATED_AT:now};
+    if (eid) { const i = state.projects.findIndex(x=>x.ID===eid); state.projects[i] = obj; }
+    else state.projects.push(obj);
+    if (API_URL) await apiPost({ action: eid?'updateRow':'addProj', data: eid?{sheet:'MASTER_PROJECT',id:eid,updates:obj}:obj });
+    renderProject(); renderDashboard(); showToast(eid?'Project diperbarui ✓':'Project ditambahkan ✓', 'success');
+  } else if (mode === 'bank') {
+    const nama = document.getElementById('f_nama').value.trim();
+    if (!nama) { showToast('Nama rekening wajib diisi', 'error'); return; }
+    const obj = {ID:eid||uid(),NAMA:nama,TIPE:document.getElementById('f_tipe').value,BANK:document.getElementById('f_bank').value.trim(),SALDO_AWAL:parseFloat(document.getElementById('f_saldo').value)||0,CREATED_AT:now};
+    if (eid) { const i = state.banks.findIndex(x=>x.ID===eid); state.banks[i] = obj; }
+    else state.banks.push(obj);
+    if (API_URL) await apiPost({ action: eid?'updateRow':'addBank', data: eid?{sheet:'MASTER_BANK',id:eid,updates:obj}:obj });
+    renderMaster(); renderDashboard(); showToast(eid?'Rekening diperbarui ✓':'Rekening ditambahkan ✓', 'success');
+  } else if (mode === 'cc') {
+    const nama = document.getElementById('f_nama').value.trim();
+    if (!nama) { showToast('Nama kartu wajib diisi', 'error'); return; }
+    const obj = {ID:eid||uid(),NAMA:nama,BANK:document.getElementById('f_bank').value.trim(),LIMIT:parseFloat(document.getElementById('f_limit').value)||0,JATUH_TEMPO:parseInt(document.getElementById('f_jt').value)||25,CREATED_AT:now};
+    if (eid) { const i = state.ccs.findIndex(x=>x.ID===eid); state.ccs[i] = obj; }
+    else state.ccs.push(obj);
+    if (API_URL) await apiPost({ action: eid?'updateRow':'addCC', data: eid?{sheet:'MASTER_CC',id:eid,updates:obj}:obj });
+    renderMaster(); renderDashboard(); showToast(eid?'Kartu diperbarui ✓':'Kartu ditambahkan ✓', 'success');
+  } else if (mode === 'kat') {
+    const nama = document.getElementById('f_nama').value.trim();
+    if (!nama) { showToast('Nama kategori wajib diisi', 'error'); return; }
+    const obj = {ID:eid||uid(),KELOMPOK:document.getElementById('f_kelompok').value,NAMA:nama,TIPE:document.getElementById('f_tipe').value,CREATED_AT:now};
+    if (eid) { const i = state.kategori.findIndex(x=>x.ID===eid); state.kategori[i] = obj; }
+    else state.kategori.push(obj);
+    if (API_URL) await apiPost({ action: eid?'updateRow':'addKat', data: eid?{sheet:'MASTER_KATEGORI',id:eid,updates:obj}:obj });
+    renderMaster(); showToast(eid?'Kategori diperbarui ✓':'Kategori ditambahkan ✓', 'success');
+  }
+  saveLocal(); closeDrawer();
+}
+
+function saveSettings() {
+  API_URL = document.getElementById('f_apiurl').value.trim();
+  state.user = document.getElementById('f_user').value.trim() || 'Eddy';
+  localStorage.setItem('fcc_api_url', API_URL);
+  closeDrawer();
+  showToast('Settings tersimpan ✓', 'success');
+  if (API_URL) syncAll();
+}
+
+async function deleteItem(stateKey, id, sheetName) {
+  if (!confirm('Yakin hapus data ini?')) return;
+  state[stateKey] = state[stateKey].filter(x => x.ID !== id);
+  saveLocal();
+  if (API_URL) await apiPost({ action: 'deleteRow', data: { sheet: sheetName, id } });
+  closeDrawer();
+  renderAll();
+  showToast('Data dihapus ✓', 'success');
+}
+
+function editTxn(id) { openDrawer('txn', id); }
+function editProj(id) { openDrawer('proj', id); }
+function editBank(id) { openDrawer('bank', id); }
+function editCC(id) { openDrawer('cc', id); }
+function editKat(id) { openDrawer('kat', id); }
+function closeDrawer() { document.getElementById('drawerBg').classList.remove('open'); }
+
+// ── NAVIGATION ─────────────────────────────────────────
+function goPage(id) {
+  state.currentPage = id;
+  document.querySelectorAll('.page').forEach(p => p.classList.toggle('active', p.id === 'page-' + id));
+  document.querySelectorAll('.nav-item').forEach((b,i) => b.classList.toggle('active', ['dashboard','transaksi','transfer','project','master'][i] === id));
+  document.getElementById('content').scrollTop = 0;
+  if (id === 'transfer') renderTransferPage();
+  if (id === 'master') renderMaster();
+}
+
+// ── TOAST ──────────────────────────────────────────────
+let toastTimer;
+function showToast(msg, type = 'success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast ' + type + ' show';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ── RENDER ALL ─────────────────────────────────────────
+function renderAll() {
+  renderDashboard();
+  filterTxn();
+  renderProject();
+  if (state.currentPage === 'master') renderMaster();
+  if (state.currentPage === 'transfer') renderTransferPage();
+}
+
+// ── PWA SERVICE WORKER ─────────────────────────────────
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
+
+// Settings button on topbar via long press
+let logoTimer;
+document.querySelector('.topbar-title').addEventListener('touchstart', () => { logoTimer = setTimeout(() => openDrawer('settings'), 800); });
+document.querySelector('.topbar-title').addEventListener('touchend', () => clearTimeout(logoTimer));
+document.querySelector('.topbar-title').addEventListener('click', () => openDrawer('settings'));
+</script>
+</body>
+</html>
