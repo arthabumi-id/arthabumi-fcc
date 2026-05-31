@@ -153,6 +153,18 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
 
 /* PULL TO REFRESH INDICATOR */
 .ptr{text-align:center;padding:8px;font-size:11px;color:var(--text3)}
+
+/* ACCOUNT DETAIL */
+.acct-card{cursor:pointer;transition:background .15s}
+.acct-card:active{background:var(--bg3)!important}
+.filter-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.filter-row .form-input{flex:1;min-width:0;padding:8px 10px;font-size:12px}
+.filter-chip{background:var(--bg3);border:1px solid var(--border2);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:600;color:var(--text2);cursor:pointer;white-space:nowrap}
+.filter-chip.active{background:var(--green);color:#0f0f13;border-color:var(--green)}
+.detail-summary{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px}
+.detail-sum-item{background:var(--bg3);border-radius:8px;padding:8px;text-align:center}
+.detail-sum-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.3px}
+.detail-sum-val{font-size:14px;font-weight:700;margin-top:3px}
 </style>
 </head>
 <body>
@@ -818,12 +830,17 @@ function renderMaster() {
       <button class="btn-primary" style="margin-bottom:12px" onclick="openDrawer('bank')"><i class="ti ti-plus"></i> Tambah Rekening</button>
       ${state.banks.map(b => {
         const r = getSaldo(b.NAMA);
-        return `<div class="card" style="margin-bottom:8px;padding:10px 12px">
+        return `<div class="card acct-card" style="margin-bottom:8px;padding:10px 12px" onclick="openAccountDetail('bank','${esc(b.NAMA)}')">
           <div style="display:flex;align-items:center;justify-content:space-between">
-            <div><div style="font-size:13px;font-weight:600">${esc(b.NAMA)}</div><div style="font-size:11px;color:var(--text2)">${b.BANK} · ${b.TIPE}</div></div>
-            <div style="text-align:right">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:600">${esc(b.NAMA)}</div>
+              <div style="font-size:11px;color:var(--text2)">${b.BANK} · ${b.TIPE}</div>
+              <div style="font-size:10px;color:var(--text3);margin-top:2px">${state.txns.filter(t=>t.REKENING===b.NAMA).length} transaksi · ketuk untuk detail</div>
+            </div>
+            <div style="text-align:right;flex-shrink:0">
               <div style="font-size:14px;font-weight:700;color:${r.saldo>=0?'var(--green)':'var(--red)'}">${fmt(r.saldo)}</div>
-              <div style="display:flex;gap:5px;margin-top:4px;justify-content:flex-end">
+              <div style="font-size:10px;color:var(--text3)">+${fmtS(r.masuk)} / -${fmtS(r.keluar)}</div>
+              <div style="display:flex;gap:5px;margin-top:6px;justify-content:flex-end" onclick="event.stopPropagation()">
                 <button class="btn-danger" onclick="editBank('${b.ID}')">Edit</button>
                 <button class="btn-danger" onclick="deleteItem('banks','${b.ID}','MASTER_BANK')">Hapus</button>
               </div>
@@ -837,14 +854,19 @@ function renderMaster() {
       <button class="btn-primary" style="margin-bottom:12px" onclick="openDrawer('cc')"><i class="ti ti-plus"></i> Tambah Kartu Kredit</button>
       ${state.ccs.map(c => {
         const out = getCCOut(c.NAMA), res = state.reserveFunds[c.NAMA] || 0;
-        return `<div class="card" style="margin-bottom:8px;padding:10px 12px">
+        const txnCount = state.txns.filter(t=>t.REKENING===c.NAMA).length;
+        return `<div class="card acct-card" style="margin-bottom:8px;padding:10px 12px" onclick="openAccountDetail('cc','${esc(c.NAMA)}')">
           <div style="display:flex;align-items:center;justify-content:space-between">
-            <div><div style="font-size:13px;font-weight:600">${esc(c.NAMA)}</div><div style="font-size:11px;color:var(--text2)">${c.BANK} · Limit ${c.LIMIT?fmtS(c.LIMIT):'—'} · Jth tgl ${c.JATUH_TEMPO}</div></div>
-            <div style="text-align:right">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:600">${esc(c.NAMA)}</div>
+              <div style="font-size:11px;color:var(--text2)">${c.BANK} · Limit ${c.LIMIT?fmtS(c.LIMIT):'—'} · Jth tgl ${c.JATUH_TEMPO}</div>
+              <div style="font-size:10px;color:var(--text3);margin-top:2px">${txnCount} transaksi · ketuk untuk detail</div>
+            </div>
+            <div style="text-align:right;flex-shrink:0">
               <span class="badge ${out>0?'badge-red':'badge-green'}">${out>0?'Tagihan':'Lunas'}</span>
               ${out>0?`<div style="font-size:12px;font-weight:700;color:var(--red);margin-top:3px">${fmt(out)}</div>`:''}
               ${res>0?`<div style="font-size:10px;color:var(--blue)">res: ${fmtS(res)}</div>`:''}
-              <div style="display:flex;gap:5px;margin-top:4px;justify-content:flex-end">
+              <div style="display:flex;gap:5px;margin-top:6px;justify-content:flex-end" onclick="event.stopPropagation()">
                 <button class="btn-danger" onclick="editCC('${c.ID}')">Edit</button>
                 <button class="btn-danger" onclick="deleteItem('ccs','${c.ID}','MASTER_CC')">Hapus</button>
               </div>
@@ -873,6 +895,108 @@ function renderMaster() {
       `).join('')}
     `;
   }
+}
+
+// ── ACCOUNT DETAIL ────────────────────────────────────
+function openAccountDetail(type, nama) {
+  const isCC = type === 'cc';
+  document.getElementById('drawerTitle').textContent = nama;
+
+  // Default filter: current month
+  const now = new Date();
+  const defFrom = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
+  const defTo   = now.toISOString().slice(0,10);
+
+  function renderDetail(fromDate, toDate, jenis, search) {
+    let data = state.txns.filter(t => t.REKENING === nama);
+    if (fromDate) data = data.filter(t => String(t.TANGGAL) >= fromDate);
+    if (toDate)   data = data.filter(t => String(t.TANGGAL) <= toDate);
+    if (jenis)    data = data.filter(t => t.JENIS === jenis);
+    if (search)   data = data.filter(t => (t.PROJECT+t.KATEGORI+t.NOTES).toLowerCase().includes(search.toLowerCase()));
+    data.sort((a,b) => String(b.TANGGAL).localeCompare(String(a.TANGGAL)));
+
+    const totMasuk  = data.filter(t=>t.JENIS==='Pemasukan').reduce((s,t)=>s+Number(t.NOMINAL),0);
+    const totKeluar = data.filter(t=>t.JENIS==='Pengeluaran').reduce((s,t)=>s+Number(t.NOMINAL),0);
+    const saldo     = totMasuk - totKeluar;
+
+    document.getElementById('acctDetailBody').innerHTML = `
+      <div class="detail-summary">
+        <div class="detail-sum-item">
+          <div class="detail-sum-label">Masuk</div>
+          <div class="detail-sum-val pos">${fmtS(totMasuk)}</div>
+        </div>
+        <div class="detail-sum-item">
+          <div class="detail-sum-label">Keluar</div>
+          <div class="detail-sum-val neg">${fmtS(totKeluar)}</div>
+        </div>
+        <div class="detail-sum-item">
+          <div class="detail-sum-label">${isCC?'Tagihan':'Saldo'}</div>
+          <div class="detail-sum-val" style="color:${isCC?(saldo<0?'var(--green)':'var(--red)'):(saldo>=0?'var(--green)':'var(--red)'}">
+            ${isCC?fmtS(Math.abs(saldo)):fmtS(saldo)}
+          </div>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px">${data.length} transaksi ditampilkan</div>
+      ${data.length ? data.map(t => {
+        const isTr = t.TIPE_LOG==='Transfer', isRes = t.TIPE_LOG==='Reserve';
+        return `<div class="card" style="padding:9px 11px;margin-bottom:6px">
+          <div style="display:flex;align-items:center;gap:9px">
+            <div style="width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:${t.JENIS==='Pemasukan'?'#0a2a1a':isTr?'#0a1a3a':isRes?'#1a0a3a':'#2a0a0a'}">
+              <i class="ti ti-${t.JENIS==='Pemasukan'?'arrow-down-left':isTr?'arrows-exchange':isRes?'shield-check':'arrow-up-right'}" style="font-size:13px;color:${t.JENIS==='Pemasukan'?'var(--green)':isTr?'var(--blue)':isRes?'var(--purple)':'var(--red)'}"></i>
+            </div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.KATEGORI||'—')}</div>
+              <div style="font-size:10px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${String(t.TANGGAL).slice(0,10)}${t.PROJECT?' · '+esc(t.PROJECT):''}</div>
+              ${t.NOTES?`<div style="font-size:10px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.NOTES)}</div>`:''}
+            </div>
+            <div style="text-align:right;flex-shrink:0">
+              <div style="font-size:13px;font-weight:700;color:${t.JENIS==='Pemasukan'?'var(--green)':'var(--red)'}">${t.JENIS==='Pemasukan'?'+':'-'}${fmtS(Number(t.NOMINAL))}</div>
+              ${(!isTr&&!isRes)?`<button style="font-size:10px;background:transparent;border:none;color:var(--text3);cursor:pointer;padding:0" onclick="closeDrawer();setTimeout(()=>editTxn('${t.ID}'),200)">edit</button>`:''}
+            </div>
+          </div>
+        </div>`;
+      }).join('') : '<div class="empty">Tidak ada transaksi</div>'}
+    `;
+  }
+
+  document.getElementById('drawerBody').innerHTML = `
+    <div class="filter-row">
+      <input class="form-input" type="date" id="ad_from" value="${defFrom}">
+      <input class="form-input" type="date" id="ad_to" value="${defTo}">
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
+      <button class="filter-chip active" id="chip_all"    onclick="acctChip(this,'')">Semua</button>
+      <button class="filter-chip"        id="chip_masuk"  onclick="acctChip(this,'Pemasukan')">Masuk</button>
+      <button class="filter-chip"        id="chip_keluar" onclick="acctChip(this,'Pengeluaran')">Keluar</button>
+    </div>
+    <input class="form-input" id="ad_search" placeholder="🔍 Cari kategori / notes / project..." oninput="acctFilter()" style="margin-bottom:12px">
+    <div id="acctDetailBody"></div>
+  `;
+
+  // Bind filter changes
+  ['ad_from','ad_to'].forEach(id => {
+    document.getElementById(id).addEventListener('change', acctFilter);
+  });
+
+  window._acctJenis = '';
+  window.acctChip = function(el, val) {
+    document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+    el.classList.add('active');
+    window._acctJenis = val;
+    acctFilter();
+  };
+  window.acctFilter = function() {
+    renderDetail(
+      document.getElementById('ad_from').value,
+      document.getElementById('ad_to').value,
+      window._acctJenis,
+      document.getElementById('ad_search').value
+    );
+  };
+
+  // Initial render
+  renderDetail(defFrom, defTo, '', '');
+  document.getElementById('drawerBg').classList.add('open');
 }
 
 function switchMasterTab(tab) {
