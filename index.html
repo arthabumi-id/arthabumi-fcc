@@ -10,6 +10,7 @@
 <title>FCC Arthabumi</title>
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 :root{
   --bg:#0f0f13;--bg2:#16161d;--bg3:#1e1e28;--bg4:#252532;
@@ -190,6 +191,7 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
     <!-- DASHBOARD -->
     <div class="page active" id="page-dashboard">
       <div id="dashMetrics"></div>
+      <div id="dashCharts"></div>
       <div id="dashSaldo"></div>
       <div id="dashCC"></div>
       <div id="dashRecent"></div>
@@ -296,7 +298,18 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
 // GANTI URL INI setelah deploy Apps Script!
 let API_URL = localStorage.getItem('fcc_api_url') || '';
 const SHEET_ID = '1BYXyk0XlyeuelrIa6KKch8A79z7yvOG3_RjSxft7JTo';
-const VALID_PINS = ['1234','5678','9999'];
+// PIN disimpan sebagai SHA-256 hash — bukan plaintext.
+// Untuk generate hash PIN baru, buka browser console dan ketik:
+// sha256pin('PIN_KAMU').then(h => console.log(h))
+const VALID_PIN_HASHES = [
+  '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4', // 1234
+  'ef797c8118f02dfb649607dd5d3f8c7623048c9c063d532cc95c5ed7a898a64f', // 5678
+  '1bf5f394b74ff0f07e02b52568c1e8f93b1ac3b614e90faa3b6e09d13b3a1f98', // 9999
+];
+async function sha256pin(pin) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pin));
+  return [...new Uint8Array(buf)].map(x=>x.toString(16).padStart(2,'0')).join('');
+}
 
 // ── STATE ─────────────────────────────────────────────
 let state = {
@@ -326,9 +339,10 @@ const esc = s => String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 // ── LOGIN ─────────────────────────────────────────────
 document.getElementById('pinInput').addEventListener('keydown', e => { if(e.key === 'Enter') doLogin(); });
 
-function doLogin() {
+async function doLogin() {
   const pin = document.getElementById('pinInput').value;
-  if (!VALID_PINS.includes(pin)) {
+  const hash = await sha256pin(pin);
+  if (!VALID_PIN_HASHES.includes(hash)) {
     document.getElementById('pinErr').textContent = 'PIN salah. Coba lagi.';
     document.getElementById('pinInput').value = '';
     return;
@@ -594,6 +608,9 @@ function renderDashboard() {
     </div>
   `;
 
+  // Charts (defer to next frame so DOM is ready)
+  setTimeout(renderCharts, 0);
+
   // Recent txns
   const recent = [...state.txns].sort((a,b) => String(b.TANGGAL).localeCompare(String(a.TANGGAL))).slice(0, 8);
   document.getElementById('dashRecent').innerHTML = `
@@ -616,6 +633,121 @@ function renderDashboard() {
       }).join('') || '<div class="empty">Belum ada transaksi</div>'}
     </div>
   `;
+}
+
+// ── RENDER CHARTS ─────────────────────────────────────
+let _chartInstances = {};
+
+function destroyChart(id) {
+  if (_chartInstances[id]) { _chartInstances[id].destroy(); delete _chartInstances[id]; }
+}
+
+function renderCharts() {
+  // ── 1. Arus Kas 6 Bulan ──────────────────────────────
+  const now = new Date();
+  const months = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({ key: d.toISOString().slice(0,7), label: d.toLocaleDateString('id-ID',{month:'short',year:'2-digit'}) });
+  }
+  const masukPerBulan = months.map(m => state.txns.filter(t => String(t.TANGGAL).slice(0,7)===m.key && t.JENIS==='Pemasukan').reduce((s,t)=>s+Number(t.NOMINAL),0)/1e6);
+  const keluarPerBulan = months.map(m => state.txns.filter(t => String(t.TANGGAL).slice(0,7)===m.key && t.JENIS==='Pengeluaran').reduce((s,t)=>s+Number(t.NOMINAL),0)/1e6);
+
+  // ── 2. Komposisi Pengeluaran by Kelompok ─────────────
+  const kelompokColors = { PROJECT:'#5b9cf6', OPERASIONAL:'#f5a623', PRIBADI:'#a78bfa', FINANCIAL:'#f06a6a', TRANSFER:'#2dd4a0' };
+  const kelompokMap = {};
+  state.txns.filter(t => t.JENIS==='Pengeluaran' && t.TIPE_LOG==='Pengeluaran').forEach(t => {
+    const kat = state.kategori.find(k => k.NAMA===t.KATEGORI);
+    const grp = kat ? kat.KELOMPOK : 'LAINNYA';
+    kelompokMap[grp] = (kelompokMap[grp]||0) + Number(t.NOMINAL);
+  });
+  const kelLabels = Object.keys(kelompokMap);
+  const kelValues = kelLabels.map(k => kelompokMap[k]/1e6);
+  const kelColors = kelLabels.map(k => kelompokColors[k]||'#5a5a72');
+
+  // ── 3. Cashflow Project (top 6 by activity) ──────────
+  const projWithTxn = state.projects.filter(p => state.txns.some(t => t.PROJECT===p.NAMA)).slice(0,6);
+  const projLabels = projWithTxn.map(p => p.NAMA.replace(/^PROJ\s*/i,'').slice(0,18));
+  const projMasuk = projWithTxn.map(p => getProjCF(p.NAMA).masuk/1e6);
+  const projKeluar = projWithTxn.map(p => getProjCF(p.NAMA).keluar/1e6);
+  const projSisa = projWithTxn.map(p => getProjCF(p.NAMA).sisa/1e6);
+
+  // Render HTML
+  document.getElementById('dashCharts').innerHTML = `
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title">Arus Kas 6 Bulan Terakhir</div>
+      <div style="position:relative;height:180px"><canvas id="chartArus"></canvas></div>
+    </div>
+    ${kelLabels.length ? `<div class="card" style="margin-bottom:12px">
+      <div class="card-title">Komposisi Pengeluaran</div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="position:relative;height:140px;width:140px;flex-shrink:0"><canvas id="chartKel"></canvas></div>
+        <div style="font-size:11px;line-height:2">${kelLabels.map((l,i)=>`<div><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${kelColors[i]};margin-right:5px;vertical-align:middle"></span>${l}: <b>${kelValues[i].toFixed(1)}jt</b></div>`).join('')}</div>
+      </div>
+    </div>` : ''}
+    ${projWithTxn.length ? `<div class="card" style="margin-bottom:12px">
+      <div class="card-title">Cashflow Project</div>
+      <div style="position:relative;height:${Math.max(160, projWithTxn.length*44)}px"><canvas id="chartProj"></canvas></div>
+    </div>` : ''}
+  `;
+
+  // Destroy old charts
+  destroyChart('chartArus'); destroyChart('chartKel'); destroyChart('chartProj');
+
+  // Chart defaults
+  Chart.defaults.color = '#9090a8';
+  Chart.defaults.font.family = 'Inter, -apple-system, sans-serif';
+  Chart.defaults.font.size = 11;
+
+  // 1. Arus Kas Bar
+  _chartInstances['chartArus'] = new Chart(document.getElementById('chartArus'), {
+    type: 'bar',
+    data: {
+      labels: months.map(m=>m.label),
+      datasets: [
+        { label:'Masuk', data: masukPerBulan, backgroundColor:'rgba(45,212,160,0.7)', borderRadius:4, borderSkipped:false },
+        { label:'Keluar', data: keluarPerBulan, backgroundColor:'rgba(240,106,106,0.7)', borderRadius:4, borderSkipped:false }
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ position:'top', labels:{ boxWidth:10, padding:12 } }, tooltip:{ callbacks:{ label: ctx => ` ${ctx.dataset.label}: ${ctx.raw.toFixed(1)}jt` } } },
+      scales:{ x:{ grid:{ color:'#2e2e3e' } }, y:{ grid:{ color:'#2e2e3e' }, ticks:{ callback: v => v+'jt' } } }
+    }
+  });
+
+  // 2. Komposisi Doughnut
+  if (kelLabels.length) {
+    _chartInstances['chartKel'] = new Chart(document.getElementById('chartKel'), {
+      type: 'doughnut',
+      data: { labels: kelLabels, datasets:[{ data: kelValues, backgroundColor: kelColors, borderWidth:0, hoverOffset:6 }] },
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        cutout:'65%',
+        plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ label: ctx => ` ${ctx.label}: ${ctx.raw.toFixed(1)}jt` } } }
+      }
+    });
+  }
+
+  // 3. Cashflow Project Horizontal Bar
+  if (projWithTxn.length) {
+    _chartInstances['chartProj'] = new Chart(document.getElementById('chartProj'), {
+      type: 'bar',
+      data: {
+        labels: projLabels,
+        datasets: [
+          { label:'Masuk', data: projMasuk, backgroundColor:'rgba(45,212,160,0.7)', borderRadius:3 },
+          { label:'Keluar', data: projKeluar, backgroundColor:'rgba(240,106,106,0.7)', borderRadius:3 },
+          { label:'Sisa', data: projSisa, backgroundColor:'rgba(91,156,246,0.6)', borderRadius:3 }
+        ]
+      },
+      options: {
+        indexAxis:'y', responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ position:'top', labels:{ boxWidth:10, padding:10 } }, tooltip:{ callbacks:{ label: ctx => ` ${ctx.dataset.label}: ${ctx.raw.toFixed(1)}jt` } } },
+        scales:{ x:{ grid:{ color:'#2e2e3e' }, ticks:{ callback: v => v+'jt' } }, y:{ grid:{ color:'#2e2e3e' }, ticks:{ font:{ size:10 } } } }
+      }
+    });
+  }
 }
 
 // ── RENDER TRANSAKSI ──────────────────────────────────
