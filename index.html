@@ -1186,7 +1186,7 @@ function openDrawer(mode, editId = null) {
       </div>
       <div class="form-group"><label class="form-label">Nilai Kontrak (Rp)</label><input class="form-input" type="number" id="fp_nilai" value="${t?t.NILAI_CONTRACT:''}" placeholder="0" inputmode="numeric"></div>
       <button class="btn-primary" onclick="saveDrawer()"><i class="ti ti-device-floppy"></i> Simpan</button>
-      ${eid?`<button class="btn-secondary" onclick="deleteItem('projects','${eid}','MASTER_PROJECT');closeDrawer()">Hapus Project</button>`:''}
+      ${editId?`<button class="btn-secondary" onclick="deleteItem('projects','${editId}','MASTER_PROJECT');closeDrawer()">Hapus Project</button>`:''}
     `;
   } else if (mode === 'bank') {
     const b = editId ? state.banks.find(x=>x.ID===editId) : null;
@@ -1197,7 +1197,7 @@ function openDrawer(mode, editId = null) {
         <div class="form-group"><label class="form-label">Tipe</label><select class="form-input" id="fb_tipe"><option ${!b||b.TIPE==='Bank'?'selected':''}>Bank</option><option ${b&&b.TIPE==='Kas'?'selected':''}>Kas</option></select></div>
       </div>
       <button class="btn-primary" onclick="saveDrawer()"><i class="ti ti-device-floppy"></i> Simpan</button>
-      ${eid?`<button class="btn-secondary" onclick="deleteItem('banks','${eid}','MASTER_BANK');closeDrawer()">Hapus Rekening</button>`:''}
+      ${editId?`<button class="btn-secondary" onclick="deleteItem('banks','${editId}','MASTER_BANK');closeDrawer()">Hapus Rekening</button>`:''}
     `;
   } else if (mode === 'cc') {
     const c = editId ? state.ccs.find(x=>x.ID===editId) : null;
@@ -1209,7 +1209,7 @@ function openDrawer(mode, editId = null) {
       </div>
       <div class="form-group"><label class="form-label">Limit (Rp)</label><input class="form-input" type="number" id="fc_limit" value="${c?c.LIMIT:0}" placeholder="0" inputmode="numeric"></div>
       <button class="btn-primary" onclick="saveDrawer()"><i class="ti ti-device-floppy"></i> Simpan</button>
-      ${eid?`<button class="btn-secondary" onclick="deleteItem('ccs','${eid}','MASTER_CC');closeDrawer()">Hapus Kartu</button>`:''}
+      ${editId?`<button class="btn-secondary" onclick="deleteItem('ccs','${editId}','MASTER_CC');closeDrawer()">Hapus Kartu</button>`:''}
     `;
   } else if (mode === 'kat') {
     const k = editId ? state.kategori.find(x=>x.ID===editId) : null;
@@ -1220,7 +1220,7 @@ function openDrawer(mode, editId = null) {
         <div class="form-group"><label class="form-label">Tipe</label><select class="form-input" id="fk_tipe"><option ${!k||k.TIPE==='Pemasukan'?'selected':''}>Pemasukan</option><option ${k&&k.TIPE==='Pengeluaran'?'selected':''}>Pengeluaran</option></select></div>
       </div>
       <button class="btn-primary" onclick="saveDrawer()"><i class="ti ti-device-floppy"></i> Simpan</button>
-      ${eid?`<button class="btn-secondary" onclick="deleteItem('kategori','${eid}','MASTER_KATEGORI');closeDrawer()">Hapus Kategori</button>`:''}
+      ${editId?`<button class="btn-secondary" onclick="deleteItem('kategori','${editId}','MASTER_KATEGORI');closeDrawer()">Hapus Kategori</button>`:''}
     `;
   } else if (mode === 'settings') {
     document.getElementById('drawerBody').innerHTML = `
