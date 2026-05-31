@@ -310,18 +310,7 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
 // GANTI URL INI setelah deploy Apps Script!
 let API_URL = localStorage.getItem('fcc_api_url') || '';
 const SHEET_ID = '1BYXyk0XlyeuelrIa6KKch8A79z7yvOG3_RjSxft7JTo';
-// PIN disimpan sebagai SHA-256 hash — bukan plaintext.
-// Untuk generate hash PIN baru, buka browser console dan ketik:
-// sha256pin('PIN_KAMU').then(h => console.log(h))
-const VALID_PIN_HASHES = [
-  '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4', // 1234
-  'f8638b979b2f4f793ddb6dbd197e0ee25a7a6ea32b0ae22f5e3c5d119d839e75', // 5678
-  '888df25ae35772424a560c7152a1de794440e0ea5cfee62828333a456a506e05',  // 9999
-];
-async function sha256pin(pin) {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pin));
-  return [...new Uint8Array(buf)].map(x=>x.toString(16).padStart(2,'0')).join('');
-}
+const VALID_PINS = ['1234','5678','9999'];
 
 // ── STATE ─────────────────────────────────────────────
 let state = {
@@ -351,10 +340,9 @@ const esc = s => String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 // ── LOGIN ─────────────────────────────────────────────
 document.getElementById('pinInput').addEventListener('keydown', e => { if(e.key === 'Enter') doLogin(); });
 
-async function doLogin() {
+function doLogin() {
   const pin = document.getElementById('pinInput').value;
-  const hash = await sha256pin(pin);
-  if (!VALID_PIN_HASHES.includes(hash)) {
+  if (!VALID_PINS.includes(pin)) {
     document.getElementById('pinErr').textContent = 'PIN salah. Coba lagi.';
     document.getElementById('pinInput').value = '';
     return;
