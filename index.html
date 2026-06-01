@@ -232,7 +232,7 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
           <div class="form-group"><label class="form-label">Dari rekening</label><select class="form-input" id="tr_dari" onchange="previewTransfer()"></select></div>
           <div class="form-group"><label class="form-label">Ke rekening</label><select class="form-input" id="tr_ke" onchange="previewTransfer()"></select></div>
           <div class="form-row">
-            <div class="form-group"><label class="form-label">Nominal (Rp)</label><input class="form-input" type="number" id="tr_nominal" placeholder="0" oninput="previewTransfer()"></div>
+            <div class="form-group"><label class="form-label">Nominal (Rp)</label><input class="form-input" type="text" inputmode="numeric" id="tr_nominal" placeholder="0" oninput="fmtMoneyInput(this);previewTransfer()"></div>
             <div class="form-group"><label class="form-label">Tanggal</label><input class="form-input" type="date" id="tr_tgl"></div>
           </div>
           <div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="tr_notes" placeholder="Keterangan..."></div>
@@ -250,7 +250,7 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
           <div class="form-group"><label class="form-label">Dari rekening bank</label><select class="form-input" id="res_dari" onchange="previewReserve()"></select></div>
           <div class="form-group"><label class="form-label">Reserve untuk kartu</label><select class="form-input" id="res_kartu" onchange="previewReserve()"></select></div>
           <div class="form-row">
-            <div class="form-group"><label class="form-label">Nominal (Rp)</label><input class="form-input" type="number" id="res_nominal" placeholder="0" oninput="previewReserve()"></div>
+            <div class="form-group"><label class="form-label">Nominal (Rp)</label><input class="form-input" type="text" inputmode="numeric" id="res_nominal" placeholder="0" oninput="fmtMoneyInput(this);previewReserve()"></div>
             <div class="form-group"><label class="form-label">Tanggal</label><input class="form-input" type="date" id="res_tgl"></div>
           </div>
           <div class="form-group"><label class="form-label">Keterangan</label><input class="form-input" id="res_notes" placeholder="Opsional..."></div>
@@ -1127,7 +1127,7 @@ function switchTTab(t) {
 function previewTransfer() {
   const dari = document.getElementById('tr_dari').value;
   const ke = document.getElementById('tr_ke').value;
-  const nominal = parseFloat(document.getElementById('tr_nominal').value) || 0;
+  const nominal = unfmtNum(document.getElementById('tr_nominal').value);
   const prev = document.getElementById('trPreview');
   if (!nominal || dari === ke) { prev.style.display='none'; return; }
   const sD = getSaldo(dari).saldo, sK = getSaldo(ke).saldo;
@@ -1144,7 +1144,7 @@ function previewTransfer() {
 function previewReserve() {
   const dari = document.getElementById('res_dari').value;
   const kartu = document.getElementById('res_kartu').value;
-  const nominal = parseFloat(document.getElementById('res_nominal').value) || 0;
+  const nominal = unfmtNum(document.getElementById('res_nominal').value);
   const prev = document.getElementById('resPreview');
   if (!nominal) { prev.style.display='none'; return; }
   const sD = getSaldo(dari).saldo, out = getCCOut(kartu), resLama = state.reserveFunds[kartu]||0;
@@ -1160,7 +1160,7 @@ function previewReserve() {
 async function doTransfer() {
   const dari = document.getElementById('tr_dari').value;
   const ke = document.getElementById('tr_ke').value;
-  const nominal = parseFloat(document.getElementById('tr_nominal').value) || 0;
+  const nominal = unfmtNum(document.getElementById('tr_nominal').value);
   const tgl = document.getElementById('tr_tgl').value;
   const notes = document.getElementById('tr_notes').value;
   if (!nominal || !tgl) { showToast('Nominal dan tanggal wajib diisi', 'error'); return; }
@@ -1187,7 +1187,7 @@ async function doTransfer() {
 async function doReserve() {
   const dari = document.getElementById('res_dari').value;
   const kartu = document.getElementById('res_kartu').value;
-  const nominal = parseFloat(document.getElementById('res_nominal').value) || 0;
+  const nominal = unfmtNum(document.getElementById('res_nominal').value);
   const tgl = document.getElementById('res_tgl').value;
   const notes = document.getElementById('res_notes').value;
   if (!nominal || !tgl) { showToast('Nominal dan tanggal wajib diisi', 'error'); return; }
@@ -1275,7 +1275,7 @@ function openDrawer(mode, editId = null) {
         </div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">Nominal (Rp)</label><input class="form-input" type="number" id="f_nominal" value="${t?t.NOMINAL:''}" placeholder="0" inputmode="numeric"></div>
+        <div class="form-group"><label class="form-label">Nominal (Rp)</label><input class="form-input" type="text" inputmode="numeric" id="f_nominal" value="${t?fmtInput(t.NOMINAL):''}" placeholder="0" oninput="fmtMoneyInput(this)"></div>
         <div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="f_notes" value="${t?esc(t.NOTES||''):''}" placeholder="Opsional"></div>
       </div>
       <button class="btn-primary" onclick="saveDrawer()">Simpan ke Sheets</button>
@@ -1290,7 +1290,7 @@ function openDrawer(mode, editId = null) {
         <div class="form-group"><label class="form-label">Tgl Mulai</label><input class="form-input" type="date" id="fp_tgl" value="${t?String(t.TGL_MULAI).slice(0,10):today()}"></div>
         <div class="form-group"><label class="form-label">Status</label><select class="form-input" id="fp_status"><option ${!t||t.STATUS==='Jalan'?'selected':''}>Jalan</option><option ${t&&t.STATUS==='Selesai'?'selected':''}>Selesai</option><option ${t&&t.STATUS==='Hold'?'selected':''}>Hold</option></select></div>
       </div>
-      <div class="form-group"><label class="form-label">Nilai Kontrak (Rp)</label><input class="form-input" type="number" id="fp_nilai" value="${t?t.NILAI_CONTRACT:''}" placeholder="0" inputmode="numeric"></div>
+      <div class="form-group"><label class="form-label">Nilai Kontrak (Rp)</label><input class="form-input" type="text" inputmode="numeric" id="fp_nilai" value="${t?fmtInput(t.NILAI_CONTRACT):''}" placeholder="0" oninput="fmtMoneyInput(this)"></div>
       <button class="btn-primary" onclick="saveDrawer()"><i class="ti ti-device-floppy"></i> Simpan</button>
       ${editId?`<button class="btn-secondary" onclick="deleteItem('projects','${editId}','MASTER_PROJECT');closeDrawer()">Hapus Project</button>`:''}
     `;
@@ -1313,7 +1313,7 @@ function openDrawer(mode, editId = null) {
         <div class="form-group"><label class="form-label">Bank</label><input class="form-input" id="fc_bank" value="${c?esc(c.BANK):''}" placeholder="BCA..."></div>
         <div class="form-group"><label class="form-label">Jatuh Tempo</label><input class="form-input" type="number" id="fc_tempo" value="${c?c.JATUH_TEMPO:25}" placeholder="25" inputmode="numeric"></div>
       </div>
-      <div class="form-group"><label class="form-label">Limit (Rp)</label><input class="form-input" type="number" id="fc_limit" value="${c?c.LIMIT:0}" placeholder="0" inputmode="numeric"></div>
+      <div class="form-group"><label class="form-label">Limit (Rp)</label><input class="form-input" type="text" inputmode="numeric" id="fc_limit" value="${c?fmtInput(c.LIMIT):''}" placeholder="0" oninput="fmtMoneyInput(this)"></div>
       <button class="btn-primary" onclick="saveDrawer()"><i class="ti ti-device-floppy"></i> Simpan</button>
       ${editId?`<button class="btn-secondary" onclick="deleteItem('ccs','${editId}','MASTER_CC');closeDrawer()">Hapus Kartu</button>`:''}
     `;
@@ -1345,7 +1345,7 @@ async function saveDrawer() {
   if (mode === 'txn') {
     const tgl=document.getElementById('f_tgl').value,jenis=document.getElementById('f_jenis').value;
     const proj=document.getElementById('f_proj').value,rek=document.getElementById('f_rek').value;
-    let kat=document.getElementById('f_kat').value;const nominal=parseFloat(document.getElementById('f_nominal').value)||0;
+    let kat=document.getElementById('f_kat').value;const nominal=unfmtNum(document.getElementById('f_nominal').value);
     const notes=document.getElementById('f_notes').value;
     // Kategori baru otomatis ditambahkan ke MASTER_KATEGORI bila belum ada
     let newKatObj=null;
@@ -1365,7 +1365,7 @@ async function saveDrawer() {
     if(API_URL)await apiPost({action:eid?'updateRow':'addTxn',data:eid?{sheet:'TRANSAKSI',id:eid,updates:obj}:obj});
     saveLocal();renderDashboard();renderTxn();showToast(eid?'Transaksi diperbarui':'Transaksi tersimpan','success');
   } else if (mode === 'proj') {
-    const obj={ID:eid||uid(),NAMA:document.getElementById('fp_nama').value,KLIEN:document.getElementById('fp_klien').value,TGL_MULAI:document.getElementById('fp_tgl').value,STATUS:document.getElementById('fp_status').value,NILAI_CONTRACT:parseFloat(document.getElementById('fp_nilai').value)||0,CREATED_AT:now};
+    const obj={ID:eid||uid(),NAMA:document.getElementById('fp_nama').value,KLIEN:document.getElementById('fp_klien').value,TGL_MULAI:document.getElementById('fp_tgl').value,STATUS:document.getElementById('fp_status').value,NILAI_CONTRACT:unfmtNum(document.getElementById('fp_nilai').value),CREATED_AT:now};
     if(!obj.NAMA){showToast('Nama project wajib diisi','error');return;}
     if(eid){const i=state.projects.findIndex(x=>x.ID===eid);state.projects[i]=obj;}else state.projects.unshift(obj);
     if(API_URL)await apiPost({action:eid?'updateRow':'addProj',data:eid?{sheet:'MASTER_PROJECT',id:eid,updates:obj}:obj});
@@ -1377,7 +1377,7 @@ async function saveDrawer() {
     if(API_URL)await apiPost({action:eid?'updateRow':'addBank',data:eid?{sheet:'MASTER_BANK',id:eid,updates:obj}:obj});
     saveLocal();renderMaster();renderDashboard();showToast(eid?'Rekening diperbarui':'Rekening ditambahkan','success');
   } else if (mode === 'cc') {
-    const obj={ID:eid||uid(),NAMA:document.getElementById('fc_nama').value,BANK:document.getElementById('fc_bank').value,LIMIT:parseFloat(document.getElementById('fc_limit').value)||0,JATUH_TEMPO:parseInt(document.getElementById('fc_tempo').value)||25,CREATED_AT:now};
+    const obj={ID:eid||uid(),NAMA:document.getElementById('fc_nama').value,BANK:document.getElementById('fc_bank').value,LIMIT:unfmtNum(document.getElementById('fc_limit').value),JATUH_TEMPO:parseInt(document.getElementById('fc_tempo').value)||25,CREATED_AT:now};
     if(!obj.NAMA){showToast('Nama kartu wajib diisi','error');return;}
     if(eid){const i=state.ccs.findIndex(x=>x.ID===eid);state.ccs[i]=obj;}else state.ccs.push(obj);
     if(API_URL)await apiPost({action:eid?'updateRow':'addCC',data:eid?{sheet:'MASTER_CC',id:eid,updates:obj}:obj});
@@ -1399,6 +1399,10 @@ function editProj(id){openDrawer('proj',id);}
 function editBank(id){openDrawer('bank',id);}
 function editCC(id){openDrawer('cc',id);}
 function editKat(id){openDrawer('kat',id);}
+// Format input nominal dengan titik ribuan saat diketik
+function fmtMoneyInput(el){const raw=String(el.value).replace(/[^\d]/g,'');el.value=raw?Number(raw).toLocaleString('id-ID'):'';}
+function unfmtNum(v){return parseFloat(String(v).replace(/[^\d]/g,''))||0;}
+function fmtInput(n){const x=Number(String(n).replace(/[^\d]/g,''));return!x||isNaN(x)?'':x.toLocaleString('id-ID');}
 function onKatChange(){
   const sel=document.getElementById('f_kat'),wrap=document.getElementById('f_kat_new_wrap');
   if(!sel||!wrap)return;
