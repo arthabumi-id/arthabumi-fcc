@@ -1326,6 +1326,7 @@ function openDrawer(mode, editId = null) {
     document.getElementById('drawerBody').innerHTML = `
       <div class="settings-row"><div><div class="settings-label">API URL</div><div class="settings-sub">${API_URL?'Tersimpan':'Belum diset'}</div></div><button class="btn-danger" onclick="setApiUrl()">Ubah</button></div>
       <div class="settings-row"><div><div class="settings-label">Sheet ID</div><div class="settings-sub">${SHEET_ID.slice(0,16)}...</div></div></div>
+      <div class="settings-row"><div><div class="settings-label">Hitung Ulang Total</div><div class="settings-sub">Pakai setelah edit manual di Google Sheets</div></div><button class="btn-danger" onclick="forceRefresh()">Refresh</button></div>
       <div class="settings-row"><div><div class="settings-label">Cache lokal</div><div class="settings-sub">${state.txns.length} txn cached</div></div><button class="btn-danger" onclick="if(confirm('Reset data lokal?')){localStorage.removeItem('fcc_data');location.reload()}">Reset</button></div>
     `;
   }
@@ -1383,6 +1384,18 @@ function editBank(id){openDrawer('bank',id);}
 function editCC(id){openDrawer('cc',id);}
 function editKat(id){openDrawer('kat',id);}
 function setApiUrl(){const url=prompt('API URL:',API_URL);if(url!==null){API_URL=url.trim();localStorage.setItem('fcc_api_url',API_URL);showToast('API URL disimpan','success');closeDrawer();syncAll();}}
+// Buang cache summary di server lalu tarik data segar — dipakai setelah edit manual di Sheets
+async function forceRefresh(){
+  if(!API_URL){showToast('API URL belum diset','error');return;}
+  showToast('Menghitung ulang dari Sheets...','success');
+  const data=await apiGet({action:'clearCache'});
+  if(data&&!data.error){
+    state.banks=data.banks||state.banks;state.ccs=data.ccs||state.ccs;state.projects=data.projects||state.projects;
+    state.kategori=data.kategori||state.kategori;state.txns=data.txns||state.txns;state.transfers=data.transfers||state.transfers;
+    state.reserves=data.reserves||state.reserves;state.summary=data.summary||null;state.txnsSince=data.since||state.txnsSince;
+    computeReserve();saveLocal();renderAll();closeDrawer();showToast('Total dihitung ulang ✓','success');
+  } else { showToast('Gagal refresh','error'); }
+}
 function showToast(msg,type){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(type||'success');setTimeout(()=>t.classList.add('show'),10);setTimeout(()=>t.classList.remove('show'),2800);}
 function goPage(page){state.currentPage=page;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+page).classList.add('active');document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));const idx=['dashboard','transaksi','transfer','project','master'].indexOf(page);if(idx>=0)document.querySelectorAll('.nav-item')[idx].classList.add('active');document.getElementById('content').scrollTop=0;if(page==='master')renderMaster();if(page==='transfer')renderTransferPage();}
 function renderAll(){renderDashboard();filterTxn();renderProject();if(state.currentPage==='master')renderMaster();if(state.currentPage==='transfer')renderTransferPage();}

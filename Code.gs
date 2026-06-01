@@ -110,6 +110,7 @@ function doGet(e) {
       case 'ping':         return json({ ok: true, version: '3.0' });
       case 'getBundle':    return json(getBundle(ss, e.parameter));
       case 'getSummary':   return json({ summary: getSummary(ss) });
+      case 'clearCache':   invalidateSummary(); return json(getBundle(ss, e.parameter)); // paksa hitung ulang stlh edit manual di Sheets
       case 'getAll':       return json(getAllData(ss));
       case 'getBanks':     return json(getSheet(ss, S.BANK));
       case 'getCCs':       return json(getSheet(ss, S.CC));
