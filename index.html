@@ -1275,6 +1275,7 @@ async function saveDrawer() {
 function closeDrawer(){document.getElementById('drawerBg').classList.remove('open');drawerMode=null;drawerEditId=null;}
 async function deleteItem(stateKey,id,sheetName){state[stateKey]=state[stateKey].filter(x=>x.ID!==id);if(API_URL)await apiPost({action:'deleteRow',data:{sheet:sheetName,id}});saveLocal();renderAll();showToast('Dihapus','success');}
 function editTxn(id){openDrawer('txn',id);}
+function editProj(id){openDrawer('proj',id);}
 function editBank(id){openDrawer('bank',id);}
 function editCC(id){openDrawer('cc',id);}
 function editKat(id){openDrawer('kat',id);}
