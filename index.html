@@ -796,9 +796,9 @@ function renderProject() {
         <span class="badge ${p.STATUS==='Jalan'?'badge-amber':'badge-green'}" style="margin-left:10px;flex-shrink:0">${p.STATUS}</span>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">
-        <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Nilai</div><div style="font-size:12px;font-weight:600">${p.NILAI_CONTRACT?'Rp '+fmt(p.NILAI_CONTRACT):'—'}</div></div>
-        <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Masuk</div><div style="font-size:12px;font-weight:600;color:var(--green)">+Rp ${fmt(cf.masuk)}</div></div>
-        <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Sisa CF</div><div style="font-size:12px;font-weight:600;color:${cf.sisa>=0?'var(--green)':'var(--red)'}">${cf.sisa>=0?'+':'-'}Rp ${fmt(Math.abs(cf.sisa))}</div></div>
+        <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Nilai</div><div style="font-size:12px;font-weight:600">${p.NILAI_CONTRACT?fmt(p.NILAI_CONTRACT):'—'}</div></div>
+        <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Masuk</div><div style="font-size:12px;font-weight:600;color:var(--green)">+${fmt(cf.masuk)}</div></div>
+        <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Sisa CF</div><div style="font-size:12px;font-weight:600;color:${cf.sisa>=0?'var(--green)':'var(--red)'}">${cf.sisa>=0?'+':'-'}${fmt(Math.abs(cf.sisa))}</div></div>
       </div>
       <div class="res-bar-wrap"><div class="res-bar" style="width:${pct}%;background:${p.STATUS==='Jalan'?'var(--amber)':'var(--green)'}"></div></div>
       <div style="display:flex;justify-content:space-between;margin-top:6px">
@@ -910,16 +910,16 @@ function openAccountDetail(type, nama) {
       <div class="detail-summary">
         <div class="detail-sum-item">
           <div class="detail-sum-label">Masuk</div>
-          <div class="detail-sum-val pos">Rp ${fmt(totMasuk)}</div>
+          <div class="detail-sum-val pos">${fmt(totMasuk)}</div>
         </div>
         <div class="detail-sum-item">
           <div class="detail-sum-label">Keluar</div>
-          <div class="detail-sum-val neg">Rp ${fmt(totKeluar)}</div>
+          <div class="detail-sum-val neg">${fmt(totKeluar)}</div>
         </div>
         <div class="detail-sum-item">
           <div class="detail-sum-label">${isCC?'Tagihan':'Saldo'}</div>
           <div class="detail-sum-val" style="color:${isCC?(saldo<0?'var(--green)':'var(--red)'):(saldo>=0?'var(--green)':'var(--red)')}">
-            Rp ${fmt(Math.abs(saldo))}
+            ${fmt(Math.abs(saldo))}
           </div>
         </div>
       </div>
