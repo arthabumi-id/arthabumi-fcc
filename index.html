@@ -237,7 +237,8 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
           </div>
           <div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="tr_notes" placeholder="Keterangan..."></div>
           <div class="preview-box" id="trPreview" style="display:none"></div>
-          <button class="btn-primary" onclick="doTransfer()"><i class="ti ti-arrows-exchange"></i> Proses Transfer</button>
+          <button class="btn-primary" id="trSubmitBtn" onclick="doTransfer()"><i class="ti ti-arrows-exchange"></i> Proses Transfer</button>
+          <button class="btn-secondary" id="trCancelBtn" style="display:none" onclick="cancelEditTransfer()">Batal Edit</button>
         </div>
         <div class="card" id="transferHistCard">
           <div class="card-title">Riwayat Transfer</div>
@@ -592,7 +593,7 @@ function renderDashboard() {
       </div>
       <div class="metric">
         <div class="metric-label">Total Saldo Bank</div>
-        <div class="metric-value pos">${fmt(totBank)}</div>
+        <div class="metric-value" style="color:${totBank>=0?'var(--green)':'var(--red)'}">${fmt(totBank)}</div>
         <div class="metric-sub">${state.banks.length} rekening</div>
       </div>
       <div class="metric">
@@ -1166,6 +1167,15 @@ async function doTransfer() {
   const notes = document.getElementById('tr_notes').value;
   if (!nominal || !tgl) { showToast('Nominal dan tanggal wajib diisi', 'error'); return; }
   if (dari === ke) { showToast('Rekening asal dan tujuan sama!', 'error'); return; }
+  // Mode edit: hapus transfer lama dulu (lokal + server) sebelum buat yang baru
+  const editRef = editTransferRef; editTransferRef = null;
+  if (editRef) {
+    const rm = state.txns.filter(t => t.TIPE_LOG==='Transfer' && String(t.NOTES||'').indexOf(editRef)>=0);
+    rm.forEach(t => applySummaryDelta(t, -1));
+    state.txns = state.txns.filter(t => !(t.TIPE_LOG==='Transfer' && String(t.NOTES||'').indexOf(editRef)>=0));
+    state.transfers = state.transfers.filter(t => String(t.REF_ID)!==String(editRef));
+    if (API_URL) await apiPost({ action: 'deleteTransfer', data: { refId: editRef } });
+  }
   const refId = 'TR' + Date.now();
   const now = new Date().toISOString();
   const t1 = {ID:uid(),TANGGAL:tgl,JENIS:'Pengeluaran',PROJECT:'',REKENING:dari,KATEGORI:'Transfer Keluar',NOMINAL:nominal,NOTES:`[${refId}] → ${ke} ${notes}`,TIPE_LOG:'Transfer',CREATED_AT:now};
@@ -1181,8 +1191,49 @@ async function doTransfer() {
   document.getElementById('tr_nominal').value = '';
   document.getElementById('tr_notes').value = '';
   document.getElementById('trPreview').style.display = 'none';
+  updateTransferBtn();
   renderDashboard(); renderTxn(); renderTransferHist();
-  showToast(`Transfer ${fmt(nominal)} berhasil ✓`, 'success');
+  showToast(editRef ? 'Transfer diperbarui ✓' : `Transfer ${fmt(nominal)} berhasil ✓`, 'success');
+}
+
+function updateTransferBtn() {
+  const b = document.getElementById('trSubmitBtn'), c = document.getElementById('trCancelBtn');
+  if (b) b.innerHTML = editTransferRef ? '<i class="ti ti-device-floppy"></i> Update Transfer' : '<i class="ti ti-arrows-exchange"></i> Proses Transfer';
+  if (c) c.style.display = editTransferRef ? 'block' : 'none';
+}
+
+function editTransferRow(ref) {
+  const tr = state.transfers.find(t => String(t.REF_ID)===String(ref));
+  if (!tr) { showToast('Transfer tidak ditemukan', 'error'); return; }
+  editTransferRef = ref;
+  document.getElementById('tr_dari').value = tr.DARI;
+  document.getElementById('tr_ke').value = tr.KE;
+  document.getElementById('tr_nominal').value = fmtInput(tr.NOMINAL);
+  document.getElementById('tr_tgl').value = String(tr.TANGGAL).slice(0,10);
+  document.getElementById('tr_notes').value = tr.NOTES || '';
+  previewTransfer(); updateTransferBtn();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  showToast('Mode edit — ubah lalu tekan Update Transfer', 'success');
+}
+
+function cancelEditTransfer() {
+  editTransferRef = null;
+  document.getElementById('tr_nominal').value = '';
+  document.getElementById('tr_notes').value = '';
+  document.getElementById('trPreview').style.display = 'none';
+  updateTransferBtn();
+}
+
+async function deleteTransferRow(ref) {
+  if (!confirm('Hapus transfer ini? 2 transaksi terkait + 1 log akan ikut dihapus.')) return;
+  const rm = state.txns.filter(t => t.TIPE_LOG==='Transfer' && String(t.NOTES||'').indexOf(ref)>=0);
+  rm.forEach(t => applySummaryDelta(t, -1));
+  state.txns = state.txns.filter(t => !(t.TIPE_LOG==='Transfer' && String(t.NOTES||'').indexOf(ref)>=0));
+  state.transfers = state.transfers.filter(t => String(t.REF_ID)!==String(ref));
+  saveLocal();
+  if (API_URL) await apiPost({ action: 'deleteTransfer', data: { refId: ref } });
+  renderDashboard(); renderTxn(); renderTransferHist();
+  showToast('Transfer dihapus', 'success');
 }
 
 async function doReserve() {
@@ -1216,7 +1267,13 @@ function renderTransferHist() {
       <div class="list-item">
         <div class="list-icon" style="background:#0a1a3a"><i class="ti ti-arrows-exchange" style="color:var(--blue)"></i></div>
         <div class="list-body"><div class="list-title">${esc(t.DARI)} → ${esc(t.KE)}</div><div class="list-sub">${String(t.TANGGAL).slice(0,10)} · ${esc(t.NOTES||'')}</div></div>
-        <div class="list-right"><div style="font-size:13px;font-weight:700;color:var(--blue)">${fmt(Number(t.NOMINAL))}</div></div>
+        <div class="list-right" style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+          <div style="font-size:13px;font-weight:700;color:var(--blue)">${fmt(Number(t.NOMINAL))}</div>
+          <div style="display:flex;gap:8px">
+            <button style="font-size:11px;background:transparent;border:none;color:var(--text2);cursor:pointer;padding:0" onclick="editTransferRow('${esc(t.REF_ID)}')">edit</button>
+            <button style="font-size:11px;background:transparent;border:none;color:var(--red);cursor:pointer;padding:0" onclick="deleteTransferRow('${esc(t.REF_ID)}')">hapus</button>
+          </div>
+        </div>
       </div>
     `).join('') : '<div class="empty">Belum ada transfer</div>';
 }
@@ -1241,6 +1298,7 @@ function renderReserveDetail() {
 
 // ── DRAWER / FORM ─────────────────────────────────────
 let drawerMode = '', drawerEditId = null;
+let editTransferRef = null;
 
 function openFAB() {
   const page = state.currentPage;

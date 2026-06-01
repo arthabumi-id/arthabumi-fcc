@@ -138,6 +138,7 @@ function doPost(e) {
       case 'addProj':     res = addRow(ss, S.PROJ, data); break;
       case 'addKat':      res = addRow(ss, S.KAT, data); break;
       case 'addTransfer': res = addTransfer(ss, data); break;
+      case 'deleteTransfer': res = deleteTransfer(ss, data); break;
       case 'addReserve':  res = addReserve(ss, data); break;
       case 'updateRow':   res = updateRow(ss, data); break;
       case 'deleteRow':   res = deleteRow(ss, data); break;
@@ -274,6 +275,26 @@ function addReserve(ss, data) {
   const now = new Date().toISOString();
   ss.getSheetByName(S.TXN).appendRow(['ID'+Date.now(), data.TANGGAL, 'Pengeluaran', '', data.DARI_REKENING, 'Reserve CC', data.NOMINAL, '[RESERVE ke '+data.UNTUK_CC+'] '+data.NOTES, 'Reserve', data.USER, now]);
   ss.getSheetByName(S.RESERVE).appendRow(['ID'+Date.now(), data.TANGGAL, data.DARI_REKENING, data.UNTUK_CC, data.NOMINAL, data.NOTES, data.USER, now]);
+  return { ok: true };
+}
+
+// Hapus 1 transfer = baris TRANSFER_LOG (by REF_ID) + 2 baris TRANSAKSI
+// yang NOTES-nya memuat refId. Hapus dari bawah agar index tidak bergeser.
+function deleteTransfer(ss, data) {
+  const refId = String(data.refId || '');
+  if (!refId) return { error: 'refId required' };
+  const tl = ss.getSheetByName(S.TRANSFER);
+  if (tl && tl.getLastRow() > 1) {
+    const all = tl.getRange(1, 1, tl.getLastRow(), tl.getLastColumn()).getValues();
+    const c = all[0].indexOf('REF_ID');
+    for (let i = all.length - 1; i >= 1; i--) if (String(all[i][c]) === refId) tl.deleteRow(i + 1);
+  }
+  const tx = ss.getSheetByName(S.TXN);
+  if (tx && tx.getLastRow() > 1) {
+    const all = tx.getRange(1, 1, tx.getLastRow(), tx.getLastColumn()).getValues();
+    const c = all[0].indexOf('NOTES');
+    for (let i = all.length - 1; i >= 1; i--) if (String(all[i][c]).indexOf(refId) >= 0) tx.deleteRow(i + 1);
+  }
   return { ok: true };
 }
 
