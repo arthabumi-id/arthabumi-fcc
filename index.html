@@ -1267,7 +1267,13 @@ function openDrawer(mode, editId = null) {
       </div>
       <div class="form-group"><label class="form-label">Project</label><select class="form-input" id="f_proj"><option value="">— Tidak ada —</option>${state.projects.map(p=>`<option ${t&&t.PROJECT===p.NAMA?'selected':''}>${p.NAMA}</option>`).join('')}</select></div>
       <div class="form-group"><label class="form-label">Rekening</label><select class="form-input" id="f_rek">${allRek.map(n=>`<option ${t&&t.REKENING===n?'selected':''}>${n}</option>`).join('')}</select></div>
-      <div class="form-group"><label class="form-label">Kategori</label><select class="form-input" id="f_kat">${state.kategori.map(k=>`<option ${t&&t.KATEGORI===k.NAMA?'selected':''}>${k.NAMA}</option>`).join('')}</select></div>
+      <div class="form-group"><label class="form-label">Kategori</label><select class="form-input" id="f_kat" onchange="onKatChange()">${state.kategori.map(k=>`<option ${t&&t.KATEGORI===k.NAMA?'selected':''}>${k.NAMA}</option>`).join('')}<option value="__NEW__">➕ Tambah kategori baru…</option></select></div>
+      <div class="form-group" id="f_kat_new_wrap" style="display:none">
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Nama Kategori Baru</label><input class="form-input" id="f_kat_new" placeholder="Nama kategori..."></div>
+          <div class="form-group"><label class="form-label">Kelompok</label><select class="form-input" id="f_kat_new_grp"><option>OPERASIONAL</option><option>PEMASUKAN</option><option>PROJECT</option><option>PRIBADI</option><option>FINANCIAL</option></select></div>
+        </div>
+      </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Nominal (Rp)</label><input class="form-input" type="number" id="f_nominal" value="${t?t.NOMINAL:''}" placeholder="0" inputmode="numeric"></div>
         <div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="f_notes" value="${t?esc(t.NOTES||''):''}" placeholder="Opsional"></div>
@@ -1339,9 +1345,19 @@ async function saveDrawer() {
   if (mode === 'txn') {
     const tgl=document.getElementById('f_tgl').value,jenis=document.getElementById('f_jenis').value;
     const proj=document.getElementById('f_proj').value,rek=document.getElementById('f_rek').value;
-    const kat=document.getElementById('f_kat').value,nominal=parseFloat(document.getElementById('f_nominal').value)||0;
+    let kat=document.getElementById('f_kat').value;const nominal=parseFloat(document.getElementById('f_nominal').value)||0;
     const notes=document.getElementById('f_notes').value;
+    // Kategori baru otomatis ditambahkan ke MASTER_KATEGORI bila belum ada
+    let newKatObj=null;
+    if(kat==='__NEW__'){
+      const nm=(document.getElementById('f_kat_new').value||'').trim();
+      if(!nm){showToast('Nama kategori baru wajib diisi','error');return;}
+      const exist=state.kategori.find(k=>String(k.NAMA).toLowerCase()===nm.toLowerCase());
+      if(exist){kat=exist.NAMA;}
+      else{const grp=document.getElementById('f_kat_new_grp').value;newKatObj={ID:uid(),NAMA:nm,KELOMPOK:grp,TIPE:jenis,CREATED_AT:now};kat=nm;}
+    }
     if(!tgl||!rek||!kat||!nominal){showToast('Tanggal, rekening, kategori, nominal wajib diisi','error');return;}
+    if(newKatObj){state.kategori.push(newKatObj);if(API_URL)await apiPost({action:'addKat',data:newKatObj});showToast('Kategori baru "'+newKatObj.NAMA+'" ditambahkan','success');}
     const obj={ID:eid||uid(),TANGGAL:tgl,JENIS:jenis,PROJECT:proj,REKENING:rek,KATEGORI:kat,NOMINAL:nominal,NOTES:notes,TIPE_LOG:jenis,CREATED_BY:state.user,CREATED_AT:now};
     let oldT=null;
     if(eid){const i=state.txns.findIndex(x=>x.ID===eid);if(i>=0){oldT=state.txns[i];state.txns[i]=obj;}else state.txns.unshift(obj);}else state.txns.unshift(obj);
@@ -1383,6 +1399,13 @@ function editProj(id){openDrawer('proj',id);}
 function editBank(id){openDrawer('bank',id);}
 function editCC(id){openDrawer('cc',id);}
 function editKat(id){openDrawer('kat',id);}
+function onKatChange(){
+  const sel=document.getElementById('f_kat'),wrap=document.getElementById('f_kat_new_wrap');
+  if(!sel||!wrap)return;
+  const isNew=sel.value==='__NEW__';
+  wrap.style.display=isNew?'block':'none';
+  if(isNew)setTimeout(()=>{const i=document.getElementById('f_kat_new');if(i)i.focus();},50);
+}
 function setApiUrl(){const url=prompt('API URL:',API_URL);if(url!==null){API_URL=url.trim();localStorage.setItem('fcc_api_url',API_URL);showToast('API URL disimpan','success');closeDrawer();syncAll();}}
 // Buang cache summary di server lalu tarik data segar — dipakai setelah edit manual di Sheets
 async function forceRefresh(){
