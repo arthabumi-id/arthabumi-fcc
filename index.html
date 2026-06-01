@@ -319,6 +319,8 @@ let state = {
   banks: [], ccs: [], projects: [], kategori: [],
   txns: [], transfers: [], reserves: [],
   reserveFunds: {}, // computed: cc_name -> total
+  summary: null,    // agregat penuh dari server (saldo/proj/bulan/kategori)
+  txnsSince: null,  // batas tanggal txn terlama yg sudah dimuat ke client
   online: false,
   currentPage: 'dashboard',
   currentMasterTab: 'bank',
@@ -358,7 +360,7 @@ function saveLocal() {
   localStorage.setItem('fcc_data', JSON.stringify({
     banks: state.banks, ccs: state.ccs, projects: state.projects,
     kategori: state.kategori, txns: state.txns, transfers: state.transfers,
-    reserves: state.reserves
+    reserves: state.reserves, summary: state.summary, txnsSince: state.txnsSince
   }));
 }
 
@@ -435,22 +437,69 @@ function seedLocalData() {
 }
 
 // ── COMPUTED ──────────────────────────────────────────
+// Semua agregat utama diambil dari state.summary (dihitung server atas SELURUH
+// data) bila tersedia, sehingga client cukup memuat txn terbaru saja. Bila
+// summary belum ada (offline / API lama), fallback hitung dari state.txns.
+const acctAgg = nama => (state.summary && state.summary.acct && state.summary.acct[nama]) || null;
+
+function acctCount(nama) {
+  const a = acctAgg(nama);
+  return a ? (a.count || 0) : state.txns.filter(t => t.REKENING === nama).length;
+}
+
 function getSaldo(namaRek) {
+  const a = acctAgg(namaRek);
+  if (a) return { masuk: a.masuk || 0, keluar: a.keluar || 0, saldo: (a.masuk||0) - (a.keluar||0) };
   const m = state.txns.filter(t => t.REKENING === namaRek && t.JENIS === 'Pemasukan').reduce((s,t) => s + Number(t.NOMINAL), 0);
   const k = state.txns.filter(t => t.REKENING === namaRek && t.JENIS === 'Pengeluaran').reduce((s,t) => s + Number(t.NOMINAL), 0);
   return { masuk: m, keluar: k, saldo: m - k };
 }
 
 function getCCOut(namaCC) {
+  const a = acctAgg(namaCC);
+  if (a) return (a.keluar||0) - (a.masuk||0);
   const tag = state.txns.filter(t => t.REKENING === namaCC && t.JENIS === 'Pengeluaran').reduce((s,t) => s + Number(t.NOMINAL), 0);
   const bay = state.txns.filter(t => t.REKENING === namaCC && t.JENIS === 'Pemasukan').reduce((s,t) => s + Number(t.NOMINAL), 0);
   return tag - bay;
 }
 
 function getProjCF(nama) {
+  const p = state.summary && state.summary.proj && state.summary.proj[nama];
+  if (p) return { masuk: p.masuk || 0, keluar: p.keluar || 0, sisa: (p.masuk||0) - (p.keluar||0) };
   const m = state.txns.filter(t => t.PROJECT === nama && t.JENIS === 'Pemasukan').reduce((s,t) => s + Number(t.NOMINAL), 0);
   const k = state.txns.filter(t => t.PROJECT === nama && t.JENIS === 'Pengeluaran').reduce((s,t) => s + Number(t.NOMINAL), 0);
   return { masuk: m, keluar: k, sisa: m - k };
+}
+
+function monthAgg(key) {
+  if (state.summary && state.summary.month && state.summary.month[key]) return state.summary.month[key];
+  const masuk  = state.txns.filter(t => String(t.TANGGAL).slice(0,7)===key && t.JENIS==='Pemasukan').reduce((s,t)=>s+Number(t.NOMINAL),0);
+  const keluar = state.txns.filter(t => String(t.TANGGAL).slice(0,7)===key && t.JENIS==='Pengeluaran').reduce((s,t)=>s+Number(t.NOMINAL),0);
+  return { masuk, keluar };
+}
+
+const daysAgoISO = days => { const d = new Date(); d.setDate(d.getDate()-days); return d.toISOString().slice(0,10); };
+
+// Patch summary lokal saat ada perubahan (add: sign=+1, hapus/old: sign=-1).
+// Mirror persis logika getSummary() di Code.gs supaya dashboard akurat seketika,
+// termasuk saat offline. Sync berikutnya tetap merekonsiliasi dari server.
+function applySummaryDelta(t, sign) {
+  if (!state.summary || !t) return;
+  const s = state.summary, nom = (Number(t.NOMINAL)||0) * sign;
+  if (!nom) return;
+  const masuk = t.JENIS === 'Pemasukan', fld = masuk ? 'masuk' : 'keluar';
+  if (t.REKENING) {
+    const a = s.acct[t.REKENING] || (s.acct[t.REKENING] = {masuk:0,keluar:0,count:0});
+    a[fld] += nom; a.count += sign;
+  }
+  if (t.PROJECT) {
+    const p = s.proj[t.PROJECT] || (s.proj[t.PROJECT] = {masuk:0,keluar:0});
+    p[fld] += nom;
+  }
+  const ym = String(t.TANGGAL).slice(0,7);
+  if (ym) { const m = s.month[ym] || (s.month[ym] = {masuk:0,keluar:0}); m[fld] += nom; }
+  if (!masuk && t.TIPE_LOG === 'Pengeluaran' && t.KATEGORI) s.katExp[t.KATEGORI] = (s.katExp[t.KATEGORI]||0) + nom;
+  s.count = (s.count||0) + sign;
 }
 
 function computeReserve() {
@@ -494,9 +543,12 @@ async function syncAll() {
     return;
   }
   
-  const data = await apiGet({ action: 'getAll' });
+  // getBundle = 1 round-trip: master + transfers + reserves + summary (agregat
+  // penuh) + txn terbaru saja. Fallback ke getAll bila API lama belum di-deploy.
+  let data = await apiGet({ action: 'getBundle' });
+  if (!data || data.error) data = await apiGet({ action: 'getAll' });
   btn.innerHTML = '<i class="ti ti-refresh"></i> Sync';
-  
+
   if (data && !data.error) {
     state.banks = data.banks || state.banks;
     state.ccs = data.ccs || state.ccs;
@@ -505,6 +557,8 @@ async function syncAll() {
     state.txns = data.txns || state.txns;
     state.transfers = data.transfers || state.transfers;
     state.reserves = data.reserves || state.reserves;
+    state.summary = data.summary || null; // null bila pakai getAll lama → accessor fallback ke txns
+    state.txnsSince = data.since || state.txnsSince;
     computeReserve();
     saveLocal();
     renderAll();
@@ -533,22 +587,22 @@ function renderDashboard() {
     <div class="metric-grid">
       <div class="metric wide" style="background:linear-gradient(135deg,#0a2a1e,#0d1f2d);border:1px solid #2dd4a030">
         <div class="metric-label">Net Cash Position</div>
-        <div class="metric-value" style="font-size:28px;color:${totBank-totRes >= 0?'var(--green)':'var(--red)'}">Rp ${fmt(totBank-totRes)}</div>
+        <div class="metric-value" style="font-size:28px;color:${totBank-totRes >= 0?'var(--green)':'var(--red)'}">${fmt(totBank-totRes)}</div>
         <div class="metric-sub">Bank (${fmt(totBank)}) − Reserve (${fmt(totRes)})</div>
       </div>
       <div class="metric">
         <div class="metric-label">Total Saldo Bank</div>
-        <div class="metric-value pos">Rp ${fmt(totBank)}</div>
+        <div class="metric-value pos">${fmt(totBank)}</div>
         <div class="metric-sub">${state.banks.length} rekening</div>
       </div>
       <div class="metric">
         <div class="metric-label">Outstanding CC</div>
-        <div class="metric-value ${totCC > 0?'neg':'pos'}">Rp ${fmt(totCC)}</div>
+        <div class="metric-value ${totCC > 0?'neg':'pos'}">${fmt(totCC)}</div>
         <div class="metric-sub">${state.ccs.length} kartu</div>
       </div>
       <div class="metric">
         <div class="metric-label">Reserve CC</div>
-        <div class="metric-value info">Rp ${fmt(totRes)}</div>
+        <div class="metric-value info">${fmt(totRes)}</div>
         <div class="metric-sub">Dana tersisihkan</div>
       </div>
       <div class="metric">
@@ -599,7 +653,7 @@ function renderDashboard() {
             ${out > 0 ? `<div class="res-bar-wrap"><div class="res-bar" style="width:${pct}%;background:${pct>=100?'var(--green)':'var(--amber)'}"></div></div>` : ''}
           </div>
           <div class="list-right">
-            <div style="font-size:13px;font-weight:700;color:var(--red)">${out > 0?'Rp '+fmt(out):'—'}</div>
+            <div style="font-size:13px;font-weight:700;color:var(--red)">${out > 0?fmt(out):'—'}</div>
             ${res > 0 ? `<div style="font-size:10px;color:var(--blue)">res: ${fmtS(res)} (${pct}%)</div>` : ''}
           </div>
         </div>` : '';
@@ -649,23 +703,31 @@ function renderCharts() {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     months.push({ key: d.toISOString().slice(0,7), label: d.toLocaleDateString('id-ID',{month:'short',year:'2-digit'}) });
   }
-  const masukPerBulan = months.map(m => state.txns.filter(t => String(t.TANGGAL).slice(0,7)===m.key && t.JENIS==='Pemasukan').reduce((s,t)=>s+Number(t.NOMINAL),0)/1e6);
-  const keluarPerBulan = months.map(m => state.txns.filter(t => String(t.TANGGAL).slice(0,7)===m.key && t.JENIS==='Pengeluaran').reduce((s,t)=>s+Number(t.NOMINAL),0)/1e6);
+  const masukPerBulan = months.map(m => monthAgg(m.key).masuk/1e6);
+  const keluarPerBulan = months.map(m => monthAgg(m.key).keluar/1e6);
 
   // ── 2. Komposisi Pengeluaran by Kelompok ─────────────
   const kelompokColors = { PROJECT:'#5b9cf6', OPERASIONAL:'#f5a623', PRIBADI:'#a78bfa', FINANCIAL:'#f06a6a', TRANSFER:'#2dd4a0' };
   const kelompokMap = {};
-  state.txns.filter(t => t.JENIS==='Pengeluaran' && t.TIPE_LOG==='Pengeluaran').forEach(t => {
-    const kat = state.kategori.find(k => k.NAMA===t.KATEGORI);
-    const grp = kat ? kat.KELOMPOK : 'LAINNYA';
-    kelompokMap[grp] = (kelompokMap[grp]||0) + Number(t.NOMINAL);
-  });
+  const katToGrp = katName => { const kat = state.kategori.find(k => k.NAMA===katName); return kat ? kat.KELOMPOK : 'LAINNYA'; };
+  if (state.summary && state.summary.katExp && Object.keys(state.summary.katExp).length) {
+    Object.entries(state.summary.katExp).forEach(([katName, val]) => {
+      const grp = katToGrp(katName);
+      kelompokMap[grp] = (kelompokMap[grp]||0) + Number(val);
+    });
+  } else {
+    state.txns.filter(t => t.JENIS==='Pengeluaran' && t.TIPE_LOG==='Pengeluaran').forEach(t => {
+      const grp = katToGrp(t.KATEGORI);
+      kelompokMap[grp] = (kelompokMap[grp]||0) + Number(t.NOMINAL);
+    });
+  }
   const kelLabels = Object.keys(kelompokMap);
   const kelValues = kelLabels.map(k => kelompokMap[k]/1e6);
   const kelColors = kelLabels.map(k => kelompokColors[k]||'#5a5a72');
 
   // ── 3. Cashflow Project (top 6 by activity) ──────────
-  const projWithTxn = state.projects.filter(p => state.txns.some(t => t.PROJECT===p.NAMA)).slice(0,6);
+  const hasProjActivity = nama => (state.summary && state.summary.proj && state.summary.proj[nama]) || state.txns.some(t => t.PROJECT===nama);
+  const projWithTxn = state.projects.filter(p => hasProjActivity(p.NAMA)).slice(0,6);
   const projLabels = projWithTxn.map(p => p.NAMA.replace(/^PROJ\s*/i,'').slice(0,18));
   const projMasuk = projWithTxn.map(p => getProjCF(p.NAMA).masuk/1e6);
   const projKeluar = projWithTxn.map(p => getProjCF(p.NAMA).keluar/1e6);
@@ -765,12 +827,40 @@ function renderTxn(filtered) {
           ${t.NOTES ? `<div style="font-size:10px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.NOTES)}</div>` : ''}
         </div>
         <div style="text-align:right;flex-shrink:0">
-          <div style="font-size:14px;font-weight:700;color:${t.JENIS==='Pemasukan'?'var(--green)':'var(--red)'}">${t.JENIS==='Pemasukan'?'+':'-'}Rp ${fmt(Number(t.NOMINAL))}</div>
+          <div style="font-size:14px;font-weight:700;color:${t.JENIS==='Pemasukan'?'var(--green)':'var(--red)'}">${t.JENIS==='Pemasukan'?'+':'-'}${fmt(Number(t.NOMINAL))}</div>
           ${(!isTr&&!isRes) ? `<button style="font-size:10px;margin-top:3px;background:transparent;border:none;color:var(--text3);cursor:pointer" onclick="editTxn('${t.ID}')">edit</button>` : '<div style="font-size:10px;color:var(--text3)">auto</div>'}
         </div>
       </div>
     </div>`;
   }).join('') : '<div class="empty">Tidak ada transaksi</div>';
+
+  // Tombol muat data lebih lama (hanya di tampilan default & saat online)
+  if (!filtered && API_URL) {
+    document.getElementById('txnList').innerHTML +=
+      `<button class="btn-primary" style="width:100%;margin-top:10px;opacity:.85" onclick="loadMoreTxns(this)"><i class="ti ti-history"></i> Muat transaksi lebih lama</button>
+       <div style="text-align:center;font-size:10px;color:var(--text3);margin-top:6px">Menampilkan sejak ${state.txnsSince || '—'}</div>`;
+  }
+}
+
+async function loadMoreTxns(btn) {
+  if (!API_URL) return;
+  if (btn) btn.innerHTML = '<div class="spin" style="width:12px;height:12px;border-width:2px;display:inline-block;vertical-align:middle"></div> memuat...';
+  const cur = state.txnsSince || daysAgoISO(120);
+  const d = new Date(cur); d.setMonth(d.getMonth() - 12); // mundur 12 bulan
+  const newSince = d.toISOString().slice(0, 10);
+  const older = await apiGet({ action: 'getTxns', since: newSince, until: cur });
+  if (Array.isArray(older)) {
+    const ids = new Set(state.txns.map(t => t.ID));
+    let added = 0;
+    older.forEach(t => { if (!ids.has(t.ID)) { state.txns.push(t); added++; } });
+    state.txnsSince = newSince;
+    saveLocal();
+    renderTxn();
+    showToast(added ? ('+' + added + ' transaksi lama dimuat') : 'Tidak ada transaksi lebih lama', 'success');
+  } else {
+    renderTxn();
+    showToast('Gagal memuat transaksi lama', 'error');
+  }
 }
 
 function filterTxn() {
@@ -822,7 +912,7 @@ function renderMaster() {
             <div style="flex:1;min-width:0">
               <div style="font-size:13px;font-weight:600">${esc(b.NAMA)}</div>
               <div style="font-size:11px;color:var(--text2)">${b.BANK} · ${b.TIPE}</div>
-              <div style="font-size:10px;color:var(--text3);margin-top:2px">${state.txns.filter(t=>t.REKENING===b.NAMA).length} transaksi · ketuk untuk detail</div>
+              <div style="font-size:10px;color:var(--text3);margin-top:2px">${acctCount(b.NAMA)} transaksi · ketuk untuk detail</div>
             </div>
             <div style="text-align:right;flex-shrink:0">
               <div style="font-size:14px;font-weight:700;color:${r.saldo>=0?'var(--green)':'var(--red)'}">${fmt(r.saldo)}</div>
@@ -841,7 +931,7 @@ function renderMaster() {
       <button class="btn-primary" style="margin-bottom:12px" onclick="openDrawer('cc')"><i class="ti ti-plus"></i> Tambah Kartu Kredit</button>
       ${state.ccs.map(c => {
         const out = getCCOut(c.NAMA), res = state.reserveFunds[c.NAMA] || 0;
-        const txnCount = state.txns.filter(t=>t.REKENING===c.NAMA).length;
+        const txnCount = acctCount(c.NAMA);
         return `<div class="card acct-card" style="margin-bottom:8px;padding:10px 12px" data-acctype="cc" data-accnama="${esc(c.NAMA)}">
           <div style="display:flex;align-items:center;justify-content:space-between">
             <div style="flex:1;min-width:0">
@@ -889,13 +979,17 @@ function openAccountDetail(type, nama) {
   const isCC = type === 'cc';
   document.getElementById('drawerTitle').textContent = nama;
 
+  // Tampil cepat dari cache txn terbaru; riwayat penuh di-fetch on-demand
+  // supaya tidak perlu menyimpan semua txn di client.
+  let acctTxns = state.txns.filter(t => t.REKENING === nama);
+
   // Default filter: current month
   const now = new Date();
   const defFrom = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
   const defTo   = now.toISOString().slice(0,10);
 
   function renderDetail(fromDate, toDate, jenis, search) {
-    let data = state.txns.filter(t => t.REKENING === nama);
+    let data = acctTxns.slice();
     if (fromDate) data = data.filter(t => String(t.TANGGAL) >= fromDate);
     if (toDate)   data = data.filter(t => String(t.TANGGAL) <= toDate);
     if (jenis)    data = data.filter(t => t.JENIS === jenis);
@@ -937,7 +1031,7 @@ function openAccountDetail(type, nama) {
               ${t.NOTES?`<div style="font-size:10px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.NOTES)}</div>`:''}
             </div>
             <div style="text-align:right;flex-shrink:0">
-              <div style="font-size:13px;font-weight:700;color:${t.JENIS==='Pemasukan'?'var(--green)':'var(--red)'}">${t.JENIS==='Pemasukan'?'+':'-'}Rp ${fmt(Number(t.NOMINAL))}</div>
+              <div style="font-size:13px;font-weight:700;color:${t.JENIS==='Pemasukan'?'var(--green)':'var(--red)'}">${t.JENIS==='Pemasukan'?'+':'-'}${fmt(Number(t.NOMINAL))}</div>
               ${(!isTr&&!isRes)?`<button style="font-size:10px;background:transparent;border:none;color:var(--text3);cursor:pointer;padding:0" onclick="closeDrawer();setTimeout(()=>editTxn('${t.ID}'),200)">edit</button>`:''}
             </div>
           </div>
@@ -981,9 +1075,14 @@ function openAccountDetail(type, nama) {
     );
   };
 
-  // Initial render
+  // Initial render (dari cache), lalu ambil riwayat penuh akun ini dari server
   renderDetail(defFrom, defTo, '', '');
   document.getElementById('drawerBg').classList.add('open');
+  if (API_URL) {
+    apiGet({ action: 'getTxns', rekening: nama }).then(res => {
+      if (Array.isArray(res)) { acctTxns = res; if (typeof acctFilter === 'function') acctFilter(); }
+    });
+  }
 }
 
 
@@ -1073,6 +1172,7 @@ async function doTransfer() {
   const tr = {ID:uid(),TANGGAL:tgl,DARI:dari,KE:ke,NOMINAL:nominal,NOTES:notes,REF_ID:refId,CREATED_BY:state.user,CREATED_AT:now};
   state.txns.unshift(t1, t2);
   state.transfers.unshift(tr);
+  applySummaryDelta(t1, 1); applySummaryDelta(t2, 1);
   saveLocal();
   if (API_URL) {
     await apiPost({ action: 'addTransfer', data: {TANGGAL:tgl,DARI:dari,KE:ke,NOMINAL:nominal,NOTES:notes,USER:state.user} });
@@ -1097,6 +1197,7 @@ async function doReserve() {
   state.txns.unshift(t1);
   state.reserves.unshift(r1);
   state.reserveFunds[kartu] = (state.reserveFunds[kartu]||0) + nominal;
+  applySummaryDelta(t1, 1);
   saveLocal();
   if (API_URL) {
     await apiPost({ action: 'addReserve', data: {TANGGAL:tgl,DARI_REKENING:dari,UNTUK_CC:kartu,NOMINAL:nominal,NOTES:notes,USER:state.user} });
@@ -1241,7 +1342,9 @@ async function saveDrawer() {
     const notes=document.getElementById('f_notes').value;
     if(!tgl||!rek||!kat||!nominal){showToast('Tanggal, rekening, kategori, nominal wajib diisi','error');return;}
     const obj={ID:eid||uid(),TANGGAL:tgl,JENIS:jenis,PROJECT:proj,REKENING:rek,KATEGORI:kat,NOMINAL:nominal,NOTES:notes,TIPE_LOG:jenis,CREATED_BY:state.user,CREATED_AT:now};
-    if(eid){const i=state.txns.findIndex(x=>x.ID===eid);state.txns[i]=obj;}else state.txns.unshift(obj);
+    let oldT=null;
+    if(eid){const i=state.txns.findIndex(x=>x.ID===eid);if(i>=0){oldT=state.txns[i];state.txns[i]=obj;}else state.txns.unshift(obj);}else state.txns.unshift(obj);
+    if(oldT)applySummaryDelta(oldT,-1); applySummaryDelta(obj,1);
     if(API_URL)await apiPost({action:eid?'updateRow':'addTxn',data:eid?{sheet:'TRANSAKSI',id:eid,updates:obj}:obj});
     saveLocal();renderDashboard();renderTxn();showToast(eid?'Transaksi diperbarui':'Transaksi tersimpan','success');
   } else if (mode === 'proj') {
