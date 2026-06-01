@@ -885,9 +885,10 @@ function renderProject() {
         </div>
         <span class="badge ${p.STATUS==='Jalan'?'badge-amber':'badge-green'}" style="margin-left:10px;flex-shrink:0">${p.STATUS}</span>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
         <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Nilai</div><div style="font-size:12px;font-weight:600">${p.NILAI_CONTRACT?fmt(p.NILAI_CONTRACT):'—'}</div></div>
         <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Masuk</div><div style="font-size:12px;font-weight:600;color:var(--green)">+${fmt(cf.masuk)}</div></div>
+        <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Keluar</div><div style="font-size:12px;font-weight:600;color:var(--red)">-${fmt(cf.keluar)}</div></div>
         <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Sisa CF</div><div style="font-size:12px;font-weight:600;color:${cf.sisa>=0?'var(--green)':'var(--red)'}">${cf.sisa>=0?'+':'-'}${fmt(Math.abs(cf.sisa))}</div></div>
       </div>
       <div class="res-bar-wrap"><div class="res-bar" style="width:${pct}%;background:${p.STATUS==='Jalan'?'var(--amber)':'var(--green)'}"></div></div>
@@ -1368,7 +1369,7 @@ async function saveDrawer() {
     if(eid){const i=state.txns.findIndex(x=>x.ID===eid);if(i>=0){oldT=state.txns[i];state.txns[i]=obj;}else state.txns.unshift(obj);}else state.txns.unshift(obj);
     if(oldT)applySummaryDelta(oldT,-1); applySummaryDelta(obj,1);
     if(API_URL)await apiPost({action:eid?'updateRow':'addTxn',data:eid?{sheet:'TRANSAKSI',id:eid,updates:obj}:obj});
-    saveLocal();renderDashboard();renderTxn();showToast(eid?'Transaksi diperbarui':'Transaksi tersimpan','success');
+    saveLocal();renderDashboard();renderTxn();renderProject();showToast(eid?'Transaksi diperbarui':'Transaksi tersimpan','success');
   } else if (mode === 'proj') {
     const obj={ID:eid||uid(),NAMA:document.getElementById('fp_nama').value,KLIEN:document.getElementById('fp_klien').value,TGL_MULAI:document.getElementById('fp_tgl').value,STATUS:document.getElementById('fp_status').value,NILAI_CONTRACT:unfmtNum(document.getElementById('fp_nilai').value),CREATED_AT:now};
     if(!obj.NAMA){showToast('Nama project wajib diisi','error');return;}
