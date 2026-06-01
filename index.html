@@ -878,7 +878,7 @@ function renderProject() {
   document.getElementById('projList').innerHTML = state.projects.map(p => {
     const cf = getProjCF(p.NAMA);
     const pct = p.NILAI_CONTRACT > 0 ? Math.min(100, Math.round(cf.masuk/p.NILAI_CONTRACT*100)) : 0;
-    return `<div class="card">
+    return `<div class="card" style="cursor:pointer" onclick="openProjectDetail('${p.ID}')">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
         <div style="flex:1;min-width:0">
           <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.NAMA)}</div>
@@ -895,7 +895,7 @@ function renderProject() {
       <div class="res-bar-wrap"><div class="res-bar" style="width:${pct}%;background:${p.STATUS==='Jalan'?'var(--amber)':'var(--green)'}"></div></div>
       <div style="display:flex;justify-content:space-between;margin-top:6px">
         <span style="font-size:10px;color:var(--text3)">${pct}% terbayar</span>
-        <button style="font-size:11px;color:var(--text2);background:transparent;border:1px solid var(--border);border-radius:6px;padding:3px 8px;cursor:pointer" onclick="editProj('${p.ID}')">Edit</button>
+        <button style="font-size:11px;color:var(--text2);background:transparent;border:1px solid var(--border);border-radius:6px;padding:3px 8px;cursor:pointer" onclick="event.stopPropagation();editProj('${p.ID}')">Edit</button>
       </div>
     </div>`;
   }).join('') || '<div class="empty">Belum ada project</div>';
@@ -1001,6 +1001,7 @@ function openAccountDetail(type, nama) {
     const totMasuk  = data.filter(t=>t.JENIS==='Pemasukan').reduce((s,t)=>s+Number(t.NOMINAL),0);
     const totKeluar = data.filter(t=>t.JENIS==='Pengeluaran').reduce((s,t)=>s+Number(t.NOMINAL),0);
     const saldo     = totMasuk - totKeluar;
+    const katEntries = katComposition(data);
 
     document.getElementById('acctDetailBody').innerHTML = `
       <div class="detail-summary">
@@ -1019,6 +1020,7 @@ function openAccountDetail(type, nama) {
           </div>
         </div>
       </div>
+      ${donutCardHTML('acctKatDonut', katEntries)}
       <div style="font-size:11px;color:var(--text3);margin-bottom:8px">${data.length} transaksi ditampilkan</div>
       ${data.length ? data.map(t => {
         const isTr = t.TIPE_LOG==='Transfer', isRes = t.TIPE_LOG==='Reserve';
@@ -1040,6 +1042,7 @@ function openAccountDetail(type, nama) {
         </div>`;
       }).join('') : '<div class="empty">Tidak ada transaksi</div>'}
     `;
+    buildKatDonut('acctKatDonut', katEntries);
   }
 
   document.getElementById('drawerBody').innerHTML = `
@@ -1097,6 +1100,91 @@ document.getElementById('masterContent').addEventListener('click', function(e) {
   const nama = card.dataset.accnama;
   if (type && nama) openAccountDetail(type, nama);
 });
+
+// ── KOMPOSISI PENGELUARAN (donut per kategori) ────────
+const KAT_PALETTE = ['#5b9cf6','#f5a623','#a78bfa','#f06a6a','#2dd4a0','#e879c9','#fbbf24','#60a5fa','#34d399','#f87171','#c084fc','#22d3ee','#a3e635','#fb923c','#94a3b8'];
+function katComposition(txns) {
+  const m = {};
+  txns.filter(t => t.JENIS === 'Pengeluaran').forEach(t => {
+    const k = t.KATEGORI || 'Lainnya';
+    m[k] = (m[k] || 0) + Number(t.NOMINAL || 0);
+  });
+  return Object.entries(m).filter(e => e[1] > 0).sort((a,b) => b[1]-a[1]);
+}
+function donutCardHTML(canvasId, entries) {
+  if (!entries.length) return '';
+  const total = entries.reduce((s,e) => s+e[1], 0);
+  const legend = entries.map((e,i) => `<div><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${KAT_PALETTE[i%KAT_PALETTE.length]};margin-right:5px;vertical-align:middle"></span>${esc(e[0])}: <b>${fmtS(e[1])}</b> <span style="color:var(--text3)">(${Math.round(e[1]/total*100)}%)</span></div>`).join('');
+  return `<div class="card" style="margin-bottom:12px">
+    <div class="card-title">Komposisi Pengeluaran</div>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <div style="position:relative;height:140px;width:140px;flex-shrink:0"><canvas id="${canvasId}"></canvas></div>
+      <div style="font-size:11px;line-height:1.9;flex:1;min-width:120px">${legend}</div>
+    </div>
+  </div>`;
+}
+function buildKatDonut(canvasId, entries) {
+  if (!entries.length) return;
+  destroyChart(canvasId);
+  const el = document.getElementById(canvasId); if (!el) return;
+  _chartInstances[canvasId] = new Chart(el, {
+    type: 'doughnut',
+    data: { labels: entries.map(e=>e[0]), datasets:[{ data: entries.map(e=>e[1]), backgroundColor: entries.map((e,i)=>KAT_PALETTE[i%KAT_PALETTE.length]), borderWidth:0, hoverOffset:6 }] },
+    options: { responsive:true, maintainAspectRatio:false, cutout:'62%', plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ label: ctx => ` ${ctx.label}: ${fmt(ctx.raw)}` } } } }
+  });
+}
+function detailTxnCard(t) {
+  const isTr = t.TIPE_LOG==='Transfer', isRes = t.TIPE_LOG==='Reserve';
+  return `<div class="card" style="padding:9px 11px;margin-bottom:6px">
+    <div style="display:flex;align-items:center;gap:9px">
+      <div style="width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:${t.JENIS==='Pemasukan'?'#0a2a1a':isTr?'#0a1a3a':isRes?'#1a0a3a':'#2a0a0a'}">
+        <i class="ti ti-${t.JENIS==='Pemasukan'?'arrow-down-left':isTr?'arrows-exchange':isRes?'shield-check':'arrow-up-right'}" style="font-size:13px;color:${t.JENIS==='Pemasukan'?'var(--green)':isTr?'var(--blue)':isRes?'var(--purple)':'var(--red)'}"></i>
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.KATEGORI||'—')}</div>
+        <div style="font-size:10px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${String(t.TANGGAL).slice(0,10)}${t.REKENING?' · '+esc(t.REKENING):''}</div>
+        ${t.NOTES?`<div style="font-size:10px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.NOTES)}</div>`:''}
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:13px;font-weight:700;color:${t.JENIS==='Pemasukan'?'var(--green)':'var(--red)'}">${t.JENIS==='Pemasukan'?'+':'-'}${fmt(Number(t.NOMINAL))}</div>
+        ${(!isTr&&!isRes)?`<button style="font-size:10px;background:transparent;border:none;color:var(--text3);cursor:pointer;padding:0" onclick="closeDrawer();setTimeout(()=>editTxn('${t.ID}'),200)">edit</button>`:''}
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── PROJECT DETAIL (drawer + donut komposisi) ─────────
+function openProjectDetail(id) {
+  const p = state.projects.find(x => x.ID === id);
+  if (!p) return;
+  const nama = p.NAMA;
+  document.getElementById('drawerTitle').textContent = nama;
+  let projTxns = state.txns.filter(t => t.PROJECT === nama);
+  function render() {
+    const cf = getProjCF(nama);
+    const sorted = [...projTxns].sort((a,b) => String(b.TANGGAL).localeCompare(String(a.TANGGAL)));
+    const entries = katComposition(projTxns);
+    document.getElementById('drawerBody').innerHTML = `
+      <div class="detail-summary">
+        <div class="detail-sum-item"><div class="detail-sum-label">Masuk</div><div class="detail-sum-val pos">${fmt(cf.masuk)}</div></div>
+        <div class="detail-sum-item"><div class="detail-sum-label">Keluar</div><div class="detail-sum-val neg">${fmt(cf.keluar)}</div></div>
+        <div class="detail-sum-item"><div class="detail-sum-label">Sisa CF</div><div class="detail-sum-val" style="color:${cf.sisa>=0?'var(--green)':'var(--red)'}">${cf.sisa>=0?'':'-'}${fmt(Math.abs(cf.sisa))}</div></div>
+      </div>
+      ${p.NILAI_CONTRACT?`<div style="font-size:11px;color:var(--text3);margin-bottom:10px">Nilai kontrak: ${fmt(p.NILAI_CONTRACT)}${p.KLIEN?' · '+esc(p.KLIEN):''}</div>`:''}
+      ${donutCardHTML('projKatDonut', entries)}
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px">${sorted.length} transaksi</div>
+      ${sorted.length ? sorted.map(t => detailTxnCard(t)).join('') : '<div class="empty">Belum ada transaksi</div>'}
+    `;
+    buildKatDonut('projKatDonut', entries);
+  }
+  render();
+  document.getElementById('drawerBg').classList.add('open');
+  if (API_URL) {
+    apiGet({ action: 'getTxns', project: nama }).then(res => {
+      if (Array.isArray(res)) { projTxns = res.filter(t => t.PROJECT === nama); render(); }
+    });
+  }
+}
 
 function switchMasterTab(tab) {
   state.currentMasterTab = tab;

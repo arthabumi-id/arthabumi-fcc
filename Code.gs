@@ -216,6 +216,7 @@ function getTxns(ss, params) {
   if (params.since)    data = data.filter(t => String(t.TANGGAL) >= params.since);
   if (params.until)    data = data.filter(t => String(t.TANGGAL) <= params.until);
   if (params.rekening) data = data.filter(t => t.REKENING === params.rekening);
+  if (params.project)  data = data.filter(t => t.PROJECT === params.project);
   data.sort((a, b) => String(b.TANGGAL).localeCompare(String(a.TANGGAL)));
   if (params.limit)    data = data.slice(0, Number(params.limit));
   return data;
