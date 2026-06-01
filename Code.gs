@@ -172,6 +172,7 @@ function getSummary(ss) {
   if (hit) { try { return JSON.parse(hit); } catch (e) {} }
 
   const sheet = ss.getSheetByName(S.TXN);
+  const tz = ss.getSpreadsheetTimeZone() || 'Asia/Jakarta';
   const out = { acct: {}, proj: {}, month: {}, katExp: {}, count: 0, generatedAt: new Date().toISOString() };
   if (sheet && sheet.getLastRow() > 1) {
     const rows = sheet.getRange(2, 1, sheet.getLastRow()-1, sheet.getLastColumn()).getValues();
@@ -184,7 +185,7 @@ function getSummary(ss) {
       if (!nom) return;
       const masuk = r[iJns] === 'Pemasukan';
       const rek = r[iRek], proj = r[iProj], kat = r[iKat];
-      const ym = String(r[iTgl]).slice(0, 7);
+      const ym = String(normalizeCell(r[iTgl], tz)).slice(0, 7);
       if (rek) {
         const a = out.acct[rek] || (out.acct[rek] = { masuk: 0, keluar: 0, count: 0 });
         a[masuk ? 'masuk' : 'keluar'] += nom; a.count++;
@@ -227,14 +228,22 @@ function getAllData(ss) {
   };
 }
 
+// Kolom tanggal di Sheets dibaca sbg objek Date (tengah malam zona Sheets).
+// JSON.stringify mengubahnya jadi ISO UTC → tampil mundur 1 hari di app.
+// Normalisasi: Date → 'yyyy-MM-dd' pakai zona waktu spreadsheet.
+function normalizeCell(v, tz) {
+  return (v instanceof Date) ? Utilities.formatDate(v, tz, 'yyyy-MM-dd') : v;
+}
+
 function getSheet(ss, name) {
   const sheet = ss.getSheetByName(name);
   if (!sheet || sheet.getLastRow() <= 1) return [];
+  const tz = ss.getSpreadsheetTimeZone() || 'Asia/Jakarta';
   const data = sheet.getRange(1, 1, sheet.getLastRow(), sheet.getLastColumn()).getValues();
   const headers = data[0];
   return data.slice(1).map(row => {
     const obj = {};
-    headers.forEach((h, i) => { obj[h] = row[i]; });
+    headers.forEach((h, i) => { obj[h] = normalizeCell(row[i], tz); });
     return obj;
   });
 }

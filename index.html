@@ -1357,6 +1357,11 @@ async function saveDrawer() {
       else{const grp=document.getElementById('f_kat_new_grp').value;newKatObj={ID:uid(),NAMA:nm,KELOMPOK:grp,TIPE:jenis,CREATED_AT:now};kat=nm;}
     }
     if(!tgl||!rek||!kat||!nominal){showToast('Tanggal, rekening, kategori, nominal wajib diisi','error');return;}
+    // Peringatan: kategori kelompok PROJECT tapi project belum dipilih
+    const katObj0=(newKatObj||state.kategori.find(k=>k.NAMA===kat));
+    if(katObj0&&katObj0.KELOMPOK==='PROJECT'&&!proj){
+      if(!confirm('Kategori "'+kat+'" termasuk kelompok PROJECT, tapi Project belum dipilih.\n\nSimpan tanpa project?'))return;
+    }
     if(newKatObj){state.kategori.push(newKatObj);if(API_URL)await apiPost({action:'addKat',data:newKatObj});showToast('Kategori baru "'+newKatObj.NAMA+'" ditambahkan','success');}
     const obj={ID:eid||uid(),TANGGAL:tgl,JENIS:jenis,PROJECT:proj,REKENING:rek,KATEGORI:kat,NOMINAL:nominal,NOTES:notes,TIPE_LOG:jenis,CREATED_BY:state.user,CREATED_AT:now};
     let oldT=null;
