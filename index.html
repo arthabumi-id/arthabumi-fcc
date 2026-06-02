@@ -1207,14 +1207,14 @@ function renderMaster() {
       }).join('')}
     `;
   } else if (tab === 'kat') {
-    const groups = [...new Set(state.kategori.map(k => k.KELOMPOK))];
+    const groups = [...new Set(state.kategori.map(k => k.KELOMPOK))].sort((a,b)=>String(a).localeCompare(String(b)));
     document.getElementById('masterContent').innerHTML = `
       ${expCompCardHTML()}
       <button class="btn-primary" style="margin-bottom:12px" onclick="openDrawer('kat')"><i class="ti ti-plus"></i> Tambah Kategori</button>
       ${groups.map(g => `
         <div class="card" style="margin-bottom:8px">
           <div class="card-title">${g}</div>
-          ${state.kategori.filter(k=>k.KELOMPOK===g).map(k => `
+          ${state.kategori.filter(k=>k.KELOMPOK===g).sort((a,b)=>String(a.NAMA).localeCompare(String(b.NAMA))).map(k => `
             <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">
               <div><div style="font-size:13px">${esc(k.NAMA)}</div><div style="font-size:10px;color:var(--text3)">${k.TIPE}</div></div>
               <div style="display:flex;gap:5px">
