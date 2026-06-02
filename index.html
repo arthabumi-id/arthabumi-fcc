@@ -1608,7 +1608,7 @@ function parseImport(rows){
   if(!rows||rows.length<2){showToast('File kosong / tidak ada data','error');return;}
   const hdr=rows[0].map(h=>String(h||'').trim().toUpperCase());
   const ix=name=>hdr.indexOf(name);
-  const iT=ix('TANGGAL'),iJ=ix('JENIS'),iP=ix('PROJECT'),iR=ix('REKENING'),iK=ix('KATEGORI'),iN=ix('NOMINAL'),iNo=ix('NOTES');
+  const iT=ix('TANGGAL'),iJ=ix('JENIS'),iP=ix('PROJECT'),iR=ix('REKENING'),iK=ix('KATEGORI'),iKel=ix('KELOMPOK'),iN=ix('NOMINAL'),iNo=ix('NOTES');
   if(iT<0||iJ<0||iR<0||iK<0||iN<0){showToast('Header tidak lengkap. Pakai template (TANGGAL,JENIS,REKENING,KATEGORI,NOMINAL).','error');return;}
   const acctNames=new Set([...state.banks.map(b=>b.NAMA),...state.ccs.map(c=>c.NAMA)]);
   const projNames=new Set(state.projects.map(p=>p.NAMA));
@@ -1622,6 +1622,7 @@ function parseImport(rows){
     const proj=String(iP>=0?row[iP]:'').trim();
     const rek=String(row[iR]||'').trim();
     const kat=String(row[iK]||'').trim();
+    const kel=String(iKel>=0?row[iKel]:'').trim().toUpperCase();
     const nominal=unfmtNum(row[iN]);
     const notes=String(iNo>=0?row[iNo]:'').trim();
     const errs=[];
@@ -1632,7 +1633,7 @@ function parseImport(rows){
     if(!nominal||nominal<=0)errs.push('nominal kosong/0');
     if(errs.length){errors.push({row:excelRow,msg:errs.join(', ')});continue;}
     if(proj&&!projNames.has(proj)&&!newProjMap[proj])newProjMap[proj]={NAMA:proj,KLIEN:'',STATUS:'Jalan'};
-    if(!katNames.has(kat)&&!newKatMap[kat])newKatMap[kat]={NAMA:kat,KELOMPOK:(jenis==='Pemasukan'?'PEMASUKAN':'OPERASIONAL'),TIPE:jenis};
+    if(!katNames.has(kat)&&!newKatMap[kat])newKatMap[kat]={NAMA:kat,KELOMPOK:(kel||(jenis==='Pemasukan'?'PEMASUKAN':'OPERASIONAL')),TIPE:jenis};
     valid.push({TANGGAL:tgl,JENIS:jenis,PROJECT:proj,REKENING:rek,KATEGORI:kat,NOMINAL:nominal,NOTES:notes});
   }
   const newProjs=Object.values(newProjMap),newKats=Object.values(newKatMap);
