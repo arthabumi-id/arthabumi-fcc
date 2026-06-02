@@ -103,6 +103,11 @@ Murni client-side (index.html), TIDAK menyentuh Code.gs.
 - **Kartu project:** tiap kartu kini ada baris "Laba Bersih" + margin%. Detail project (drawer) juga ada banner laba+margin.
 - **Render Project dipecah:** `projCard(p)` (1 kartu) + `renderProject()` baru. Project STATUS≠Selesai → kartu penuh (section "Project Berjalan"). Project STATUS='Selesai' → **rekap list ringkas** (section "Project Selesai · Rekap") diurut `projLastDate` desc, tiap baris klik → `openProjectDetail` (drawer lama). "Selesai" = STATUS Selesai (tidak ada field tanggal selesai; user konfirmasi cukup status).
 
+## ⭐ Perubahan v7 (Tab status project + komposisi pengeluaran per kelompok) — Juni 2026
+Murni client-side (index.html).
+- **Tab status di halaman Project:** pill `Semua / Berjalan / Hold / Selesai` (`switchProjTab`, `state.currentProjTab`, id `pTab-*`). Berjalan=STATUS Jalan, Hold=STATUS Hold, Selesai=STATUS Selesai. Tab Selesai tampil **list baris** (`projDoneGrid`, sebelumnya sempat grid) + ringkasan laba (`doneSummaryLine`). Tab Semua = kartu Jalan+Hold lalu rekap list Selesai. Badge/res-bar: Jalan kuning(amber), Hold kuning gelap, Selesai hijau.
+- **Komposisi pengeluaran per KELOMPOK** di Master > tab **Kategori** (paling atas): donut + legend %, filter periode `Bulan ini / 3 bulan / Semua` (`state.expPeriod`, `setExpPeriod`, `expCompCardHTML`, `kelompokComposition`). 'all' pakai `summary.katExp` (all-time, sudah exclude transfer/reserve); 'month'/'3m' hitung dari txn termuat (TIPE_LOG Pengeluaran). Canvas `expCompDonut` dibangun via `buildKatDonut` di akhir cabang kat `renderMaster`.
+
 ## Boleh edit manual di Google Sheets? BOLEH, dengan aturan:
 1. Jangan ubah baris HEADER / nama kolom / nama tab.
 2. Tiap baris WAJIB punya `ID` unik (kalau nambah manual, isi sendiri mis. `MAN001`) — kalau kosong, edit/hapus dari app tak bisa nemu baris.

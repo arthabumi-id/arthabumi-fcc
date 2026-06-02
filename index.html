@@ -333,6 +333,7 @@ let state = {
   currentPage: 'dashboard',
   currentMasterTab: 'bank',
   currentProjTab: 'semua',
+  expPeriod: 'month',
 };
 
 // ── UTILS ─────────────────────────────────────────────
@@ -1049,6 +1050,7 @@ function renderMaster() {
   } else if (tab === 'kat') {
     const groups = [...new Set(state.kategori.map(k => k.KELOMPOK))];
     document.getElementById('masterContent').innerHTML = `
+      ${expCompCardHTML()}
       <button class="btn-primary" style="margin-bottom:12px" onclick="openDrawer('kat')"><i class="ti ti-plus"></i> Tambah Kategori</button>
       ${groups.map(g => `
         <div class="card" style="margin-bottom:8px">
@@ -1065,6 +1067,7 @@ function renderMaster() {
         </div>
       `).join('')}
     `;
+    buildKatDonut('expCompDonut', kelompokComposition(state.expPeriod || 'month'));
   }
 }
 
@@ -1202,6 +1205,47 @@ function katComposition(txns) {
     m[k] = (m[k] || 0) + Number(t.NOMINAL || 0);
   });
   return Object.entries(m).filter(e => e[1] > 0).sort((a,b) => b[1]-a[1]);
+}
+// Komposisi pengeluaran dikelompokkan per KELOMPOK, dgn filter periode.
+// period 'all' pakai summary.katExp (all-time, sudah exclude transfer/reserve);
+// 'month'/'3m' hitung dari txn termuat (TIPE_LOG Pengeluaran saja).
+function kelompokComposition(period){
+  const katGrp = {}; state.kategori.forEach(k => katGrp[k.NAMA] = k.KELOMPOK);
+  const m = {};
+  if (period === 'all' && state.summary && state.summary.katExp) {
+    Object.entries(state.summary.katExp).forEach(([kat,val]) => {
+      const g = katGrp[kat] || 'LAINNYA'; m[g] = (m[g]||0) + Number(val||0);
+    });
+  } else {
+    let cutoff = '';
+    if (period === 'month') cutoff = today().slice(0,7) + '-01';
+    else if (period === '3m') { const d=new Date(); d.setMonth(d.getMonth()-3); cutoff=d.toISOString().slice(0,10); }
+    state.txns.filter(t => t.JENIS==='Pengeluaran' && t.TIPE_LOG==='Pengeluaran' && (!cutoff || String(t.TANGGAL)>=cutoff))
+      .forEach(t => { const g = katGrp[t.KATEGORI] || 'LAINNYA'; m[g] = (m[g]||0) + Number(t.NOMINAL||0); });
+  }
+  return Object.entries(m).filter(e => e[1] > 0).sort((a,b) => b[1]-a[1]);
+}
+function setExpPeriod(p){ state.expPeriod = p; renderMaster(); }
+function expCompCardHTML(){
+  const period = state.expPeriod || 'month';
+  const entries = kelompokComposition(period);
+  const total = entries.reduce((s,e)=>s+e[1],0);
+  const lbl = { month:'Bulan ini', '3m':'3 bulan', all:'Semua' };
+  const btns = ['month','3m','all'].map(p=>`<button onclick="setExpPeriod('${p}')" style="flex:none;padding:5px 12px;border-radius:16px;border:1px solid var(--border2);font-size:11px;cursor:pointer;background:${period===p?'var(--green)':'transparent'};color:${period===p?'#06140d':'var(--text2)'};font-weight:${period===p?'700':'400'}">${lbl[p]}</button>`).join('');
+  const legend = entries.length
+    ? entries.map((e,i)=>`<div style="cursor:default"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${KAT_PALETTE[i%KAT_PALETTE.length]};margin-right:5px;vertical-align:middle"></span>${esc(e[0])}: <b>${fmtS(e[1])}</b> <span style="color:var(--text3)">(${Math.round(e[1]/total*100)}%)</span></div>`).join('')
+    : '<div style="color:var(--text3);font-size:11px">Belum ada pengeluaran di periode ini</div>';
+  return `<div class="card" style="margin-bottom:12px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+      <div class="card-title" style="margin:0">Komposisi Pengeluaran · per Kelompok</div>
+      <div style="display:flex;gap:6px">${btns}</div>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Total keluar: <b style="color:var(--red)">${fmt(total)}</b></div>
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <div style="position:relative;height:150px;width:150px;flex-shrink:0"><canvas id="expCompDonut"></canvas></div>
+      <div style="font-size:12px;line-height:2;flex:1;min-width:140px">${legend}</div>
+    </div>
+  </div>`;
 }
 function donutCardHTML(canvasId, entries) {
   if (!entries.length) return '';
