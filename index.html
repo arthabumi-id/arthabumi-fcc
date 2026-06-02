@@ -1206,22 +1206,21 @@ function katComposition(txns) {
   });
   return Object.entries(m).filter(e => e[1] > 0).sort((a,b) => b[1]-a[1]);
 }
-// Komposisi pengeluaran dikelompokkan per KELOMPOK, dgn filter periode.
+// Komposisi pengeluaran per KATEGORI, dgn filter periode.
 // period 'all' pakai summary.katExp (all-time, sudah exclude transfer/reserve);
 // 'month'/'3m' hitung dari txn termuat (TIPE_LOG Pengeluaran saja).
 function kelompokComposition(period){
-  const katGrp = {}; state.kategori.forEach(k => katGrp[k.NAMA] = k.KELOMPOK);
   const m = {};
   if (period === 'all' && state.summary && state.summary.katExp) {
     Object.entries(state.summary.katExp).forEach(([kat,val]) => {
-      const g = katGrp[kat] || 'LAINNYA'; m[g] = (m[g]||0) + Number(val||0);
+      m[kat] = (m[kat]||0) + Number(val||0);
     });
   } else {
     let cutoff = '';
     if (period === 'month') cutoff = today().slice(0,7) + '-01';
     else if (period === '3m') { const d=new Date(); d.setMonth(d.getMonth()-3); cutoff=d.toISOString().slice(0,10); }
     state.txns.filter(t => t.JENIS==='Pengeluaran' && t.TIPE_LOG==='Pengeluaran' && (!cutoff || String(t.TANGGAL)>=cutoff))
-      .forEach(t => { const g = katGrp[t.KATEGORI] || 'LAINNYA'; m[g] = (m[g]||0) + Number(t.NOMINAL||0); });
+      .forEach(t => { const k = t.KATEGORI || 'Lainnya'; m[k] = (m[k]||0) + Number(t.NOMINAL||0); });
   }
   return Object.entries(m).filter(e => e[1] > 0).sort((a,b) => b[1]-a[1]);
 }
@@ -1237,7 +1236,7 @@ function expCompCardHTML(){
     : '<div style="color:var(--text3);font-size:11px">Belum ada pengeluaran di periode ini</div>';
   return `<div class="card" style="margin-bottom:12px">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px">
-      <div class="card-title" style="margin:0">Komposisi Pengeluaran · per Kelompok</div>
+      <div class="card-title" style="margin:0">Komposisi Pengeluaran · per Kategori</div>
       <div style="display:flex;gap:6px">${btns}</div>
     </div>
     <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Total keluar: <b style="color:var(--red)">${fmt(total)}</b></div>
