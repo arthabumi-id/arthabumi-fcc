@@ -96,6 +96,13 @@ Tujuan: pindahkan catatan manual ke FCC secara massal lewat file Excel.
 ### Server (Code.gs) — action baru `addTxnBatch` (POST). **Wajib redeploy.**
 - Payload `{ txns:[...], newProjs:[...], newKats:[...], USER }`. Tulis master baru + transaksi pakai `setValues` (1 tulis, cepat utk banyak baris). ID prefix `IMP/PRI/KI`. `invalidateSummary` jalan otomatis di doPost → summary fresh saat sync berikutnya.
 
+## ⭐ Perubahan v6 (Laba bersih + rekap project selesai) — Juni 2026
+Murni client-side (index.html), TIDAK menyentuh Code.gs.
+- Helper baru: `projProfit(nama)` (laba=masuk-keluar, margin=laba/masuk*100, pakai `getProjCF` yg sumbernya `summary.proj` → akurat lintas waktu), `doneProjectsProfit()` (agregat semua project STATUS='Selesai'), `projLastDate(nama)` (tanggal txn terakhir project dari txns termuat, fallback TGL_MULAI — dipakai utk urutan rekap).
+- **Dashboard:** kartu metrik baru "Laba Bersih · Project Selesai" (nominal + margin% + jumlah project). Definisi laba bersih = hasil project yg sudah selesai saja (keputusan user).
+- **Kartu project:** tiap kartu kini ada baris "Laba Bersih" + margin%. Detail project (drawer) juga ada banner laba+margin.
+- **Render Project dipecah:** `projCard(p)` (1 kartu) + `renderProject()` baru. Project STATUS≠Selesai → kartu penuh (section "Project Berjalan"). Project STATUS='Selesai' → **rekap list ringkas** (section "Project Selesai · Rekap") diurut `projLastDate` desc, tiap baris klik → `openProjectDetail` (drawer lama). "Selesai" = STATUS Selesai (tidak ada field tanggal selesai; user konfirmasi cukup status).
+
 ## Boleh edit manual di Google Sheets? BOLEH, dengan aturan:
 1. Jangan ubah baris HEADER / nama kolom / nama tab.
 2. Tiap baris WAJIB punya `ID` unik (kalau nambah manual, isi sendiri mis. `MAN001`) — kalau kosong, edit/hapus dari app tak bisa nemu baris.

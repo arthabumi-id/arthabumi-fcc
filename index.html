@@ -473,6 +473,29 @@ function getProjCF(nama) {
   return { masuk: m, keluar: k, sisa: m - k };
 }
 
+// Laba & margin satu project: laba = masuk - keluar, margin = laba/masuk*100
+function projProfit(nama){
+  const cf = getProjCF(nama);
+  const laba = cf.masuk - cf.keluar;
+  return { masuk: cf.masuk, keluar: cf.keluar, laba, margin: cf.masuk>0 ? laba/cf.masuk*100 : 0 };
+}
+// Agregat laba bersih SELURUH project berstatus Selesai
+function doneProjectsProfit(){
+  let masuk=0, keluar=0, n=0;
+  state.projects.filter(p=>p.STATUS==='Selesai').forEach(p=>{
+    const cf=getProjCF(p.NAMA); masuk+=cf.masuk; keluar+=cf.keluar; n++;
+  });
+  const laba=masuk-keluar;
+  return { masuk, keluar, laba, margin: masuk>0?laba/masuk*100:0, count:n };
+}
+// Tanggal transaksi terakhir project (proxy "tanggal selesai"); fallback TGL_MULAI
+function projLastDate(nama){
+  const d = state.txns.filter(t=>t.PROJECT===nama)
+    .reduce((m,t)=>String(t.TANGGAL)>m?String(t.TANGGAL):m, '');
+  const p = state.projects.find(x=>x.NAMA===nama);
+  return d || (p && String(p.TGL_MULAI||'').slice(0,10)) || '';
+}
+
 function monthAgg(key) {
   if (state.summary && state.summary.month && state.summary.month[key]) return state.summary.month[key];
   const masuk  = state.txns.filter(t => String(t.TANGGAL).slice(0,7)===key && t.JENIS==='Pemasukan').reduce((s,t)=>s+Number(t.NOMINAL),0);
@@ -584,6 +607,7 @@ function renderDashboard() {
   const totCC = state.ccs.reduce((s,c) => s + getCCOut(c.NAMA), 0);
   const totRes = Object.values(state.reserveFunds).reduce((s,v) => s + v, 0);
   const projAktif = state.projects.filter(p => p.STATUS === 'Jalan').length;
+  const dp = doneProjectsProfit();
 
   document.getElementById('dashMetrics').innerHTML = `
     <div class="metric-grid">
@@ -611,6 +635,11 @@ function renderDashboard() {
         <div class="metric-label">Project Aktif</div>
         <div class="metric-value warn">${projAktif}</div>
         <div class="metric-sub">dari ${state.projects.length} total</div>
+      </div>
+      <div class="metric wide" style="background:linear-gradient(135deg,#0a2a1e,#0d1f2d);border:1px solid #2dd4a030">
+        <div class="metric-label">Laba Bersih · Project Selesai</div>
+        <div class="metric-value" style="font-size:24px;color:${dp.laba>=0?'var(--green)':'var(--red)'}">${dp.laba>=0?'':'-'}${fmt(Math.abs(dp.laba))} <span style="font-size:15px;color:var(--text2)">(${dp.margin.toFixed(1)}%)</span></div>
+        <div class="metric-sub">Masuk ${fmtS(dp.masuk)} − Keluar ${fmtS(dp.keluar)} · ${dp.count} project selesai</div>
       </div>
     </div>
   `;
@@ -875,9 +904,9 @@ function filterTxn() {
 }
 
 // ── RENDER PROJECT ────────────────────────────────────
-function renderProject() {
-  document.getElementById('projList').innerHTML = state.projects.map(p => {
+function projCard(p){
     const cf = getProjCF(p.NAMA);
+    const pr = projProfit(p.NAMA);
     const pct = p.NILAI_CONTRACT > 0 ? Math.min(100, Math.round(cf.masuk/p.NILAI_CONTRACT*100)) : 0;
     return `<div class="card" style="cursor:pointer" onclick="openProjectDetail('${p.ID}')">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
@@ -893,13 +922,47 @@ function renderProject() {
         <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Keluar</div><div style="font-size:12px;font-weight:600;color:var(--red)">-${fmt(cf.keluar)}</div></div>
         <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Sisa CF</div><div style="font-size:12px;font-weight:600;color:${cf.sisa>=0?'var(--green)':'var(--red)'}">${cf.sisa>=0?'+':'-'}${fmt(Math.abs(cf.sisa))}</div></div>
       </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg2,#0d1f2d);border:1px solid var(--border);border-radius:8px;padding:6px 10px;margin-bottom:10px">
+        <span style="font-size:9px;color:var(--text3);text-transform:uppercase">Laba Bersih</span>
+        <span style="font-size:13px;font-weight:700;color:${pr.laba>=0?'var(--green)':'var(--red)'}">${pr.laba>=0?'+':'-'}${fmt(Math.abs(pr.laba))} <span style="font-size:11px;color:var(--text2)">(${pr.margin.toFixed(1)}%)</span></span>
+      </div>
       <div class="res-bar-wrap"><div class="res-bar" style="width:${pct}%;background:${p.STATUS==='Jalan'?'var(--amber)':'var(--green)'}"></div></div>
       <div style="display:flex;justify-content:space-between;margin-top:6px">
         <span style="font-size:10px;color:var(--text3)">${pct}% terbayar</span>
         <button style="font-size:11px;color:var(--text2);background:transparent;border:1px solid var(--border);border-radius:6px;padding:3px 8px;cursor:pointer" onclick="event.stopPropagation();editProj('${p.ID}')">Edit</button>
       </div>
     </div>`;
-  }).join('') || '<div class="empty">Belum ada project</div>';
+}
+
+function renderProject() {
+  const active = state.projects.filter(p => p.STATUS !== 'Selesai');
+  const done = state.projects.filter(p => p.STATUS === 'Selesai')
+    .sort((a,b) => projLastDate(b.NAMA).localeCompare(projLastDate(a.NAMA)));
+  let html = active.length
+    ? `<div class="card-title" style="margin-bottom:8px">Project Berjalan (${active.length})</div>` + active.map(projCard).join('')
+    : '';
+  if (done.length) {
+    const dp = doneProjectsProfit();
+    html += `<div class="card-title" style="margin:18px 0 8px">Project Selesai · Rekap (${done.length})</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Total laba bersih: <b style="color:${dp.laba>=0?'var(--green)':'var(--red)'}">${dp.laba>=0?'+':'-'}${fmt(Math.abs(dp.laba))}</b> · margin ${dp.margin.toFixed(1)}% · urut tanggal terakhir</div>
+      <div class="card" style="padding:4px 0">` +
+      done.map(p => {
+        const pr = projProfit(p.NAMA);
+        const last = projLastDate(p.NAMA) || '—';
+        return `<div onclick="openProjectDetail('${p.ID}')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border)">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.NAMA)}</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:2px">${esc(p.KLIEN||'—')} · selesai ${last}</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div style="font-size:12px;font-weight:700;color:${pr.laba>=0?'var(--green)':'var(--red)'}">${pr.laba>=0?'+':'-'}${fmtS(Math.abs(pr.laba))}</div>
+            <div style="font-size:10px;color:var(--text2)">${pr.margin.toFixed(1)}%</div>
+          </div>
+          <i class="ti ti-chevron-right" style="color:var(--text3);flex-shrink:0"></i>
+        </div>`;
+      }).join('') + `</div>`;
+  }
+  document.getElementById('projList').innerHTML = html || '<div class="empty">Belum ada project</div>';
 }
 
 // ── RENDER MASTER ─────────────────────────────────────
@@ -1163,6 +1226,7 @@ function openProjectDetail(id) {
   let projTxns = state.txns.filter(t => t.PROJECT === nama);
   function render() {
     const cf = getProjCF(nama);
+    const pr = projProfit(nama);
     const sorted = [...projTxns].sort((a,b) => String(b.TANGGAL).localeCompare(String(a.TANGGAL)));
     const entries = katComposition(projTxns);
     document.getElementById('drawerBody').innerHTML = `
@@ -1170,6 +1234,10 @@ function openProjectDetail(id) {
         <div class="detail-sum-item"><div class="detail-sum-label">Masuk</div><div class="detail-sum-val pos">${fmt(cf.masuk)}</div></div>
         <div class="detail-sum-item"><div class="detail-sum-label">Keluar</div><div class="detail-sum-val neg">${fmt(cf.keluar)}</div></div>
         <div class="detail-sum-item"><div class="detail-sum-label">Sisa CF</div><div class="detail-sum-val" style="color:${cf.sisa>=0?'var(--green)':'var(--red)'}">${cf.sisa>=0?'':'-'}${fmt(Math.abs(cf.sisa))}</div></div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#0a2a1e,#0d1f2d);border:1px solid #2dd4a030;border-radius:10px;padding:10px 14px;margin-bottom:12px">
+        <span style="font-size:11px;color:var(--text2);text-transform:uppercase">Laba Bersih (Margin)</span>
+        <span style="font-size:16px;font-weight:700;color:${pr.laba>=0?'var(--green)':'var(--red)'}">${pr.laba>=0?'+':'-'}${fmt(Math.abs(pr.laba))} <span style="font-size:13px;color:var(--text2)">(${pr.margin.toFixed(1)}%)</span></span>
       </div>
       ${p.NILAI_CONTRACT?`<div style="font-size:11px;color:var(--text3);margin-bottom:10px">Nilai kontrak: ${fmt(p.NILAI_CONTRACT)}${p.KLIEN?' · '+esc(p.KLIEN):''}</div>`:''}
       ${donutCardHTML('projKatDonut', entries)}
