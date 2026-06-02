@@ -1,4 +1,4 @@
-# FCC Arthabumi — Context & Status (v12)
+# FCC Arthabumi — Context & Status (v13)
 
 ## Apa itu FCC?
 Financial Control Center — web app pribadi Eddy untuk tracking keuangan bisnis Arthabumi (kontraktor/interior). Single-user, dihosting di GitHub Pages.
@@ -131,6 +131,9 @@ Client-only (index.html). Kartu komposisi di Master>Kategori kini ada **toggle P
 
 ## ⭐ Perubahan v12 (Input Saldo Awal rekening) — Juni 2026
 Client-only (index.html), tanpa redeploy. Form Rekening (mode 'bank') kini punya input **Saldo Awal** (`fb_saldo`, prefill `fmtInput(b.SALDO_AWAL)`); `saveDrawer` bank pakai `unfmtNum` (dulu hardcode 0). `getSaldo` kini `saldo = SALDO_AWAL + masuk − keluar` (ambil dari `state.banks`). Berdampak ke kartu Master Bank, Total Saldo Bank & Net Cash di dashboard. Detail akun TIDAK diubah (berbasis periode/filter tanggal, masih masuk−keluar). Tulis ke MASTER_BANK via addRow/updateRow yang sudah ada (kolom SALDO_AWAL).
+
+## ⭐ Perubahan v13 (Urut kategori alfabet) — Juni 2026
+Client-only. Di `renderMaster` tab 'kat': kelompok di-`sort(localeCompare)` & kategori dalam tiap kelompok di-`sort` by NAMA (localeCompare). Hanya tampilan, tidak mengubah data/urutan di Sheets.
 
 ## Boleh edit manual di Google Sheets? BOLEH, dengan aturan:
 1. Jangan ubah baris HEADER / nama kolom / nama tab.
