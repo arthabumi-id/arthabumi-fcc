@@ -53,6 +53,34 @@ Tujuan: app tahan dipakai bertahun-tahun walau transaksi makin banyak.
 - Account Detail: fetch riwayat penuh akun **on-demand** saat drawer dibuka.
 - Settings: tombol **"Hitung Ulang Total"** (`forceRefresh`) → panggil `clearCache`.
 
+## ⭐ Perubahan v4 (UX, bugfix, fitur) — Juni 2026
+### Bugfix
+- **Tanggal mundur 1 hari (FIXED):** kolom tanggal di Sheets dibaca Apps Script sbg objek `Date` (tengah malam zona Sheets) → `JSON.stringify` jadi ISO UTC → app `slice(0,10)` mundur 1 hari. Fix di `Code.gs`: `normalizeCell(v,tz)` ubah `Date` → `yyyy-MM-dd` pakai `ss.getSpreadsheetTimeZone()`, dipakai di `getSheet` & `getSummary` (agregat bulan ikut diperbaiki).
+- **Total Saldo Bank warna (FIXED):** dulu hardcode class `pos` (selalu hijau). Sekarang warna dinamis ikut tanda (merah bila negatif).
+
+### Tambah Transaksi
+- **Kategori auto-tambah:** dropdown kategori punya opsi "➕ Tambah kategori baru…" → muncul input nama + pilih KELOMPOK (TIPE ikut Jenis transaksi). Saat simpan, kategori baru ditulis ke MASTER_KATEGORI via `addKat` lalu dipakai. Cek duplikat (case-insensitive).
+- **Format ribuan otomatis:** semua input nominal (txn, transfer, reserve, nilai kontrak, limit CC) kini `type=text inputmode=numeric` + `fmtMoneyInput()` (titik ribuan saat ketik). Saat simpan dibersihkan via `unfmtNum()`. Prefill pakai `fmtInput()`. (Jatuh Tempo tetap angka biasa.)
+- **Peringatan project:** kalau kategori berkelompok PROJECT tapi Project belum dipilih → konfirmasi "Simpan tanpa project?".
+- `saveDrawer` txn kini juga panggil `renderProject()` supaya tab Project update seketika.
+
+### Project
+- Kartu project: tambah kolom **Keluar** (grid jadi 2×2: Nilai, Masuk, Keluar, Sisa CF).
+- Kartu project **bisa di-tap** → drawer **Detail Project** (`openProjectDetail(id)`): ringkasan Masuk/Keluar/Sisa + donut komposisi pengeluaran per kategori + daftar transaksi. Data txn diambil penuh via `getTxns?project=` (ada client-side filter sbg guard utk backend lama). Tombol Edit pakai `event.stopPropagation()`.
+
+### Transfer
+- Riwayat Transfer: tombol **edit** & **hapus** per baris. Hapus = buang 3 baris terkait (2 TXN + 1 TRANSFER_LOG) via REF_ID. Edit = prefill form, hapus lama + buat baru saat Update. Server action baru: **`deleteTransfer`** (cocokkan REF_ID di TRANSFER_LOG, dan substring refId di NOTES TXN).
+
+### Komposisi pengeluaran (donut per kategori)
+- Helper: `katComposition(txns)`, `donutCardHTML(canvasId,entries)`, `buildKatDonut()`, `detailTxnCard(t)`, palet `KAT_PALETTE`.
+- Disisipkan di **Detail Akun** (ikut filter) & **Detail Project**. Tidak ada tab baru — semua lewat drawer.
+
+### Server action baru di Code.gs v4
+- `deleteTransfer` (POST), filter `project` di `getTxns`. **Wajib redeploy** Apps Script setelah update Code.gs.
+
+### Belum dikerjakan (ditawarkan, user tunda)
+- **Optimistic save:** input terasa lambat karena `await apiPost` blokir UI nunggu Apps Script (1–3 dtk). Solusi: render lokal dulu, kirim server di background. Belum diterapkan.
+
 ## Boleh edit manual di Google Sheets? BOLEH, dengan aturan:
 1. Jangan ubah baris HEADER / nama kolom / nama tab.
 2. Tiap baris WAJIB punya `ID` unik (kalau nambah manual, isi sendiri mis. `MAN001`) — kalau kosong, edit/hapus dari app tak bisa nemu baris.
