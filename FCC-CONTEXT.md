@@ -1,4 +1,4 @@
-# FCC Arthabumi — Context & Status (v3)
+# FCC Arthabumi — Context & Status (v8)
 
 ## Apa itu FCC?
 Financial Control Center — web app pribadi Eddy untuk tracking keuangan bisnis Arthabumi (kontraktor/interior). Single-user, dihosting di GitHub Pages.
