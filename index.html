@@ -1070,7 +1070,7 @@ function openKasbon(prefName){
       <datalist id="kb_names">${names.map(n=>`<option value="${esc(n)}">`).join('')}</datalist></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Jenis</label><select class="form-input" id="kb_jenis" onchange="onKasbonJenis()"><option value="Pinjam">Pinjam (ambil kasbon)</option><option value="Kembali">Kembali (bayar/potong)</option></select></div>
-      <div class="form-group" id="kb_metodeWrap" style="display:none"><label class="form-label">Metode</label><select class="form-input" id="kb_metode" onchange="onKasbonMetode()"><option value="Tunai">Tunai (uang masuk)</option><option value="Potong Gaji">Potong Gaji</option></select></div>
+      <div class="form-group" id="kb_metodeWrap" style="display:none"><label class="form-label">Metode</label><select class="form-input" id="kb_metode" onchange="onKasbonMetode()"><option value="Tunai">Tunai (setor balik)</option><option value="Potong Gaji">Potong Gaji</option></select></div>
     </div>
     <div class="form-group" id="kb_rekWrap"><label class="form-label">Rekening (sumber/tujuan uang)</label><select class="form-input" id="kb_rek">${banks.map(n=>`<option>${esc(n)}</option>`).join('')}</select></div>
     <div class="form-row">
@@ -1079,7 +1079,7 @@ function openKasbon(prefName){
     </div>
     <div class="form-group"><label class="form-label">Catatan</label><input class="form-input" id="kb_notes" placeholder="opsional"></div>
     <button class="btn-primary" onclick="saveKasbon()"><i class="ti ti-device-floppy"></i> Simpan</button>
-    <div class="settings-sub" style="margin-top:8px">Pinjam: uang keluar dari rekening, sisa kasbon naik. Kembali Tunai: uang masuk, sisa turun. Kembali Potong Gaji: sisa turun tanpa gerak uang (gaji dicatat terpisah dgn nominal sudah dipotong).</div>
+    <div class="settings-sub" style="margin-top:8px">Pinjam: uang keluar dari rekening, sisa kasbon naik. Kembali (Tunai / Potong Gaji): uang masuk ke rekening yang dipilih & sisa kasbon turun. Untuk Potong Gaji, catat gaji PENUH terpisah di Transaksi (selisihnya sudah ter-offset oleh kasbon masuk ini).</div>
   `;
   drawerMode='kasbon';
   document.getElementById('drawerBg').classList.add('open');
@@ -1092,10 +1092,8 @@ function onKasbonJenis(){
   onKasbonMetode();
 }
 function onKasbonMetode(){
-  const j=document.getElementById('kb_jenis').value;
-  const m=document.getElementById('kb_metode').value;
-  const needRek = (j==='Pinjam') || (m==='Tunai');
-  document.getElementById('kb_rekWrap').style.display = needRek ? 'block' : 'none';
+  // Rekening selalu diperlukan: Pinjam = uang keluar, Kembali (Tunai/Potong Gaji) = uang masuk.
+  document.getElementById('kb_rekWrap').style.display = 'block';
 }
 async function saveKasbon(){
   const nama=(document.getElementById('kb_nama').value||'').trim();
@@ -1105,9 +1103,9 @@ async function saveKasbon(){
   const nominal=unfmtNum(document.getElementById('kb_nominal').value);
   const tgl=document.getElementById('kb_tgl').value;
   const notes=document.getElementById('kb_notes').value;
-  const rek=(metode==='Tunai')?document.getElementById('kb_rek').value:'';
+  const rek=document.getElementById('kb_rek').value;
   if(!nama||!nominal||!tgl){showToast('Nama, nominal, tanggal wajib diisi','error');return;}
-  if(metode==='Tunai'&&!rek){showToast('Pilih rekening','error');return;}
+  if(!rek){showToast('Pilih rekening','error');return;}
   if(API_URL)await apiPost({action:'addKasbon',data:{TANGGAL:tgl,KARYAWAN:nama,JENIS:jenis,NOMINAL:nominal,METODE:metode,REKENING:rek,NOTES:notes,USER:state.user}});
   closeDrawer();
   showToast('Kasbon '+jenis.toLowerCase()+' '+nama+' '+fmt(nominal)+' ✓','success');

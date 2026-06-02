@@ -369,11 +369,13 @@ function addKasbon(ss, data) {
   let kb = ss.getSheetByName(S.KASBON);
   if (!kb) { kb = ss.insertSheet(S.KASBON); kb.appendRow(HEADERS[S.KASBON]); kb.getRange(1,1,1,HEADERS[S.KASBON].length).setFontWeight('bold').setBackground('#1a1a2e').setFontColor('#ffffff'); kb.setFrozenRows(1); }
   kb.appendRow(['ID'+Date.now(), data.TANGGAL, data.KARYAWAN, data.JENIS, amt, metode, data.REKENING||'', data.NOTES||'', ref, data.USER, now]);
-  if (metode === 'Tunai' && data.REKENING) {
+  // Gerak uang selalu terjadi bila rekening dipilih.
+  // Pinjam = uang keluar; Kembali (Tunai ATAU Potong Gaji) = uang masuk ke rekening.
+  if (data.REKENING) {
     if (data.JENIS === 'Pinjam') {
-      ss.getSheetByName(S.TXN).appendRow(['ID'+Date.now()+'K', data.TANGGAL, 'Pengeluaran', '', data.REKENING, 'Kasbon Keluar', amt, '[KASBON '+ref+'] pinjam '+data.KARYAWAN+' '+(data.NOTES||''), 'Kasbon', data.USER, now]);
+      ss.getSheetByName(S.TXN).appendRow(['ID'+Date.now()+'K', data.TANGGAL, 'Pengeluaran', '', data.REKENING, 'Kasbon Keluar', amt, '[KASBON '+ref+'] pinjam '+data.KARYAWAN+' ('+metode+') '+(data.NOTES||''), 'Kasbon', data.USER, now]);
     } else {
-      ss.getSheetByName(S.TXN).appendRow(['ID'+Date.now()+'K', data.TANGGAL, 'Pemasukan', '', data.REKENING, 'Kasbon Masuk', amt, '[KASBON '+ref+'] kembali '+data.KARYAWAN+' '+(data.NOTES||''), 'Kasbon', data.USER, now]);
+      ss.getSheetByName(S.TXN).appendRow(['ID'+Date.now()+'K', data.TANGGAL, 'Pemasukan', '', data.REKENING, 'Kasbon Masuk', amt, '[KASBON '+ref+'] kembali '+data.KARYAWAN+' ('+metode+') '+(data.NOTES||''), 'Kasbon', data.USER, now]);
     }
   }
   return { ok: true, ref: ref };
