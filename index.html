@@ -287,6 +287,12 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
       </div>
       <div id="masterContent"></div>
     </div>
+
+    <!-- KASBON -->
+    <div class="page" id="page-kasbon">
+      <button class="btn-primary" style="margin-bottom:12px" onclick="openKasbon()"><i class="ti ti-plus"></i> Catat Kasbon</button>
+      <div id="kasbonList"></div>
+    </div>
   </div>
 
   <!-- BOTTOM NAV -->
@@ -295,6 +301,7 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
     <button class="nav-item" onclick="goPage('transaksi')"><i class="ti ti-list"></i><span>Transaksi</span></button>
     <button class="nav-item" onclick="goPage('transfer')"><i class="ti ti-transfer"></i><span>Transfer</span></button>
     <button class="nav-item" onclick="goPage('project')"><i class="ti ti-hammer"></i><span>Project</span></button>
+    <button class="nav-item" onclick="goPage('kasbon')"><i class="ti ti-wallet"></i><span>Kasbon</span></button>
     <button class="nav-item" onclick="goPage('master')"><i class="ti ti-settings"></i><span>Master</span></button>
   </nav>
 
@@ -326,7 +333,7 @@ let state = {
   pin: '',
   user: 'Eddy',
   banks: [], ccs: [], projects: [], kategori: [],
-  txns: [], transfers: [], reserves: [],
+  txns: [], transfers: [], reserves: [], kasbon: [],
   reserveFunds: {}, // computed: cc_name -> total
   summary: null,    // agregat penuh dari server (saldo/proj/bulan/kategori)
   txnsSince: null,  // batas tanggal txn terlama yg sudah dimuat ke client
@@ -374,7 +381,7 @@ function saveLocal() {
   localStorage.setItem('fcc_data', JSON.stringify({
     banks: state.banks, ccs: state.ccs, projects: state.projects,
     kategori: state.kategori, txns: state.txns, transfers: state.transfers,
-    reserves: state.reserves, summary: state.summary, txnsSince: state.txnsSince
+    reserves: state.reserves, kasbon: state.kasbon, summary: state.summary, txnsSince: state.txnsSince
   }));
 }
 
@@ -594,6 +601,7 @@ async function syncAll() {
     state.txns = data.txns || state.txns;
     state.transfers = data.transfers || state.transfers;
     state.reserves = data.reserves || state.reserves;
+    state.kasbon = data.kasbon || state.kasbon;
     state.summary = data.summary || null; // null bila pakai getAll lama → accessor fallback ke txns
     state.txnsSince = data.since || state.txnsSince;
     computeReserve();
@@ -1010,6 +1018,138 @@ function renderProject() {
     if(!html) html='<div class="empty">Belum ada project</div>';
   }
   document.getElementById('projList').innerHTML = html;
+}
+
+// ── KASBON KARYAWAN ───────────────────────────────────
+function kasbonAgg(){
+  const m = {};
+  state.kasbon.forEach(k => {
+    const nm = k.KARYAWAN || '—';
+    const a = m[nm] || (m[nm] = { pinjam:0, kembali:0, saldo:0, last:'' });
+    const amt = Number(k.NOMINAL)||0;
+    if (k.JENIS==='Pinjam') a.pinjam += amt; else a.kembali += amt;
+    a.saldo = a.pinjam - a.kembali;
+    const d = String(k.TANGGAL).slice(0,10); if (d > a.last) a.last = d;
+  });
+  return m;
+}
+function kasbonEmployees(){ return [...new Set(state.kasbon.map(k=>k.KARYAWAN).filter(Boolean))].sort(); }
+function renderKasbon(){
+  const agg = kasbonAgg();
+  const names = Object.keys(agg).sort((a,b)=> agg[b].saldo - agg[a].saldo);
+  const totalOut = Object.values(agg).reduce((s,a)=>s+a.saldo,0);
+  let html = `<div class="card" style="margin-bottom:12px;background:linear-gradient(135deg,#2a1f0a,#0d1f2d);border:1px solid #f5a62330">
+      <div class="metric-label">Total Kasbon Beredar (piutang)</div>
+      <div class="metric-value" style="font-size:24px;color:${totalOut>0?'var(--amber)':'var(--green)'}">${fmt(totalOut)}</div>
+      <div class="metric-sub">${names.length} karyawan</div>
+    </div>`;
+  if (!names.length) { document.getElementById('kasbonList').innerHTML = html + '<div class="empty">Belum ada kasbon. Tekan "Catat Kasbon".</div>'; return; }
+  html += names.map(nm=>{
+    const a = agg[nm];
+    return `<div class="card" onclick="openKasbonDetail('${esc(nm).replace(/'/g,"\\'")}')" style="cursor:pointer;padding:11px 13px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:10px">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(nm)}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">pinjam ${fmtS(a.pinjam)} · kembali ${fmtS(a.kembali)} · ${a.last||'—'}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:9px;color:var(--text3);text-transform:uppercase">Sisa kasbon</div>
+        <div style="font-size:15px;font-weight:700;color:${a.saldo>0?'var(--amber)':a.saldo<0?'var(--red)':'var(--green)'}">${fmt(a.saldo)}</div>
+      </div>
+      <i class="ti ti-chevron-right" style="color:var(--text3);flex-shrink:0"></i>
+    </div>`;
+  }).join('');
+  document.getElementById('kasbonList').innerHTML = html;
+}
+function openKasbon(prefName){
+  const names = kasbonEmployees();
+  const banks = state.banks.map(b=>b.NAMA);
+  document.getElementById('drawerTitle').textContent = 'Catat Kasbon';
+  document.getElementById('drawerBody').innerHTML = `
+    <div class="form-group"><label class="form-label">Nama Karyawan</label>
+      <input class="form-input" id="kb_nama" list="kb_names" value="${prefName?esc(prefName):''}" placeholder="Ketik nama / pilih">
+      <datalist id="kb_names">${names.map(n=>`<option value="${esc(n)}">`).join('')}</datalist></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Jenis</label><select class="form-input" id="kb_jenis" onchange="onKasbonJenis()"><option value="Pinjam">Pinjam (ambil kasbon)</option><option value="Kembali">Kembali (bayar/potong)</option></select></div>
+      <div class="form-group" id="kb_metodeWrap" style="display:none"><label class="form-label">Metode</label><select class="form-input" id="kb_metode" onchange="onKasbonMetode()"><option value="Tunai">Tunai (uang masuk)</option><option value="Potong Gaji">Potong Gaji</option></select></div>
+    </div>
+    <div class="form-group" id="kb_rekWrap"><label class="form-label">Rekening (sumber/tujuan uang)</label><select class="form-input" id="kb_rek">${banks.map(n=>`<option>${esc(n)}</option>`).join('')}</select></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Nominal</label><input class="form-input" id="kb_nominal" type="text" inputmode="numeric" oninput="fmtMoneyInput(this)" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Tanggal</label><input class="form-input" id="kb_tgl" type="date" value="${today()}"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Catatan</label><input class="form-input" id="kb_notes" placeholder="opsional"></div>
+    <button class="btn-primary" onclick="saveKasbon()"><i class="ti ti-device-floppy"></i> Simpan</button>
+    <div class="settings-sub" style="margin-top:8px">Pinjam: uang keluar dari rekening, sisa kasbon naik. Kembali Tunai: uang masuk, sisa turun. Kembali Potong Gaji: sisa turun tanpa gerak uang (gaji dicatat terpisah dgn nominal sudah dipotong).</div>
+  `;
+  drawerMode='kasbon';
+  document.getElementById('drawerBg').classList.add('open');
+  onKasbonJenis();
+}
+function onKasbonJenis(){
+  const j=document.getElementById('kb_jenis').value;
+  const mw=document.getElementById('kb_metodeWrap');
+  if(j==='Kembali'){ mw.style.display='block'; } else { mw.style.display='none'; document.getElementById('kb_metode').value='Tunai'; }
+  onKasbonMetode();
+}
+function onKasbonMetode(){
+  const j=document.getElementById('kb_jenis').value;
+  const m=document.getElementById('kb_metode').value;
+  const needRek = (j==='Pinjam') || (m==='Tunai');
+  document.getElementById('kb_rekWrap').style.display = needRek ? 'block' : 'none';
+}
+async function saveKasbon(){
+  const nama=(document.getElementById('kb_nama').value||'').trim();
+  const jenis=document.getElementById('kb_jenis').value;
+  let metode=document.getElementById('kb_metode').value;
+  if(jenis==='Pinjam') metode='Tunai';
+  const nominal=unfmtNum(document.getElementById('kb_nominal').value);
+  const tgl=document.getElementById('kb_tgl').value;
+  const notes=document.getElementById('kb_notes').value;
+  const rek=(metode==='Tunai')?document.getElementById('kb_rek').value:'';
+  if(!nama||!nominal||!tgl){showToast('Nama, nominal, tanggal wajib diisi','error');return;}
+  if(metode==='Tunai'&&!rek){showToast('Pilih rekening','error');return;}
+  if(API_URL)await apiPost({action:'addKasbon',data:{TANGGAL:tgl,KARYAWAN:nama,JENIS:jenis,NOMINAL:nominal,METODE:metode,REKENING:rek,NOTES:notes,USER:state.user}});
+  closeDrawer();
+  showToast('Kasbon '+jenis.toLowerCase()+' '+nama+' '+fmt(nominal)+' ✓','success');
+  if(API_URL)await syncAll(); else renderKasbon();
+}
+function openKasbonDetail(nama){
+  const a = kasbonAgg()[nama] || {pinjam:0,kembali:0,saldo:0};
+  const rows = state.kasbon.filter(k=>k.KARYAWAN===nama).sort((x,y)=>String(y.TANGGAL).localeCompare(String(x.TANGGAL)));
+  document.getElementById('drawerTitle').textContent='Kasbon: '+nama;
+  document.getElementById('drawerBody').innerHTML = `
+    <div class="detail-summary">
+      <div class="detail-sum-item"><div class="detail-sum-label">Pinjam</div><div class="detail-sum-val neg">${fmt(a.pinjam)}</div></div>
+      <div class="detail-sum-item"><div class="detail-sum-label">Kembali</div><div class="detail-sum-val pos">${fmt(a.kembali)}</div></div>
+      <div class="detail-sum-item"><div class="detail-sum-label">Sisa</div><div class="detail-sum-val" style="color:${a.saldo>0?'var(--amber)':'var(--green)'}">${fmt(a.saldo)}</div></div>
+    </div>
+    <button class="btn-primary" style="margin-bottom:12px" onclick="openKasbon('${esc(nama).replace(/'/g,"\\'")}')"><i class="ti ti-plus"></i> Catat Pinjam / Kembali</button>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:8px">${rows.length} catatan</div>
+    ${rows.map(kasbonRow).join('')||'<div class="empty">Belum ada catatan</div>'}
+  `;
+  drawerMode='kasbondetail';
+  document.getElementById('drawerBg').classList.add('open');
+}
+function kasbonRow(k){
+  const isPin = k.JENIS==='Pinjam';
+  return `<div class="card" style="padding:9px 11px;margin-bottom:6px;display:flex;align-items:center;gap:9px">
+    <div style="width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:${isPin?'#2a0a0a':'#0a2a1a'}"><i class="ti ti-${isPin?'arrow-up-right':'arrow-down-left'}" style="font-size:13px;color:${isPin?'var(--red)':'var(--green)'}"></i></div>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:12px;font-weight:600">${k.JENIS} · ${esc(k.METODE||'Tunai')}</div>
+      <div style="font-size:10px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${String(k.TANGGAL).slice(0,10)}${k.REKENING?' · '+esc(k.REKENING):''}${k.NOTES?' · '+esc(k.NOTES):''}</div>
+    </div>
+    <div style="text-align:right;flex-shrink:0">
+      <div style="font-size:13px;font-weight:700;color:${isPin?'var(--red)':'var(--green)'}">${isPin?'+':'-'}${fmt(Number(k.NOMINAL))}</div>
+      <button style="font-size:10px;background:transparent;border:none;color:var(--text3);cursor:pointer" onclick="delKasbon('${k.REF_ID||k.ID}')">hapus</button>
+    </div>
+  </div>`;
+}
+async function delKasbon(ref){
+  if(!confirm('Hapus catatan kasbon ini? Transaksi uang terkait (bila ada) ikut dihapus.'))return;
+  if(API_URL)await apiPost({action:'deleteKasbon',data:{refId:ref}});
+  showToast('Catatan kasbon dihapus','success');
+  closeDrawer();
+  if(API_URL)await syncAll(); else { state.kasbon=state.kasbon.filter(k=>(k.REF_ID||k.ID)!==ref); renderKasbon(); }
 }
 
 // ── RENDER MASTER ─────────────────────────────────────
@@ -1874,7 +2014,7 @@ async function forceRefresh(){
   if(data&&!data.error){
     state.banks=data.banks||state.banks;state.ccs=data.ccs||state.ccs;state.projects=data.projects||state.projects;
     state.kategori=data.kategori||state.kategori;state.txns=data.txns||state.txns;state.transfers=data.transfers||state.transfers;
-    state.reserves=data.reserves||state.reserves;state.summary=data.summary||null;state.txnsSince=data.since||state.txnsSince;
+    state.reserves=data.reserves||state.reserves;state.kasbon=data.kasbon||state.kasbon;state.summary=data.summary||null;state.txnsSince=data.since||state.txnsSince;
     computeReserve();saveLocal();renderAll();closeDrawer();showToast('Total dihitung ulang ✓','success');
   } else { showToast('Gagal refresh','error'); }
 }
@@ -1980,8 +2120,8 @@ async function confirmImport(){
   }
 }
 function showToast(msg,type){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(type||'success');setTimeout(()=>t.classList.add('show'),10);setTimeout(()=>t.classList.remove('show'),2800);}
-function goPage(page){state.currentPage=page;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+page).classList.add('active');document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));const idx=['dashboard','transaksi','transfer','project','master'].indexOf(page);if(idx>=0)document.querySelectorAll('.nav-item')[idx].classList.add('active');document.getElementById('content').scrollTop=0;if(page==='master')renderMaster();if(page==='transfer')renderTransferPage();}
-function renderAll(){renderDashboard();renderTxnMonthTabs();filterTxn();renderProject();if(state.currentPage==='master')renderMaster();if(state.currentPage==='transfer')renderTransferPage();}
+function goPage(page){state.currentPage=page;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+page).classList.add('active');document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));const idx=['dashboard','transaksi','transfer','project','kasbon','master'].indexOf(page);if(idx>=0)document.querySelectorAll('.nav-item')[idx].classList.add('active');document.getElementById('content').scrollTop=0;if(page==='master')renderMaster();if(page==='transfer')renderTransferPage();if(page==='kasbon')renderKasbon();}
+function renderAll(){renderDashboard();renderTxnMonthTabs();filterTxn();renderProject();if(state.currentPage==='master')renderMaster();if(state.currentPage==='transfer')renderTransferPage();if(state.currentPage==='kasbon')renderKasbon();}
 if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{});}
 let logoTimer;
 document.querySelector('.topbar-title').addEventListener('touchstart',()=>{logoTimer=setTimeout(()=>openDrawer('settings'),800);});

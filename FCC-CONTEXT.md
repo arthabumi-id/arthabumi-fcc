@@ -1,4 +1,4 @@
-# FCC Arthabumi — Context & Status (v9)
+# FCC Arthabumi — Context & Status (v10)
 
 ## Apa itu FCC?
 Financial Control Center — web app pribadi Eddy untuk tracking keuangan bisnis Arthabumi (kontraktor/interior). Single-user, dihosting di GitHub Pages.
@@ -119,6 +119,11 @@ Client-side (index.html).
 - **Sumber = Reserve:** action baru Code.gs **`payCCReserve`** (POST, **wajib redeploy**): tulis 1 TXN Pemasukan ke CC (TIPE_LOG Reserve, KATEGORI 'Bayar CC (Reserve)') → tagihan ↓, dan 1 RESERVE_LOG **negatif** (DARI_REKENING '(release)') → pot reserve ↓. **Bank tidak disentuh** karena dana sudah keluar saat reserve dibuat (over siklus reserve→bayar, angka konsisten). Validasi nominal ≤ reserve tersedia + konfirmasi.
 - Setelah simpan → `syncAll` (state authoritative). Keduanya TIPE_LOG Transfer/Reserve → tidak masuk laba/komposisi pengeluaran.
 - CATATAN model: saat reserve dibuat, saldo bank langsung ↓ (TXN Pengeluaran Reserve) & Net Cash = Bank − Reserve (saat ada reserve, Net Cash sengaja konservatif/understated; lunas saat dibayar).
+
+## ⭐ Perubahan v10 (Kasbon karyawan) — Juni 2026
+- **Sheet baru `KASBON`:** `ID,TANGGAL,KARYAWAN,JENIS,NOMINAL,METODE,REKENING,NOTES,REF_ID,CREATED_BY,CREATED_AT`. JENIS=`Pinjam`/`Kembali`, METODE=`Tunai`/`Potong Gaji`. Auto-dibuat oleh `addKasbon` bila belum ada (juga via initSheets karena masuk HEADERS). Ditambahkan ke `getBundle` & `getAllData` (`kasbon`).
+- **Code.gs actions baru (wajib redeploy):** `addKasbon` (tulis ledger KASBON + bila METODE Tunai tulis 1 TXN: Pinjam→Pengeluaran 'Kasbon Keluar', Kembali→Pemasukan 'Kasbon Masuk', TIPE_LOG `Kasbon`), `deleteKasbon` (hapus baris KASBON by REF_ID + TXN yg NOTES memuat refId). Saldo rekening akurat; TIPE_LOG Kasbon → tidak masuk laba/komposisi.
+- **Client:** nav baru **Kasbon** (`ti-wallet`, idx 4, Master geser ke 5), `state.kasbon` (di syncAll/forceRefresh/saveLocal). Halaman `page-kasbon` (`renderKasbon`): kartu Total Kasbon Beredar + daftar karyawan diurut sisa, klik → `openKasbonDetail` (ringkasan pinjam/kembali/sisa + riwayat + tombol catat + hapus per baris). Input `openKasbon(prefName)` drawer (`drawerMode='kasbon'`): nama (datalist karyawan, custom boleh), Jenis, Metode (muncul saat Kembali; Pinjam selalu Tunai), Rekening (saat Tunai), nominal/tanggal/notes → `saveKasbon` POST addKasbon lalu syncAll. Helper `kasbonAgg`/`kasbonEmployees`/`onKasbonJenis`/`onKasbonMetode`/`delKasbon`. **Potong Gaji** = sisa kasbon turun tanpa gerak uang (gaji dicatat terpisah dgn nominal sudah dipotong).
 
 ## Boleh edit manual di Google Sheets? BOLEH, dengan aturan:
 1. Jangan ubah baris HEADER / nama kolom / nama tab.

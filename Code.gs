@@ -14,7 +14,7 @@ const SUMMARY_KEY = 'fcc_summary_v3';
 
 const S = {
   TXN: 'TRANSAKSI', BANK: 'MASTER_BANK', CC: 'MASTER_CC', PROJ: 'MASTER_PROJECT',
-  KAT: 'MASTER_KATEGORI', TRANSFER: 'TRANSFER_LOG', RESERVE: 'RESERVE_LOG',
+  KAT: 'MASTER_KATEGORI', TRANSFER: 'TRANSFER_LOG', RESERVE: 'RESERVE_LOG', KASBON: 'KASBON',
 };
 
 const HEADERS = {
@@ -25,6 +25,7 @@ const HEADERS = {
   [S.KAT]:      ['ID','KELOMPOK','NAMA','TIPE','CREATED_AT'],
   [S.TRANSFER]: ['ID','TANGGAL','DARI','KE','NOMINAL','NOTES','REF_ID','CREATED_BY','CREATED_AT'],
   [S.RESERVE]:  ['ID','TANGGAL','DARI_REKENING','UNTUK_CC','NOMINAL','NOTES','CREATED_BY','CREATED_AT'],
+  [S.KASBON]:   ['ID','TANGGAL','KARYAWAN','JENIS','NOMINAL','METODE','REKENING','NOTES','REF_ID','CREATED_BY','CREATED_AT'],
 };
 
 // ── INIT ─────────────────────────────────────────────────────
@@ -142,6 +143,8 @@ function doPost(e) {
       case 'deleteTransfer': res = deleteTransfer(ss, data); break;
       case 'addReserve':  res = addReserve(ss, data); break;
       case 'payCCReserve': res = payCCReserve(ss, data); break;
+      case 'addKasbon':   res = addKasbon(ss, data); break;
+      case 'deleteKasbon':res = deleteKasbon(ss, data); break;
       case 'updateRow':   res = updateRow(ss, data); break;
       case 'deleteRow':   res = deleteRow(ss, data); break;
       case 'init':        res = initSheets(); break;
@@ -162,6 +165,7 @@ function getBundle(ss, params) {
     kategori:  getSheet(ss, S.KAT),
     transfers: getSheet(ss, S.TRANSFER),
     reserves:  getSheet(ss, S.RESERVE),
+    kasbon:    getSheet(ss, S.KASBON),
     summary:   getSummary(ss),
     txns:      getTxns(ss, { since: since }),
     since:     since,
@@ -229,6 +233,7 @@ function getAllData(ss) {
     banks: getSheet(ss, S.BANK), ccs: getSheet(ss, S.CC), projects: getSheet(ss, S.PROJ),
     kategori: getSheet(ss, S.KAT), txns: getSheet(ss, S.TXN),
     transfers: getSheet(ss, S.TRANSFER), reserves: getSheet(ss, S.RESERVE),
+    kasbon: getSheet(ss, S.KASBON),
   };
 }
 
@@ -350,6 +355,45 @@ function addReserve(ss, data) {
   const now = new Date().toISOString();
   ss.getSheetByName(S.TXN).appendRow(['ID'+Date.now(), data.TANGGAL, 'Pengeluaran', '', data.DARI_REKENING, 'Reserve CC', data.NOMINAL, '[RESERVE ke '+data.UNTUK_CC+'] '+data.NOTES, 'Reserve', data.USER, now]);
   ss.getSheetByName(S.RESERVE).appendRow(['ID'+Date.now(), data.TANGGAL, data.DARI_REKENING, data.UNTUK_CC, data.NOMINAL, data.NOTES, data.USER, now]);
+  return { ok: true };
+}
+
+// KASBON karyawan. Ledger di sheet KASBON + (bila Tunai) gerak uang di TRANSAKSI.
+// JENIS: 'Pinjam' (uang keluar) / 'Kembali' (uang masuk). METODE: 'Tunai' / 'Potong Gaji'.
+// TIPE_LOG TXN = 'Kasbon' → tidak masuk laba/komposisi, tapi saldo rekening tetap akurat.
+function addKasbon(ss, data) {
+  const now = new Date().toISOString();
+  const ref = 'KB' + Date.now();
+  const amt = Math.abs(Number(data.NOMINAL) || 0);
+  const metode = data.METODE || 'Tunai';
+  let kb = ss.getSheetByName(S.KASBON);
+  if (!kb) { kb = ss.insertSheet(S.KASBON); kb.appendRow(HEADERS[S.KASBON]); kb.getRange(1,1,1,HEADERS[S.KASBON].length).setFontWeight('bold').setBackground('#1a1a2e').setFontColor('#ffffff'); kb.setFrozenRows(1); }
+  kb.appendRow(['ID'+Date.now(), data.TANGGAL, data.KARYAWAN, data.JENIS, amt, metode, data.REKENING||'', data.NOTES||'', ref, data.USER, now]);
+  if (metode === 'Tunai' && data.REKENING) {
+    if (data.JENIS === 'Pinjam') {
+      ss.getSheetByName(S.TXN).appendRow(['ID'+Date.now()+'K', data.TANGGAL, 'Pengeluaran', '', data.REKENING, 'Kasbon Keluar', amt, '[KASBON '+ref+'] pinjam '+data.KARYAWAN+' '+(data.NOTES||''), 'Kasbon', data.USER, now]);
+    } else {
+      ss.getSheetByName(S.TXN).appendRow(['ID'+Date.now()+'K', data.TANGGAL, 'Pemasukan', '', data.REKENING, 'Kasbon Masuk', amt, '[KASBON '+ref+'] kembali '+data.KARYAWAN+' '+(data.NOTES||''), 'Kasbon', data.USER, now]);
+    }
+  }
+  return { ok: true, ref: ref };
+}
+// Hapus 1 entri kasbon (by REF_ID) + baris TXN terkait (NOTES memuat refId).
+function deleteKasbon(ss, data) {
+  const ref = String(data.refId || '');
+  if (!ref) return { error: 'refId required' };
+  const kb = ss.getSheetByName(S.KASBON);
+  if (kb && kb.getLastRow() > 1) {
+    const all = kb.getRange(1, 1, kb.getLastRow(), kb.getLastColumn()).getValues();
+    const c = all[0].indexOf('REF_ID');
+    for (let i = all.length - 1; i >= 1; i--) if (String(all[i][c]) === ref) kb.deleteRow(i + 1);
+  }
+  const tx = ss.getSheetByName(S.TXN);
+  if (tx && tx.getLastRow() > 1) {
+    const all = tx.getRange(1, 1, tx.getLastRow(), tx.getLastColumn()).getValues();
+    const c = all[0].indexOf('NOTES');
+    for (let i = all.length - 1; i >= 1; i--) if (String(all[i][c]).indexOf(ref) >= 0) tx.deleteRow(i + 1);
+  }
   return { ok: true };
 }
 
