@@ -469,11 +469,13 @@ function acctCount(nama) {
 }
 
 function getSaldo(namaRek) {
+  const bank = state.banks.find(b => b.NAMA === namaRek);
+  const awal = bank ? (Number(bank.SALDO_AWAL) || 0) : 0;
   const a = acctAgg(namaRek);
-  if (a) return { masuk: a.masuk || 0, keluar: a.keluar || 0, saldo: (a.masuk||0) - (a.keluar||0) };
+  if (a) return { masuk: a.masuk || 0, keluar: a.keluar || 0, saldo: awal + (a.masuk||0) - (a.keluar||0) };
   const m = state.txns.filter(t => t.REKENING === namaRek && t.JENIS === 'Pemasukan').reduce((s,t) => s + Number(t.NOMINAL), 0);
   const k = state.txns.filter(t => t.REKENING === namaRek && t.JENIS === 'Pengeluaran').reduce((s,t) => s + Number(t.NOMINAL), 0);
-  return { masuk: m, keluar: k, saldo: m - k };
+  return { masuk: m, keluar: k, saldo: awal + m - k };
 }
 
 function getCCOut(namaCC) {
@@ -1852,6 +1854,7 @@ function openDrawer(mode, editId = null) {
         <div class="form-group"><label class="form-label">Bank</label><input class="form-input" id="fb_bank" value="${b?esc(b.BANK):''}" placeholder="BCA..."></div>
         <div class="form-group"><label class="form-label">Tipe</label><select class="form-input" id="fb_tipe"><option ${!b||b.TIPE==='Bank'?'selected':''}>Bank</option><option ${b&&b.TIPE==='Kas'?'selected':''}>Kas</option></select></div>
       </div>
+      <div class="form-group"><label class="form-label">Saldo Awal (Rp)</label><input class="form-input" type="text" inputmode="numeric" id="fb_saldo" value="${b?fmtInput(b.SALDO_AWAL):''}" placeholder="0" oninput="fmtMoneyInput(this)"><div class="settings-sub" style="margin-top:4px">Saldo sebelum transaksi pertama dicatat. Saldo akhir = Saldo Awal + masuk − keluar.</div></div>
       <button class="btn-primary" onclick="saveDrawer()"><i class="ti ti-device-floppy"></i> Simpan</button>
       ${editId?`<button class="btn-secondary" onclick="deleteItem('banks','${editId}','MASTER_BANK');closeDrawer()">Hapus Rekening</button>`:''}
     `;
@@ -1955,7 +1958,7 @@ async function saveDrawer() {
     if(API_URL)await apiPost({action:eid?'updateRow':'addProj',data:eid?{sheet:'MASTER_PROJECT',id:eid,updates:obj}:obj});
     saveLocal();renderProject();renderDashboard();showToast(eid?'Project diperbarui':'Project ditambahkan','success');
   } else if (mode === 'bank') {
-    const obj={ID:eid||uid(),NAMA:document.getElementById('fb_nama').value,BANK:document.getElementById('fb_bank').value,TIPE:document.getElementById('fb_tipe').value,SALDO_AWAL:0,CREATED_AT:now};
+    const obj={ID:eid||uid(),NAMA:document.getElementById('fb_nama').value,BANK:document.getElementById('fb_bank').value,TIPE:document.getElementById('fb_tipe').value,SALDO_AWAL:unfmtNum(document.getElementById('fb_saldo').value),CREATED_AT:now};
     if(!obj.NAMA){showToast('Nama rekening wajib diisi','error');return;}
     if(eid){const i=state.banks.findIndex(x=>x.ID===eid);state.banks[i]=obj;}else state.banks.push(obj);
     if(API_URL)await apiPost({action:eid?'updateRow':'addBank',data:eid?{sheet:'MASTER_BANK',id:eid,updates:obj}:obj});
