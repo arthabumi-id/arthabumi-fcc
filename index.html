@@ -11,6 +11,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 :root{
   --bg:#0f0f13;--bg2:#16161d;--bg3:#1e1e28;--bg4:#252532;
@@ -1480,6 +1481,8 @@ function openDrawer(mode, editId = null) {
       <div class="settings-row"><div><div class="settings-label">API URL</div><div class="settings-sub">${API_URL?'Tersimpan':'Belum diset'}</div></div><button class="btn-danger" onclick="setApiUrl()">Ubah</button></div>
       <div class="settings-row"><div><div class="settings-label">Sheet ID</div><div class="settings-sub">${SHEET_ID.slice(0,16)}...</div></div></div>
       <div class="settings-row"><div><div class="settings-label">Hitung Ulang Total</div><div class="settings-sub">Pakai setelah edit manual di Google Sheets</div></div><button class="btn-danger" onclick="forceRefresh()">Refresh</button></div>
+      <div class="settings-row"><div><div class="settings-label">Import Excel</div><div class="settings-sub">Tambah banyak transaksi dari file .xlsx (template)</div></div><button class="btn-danger" onclick="document.getElementById('importFile').click()">Import</button></div>
+      <input type="file" id="importFile" accept=".xlsx,.xls" style="display:none" onchange="handleImportFile(event)">
       <div class="settings-row"><div><div class="settings-label">Cache lokal</div><div class="settings-sub">${state.txns.length} txn cached</div></div><button class="btn-danger" onclick="if(confirm('Reset data lokal?')){localStorage.removeItem('fcc_data');location.reload()}">Reset</button></div>
     `;
   }
@@ -1574,6 +1577,106 @@ async function forceRefresh(){
     state.reserves=data.reserves||state.reserves;state.summary=data.summary||null;state.txnsSince=data.since||state.txnsSince;
     computeReserve();saveLocal();renderAll();closeDrawer();showToast('Total dihitung ulang ✓','success');
   } else { showToast('Gagal refresh','error'); }
+}
+// ── IMPORT EXCEL ──────────────────────────────────────
+let importPayload=null;
+function impDateISO(v){
+  if(v instanceof Date && !isNaN(v)){const y=v.getFullYear(),m=String(v.getMonth()+1).padStart(2,'0'),d=String(v.getDate()).padStart(2,'0');return y+'-'+m+'-'+d;}
+  if(typeof v==='number'){const dt=new Date(Math.round((v-25569)*86400*1000));if(!isNaN(dt)){return dt.toISOString().slice(0,10);}}
+  const s=String(v||'').trim();
+  let m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if(m)return m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0');
+  m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+  if(m)return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
+  return null;
+}
+function handleImportFile(ev){
+  const file=ev.target.files[0]; ev.target.value=''; if(!file)return;
+  if(!API_URL){showToast('API URL belum diset','error');return;}
+  const rd=new FileReader();
+  rd.onload=e=>{
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true});
+      const shName=wb.SheetNames.find(n=>/transaksi/i.test(n))||wb.SheetNames[0];
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[shName],{header:1,raw:true,defval:''});
+      parseImport(rows);
+    }catch(err){showToast('Gagal baca file: '+err.message,'error');}
+  };
+  rd.readAsArrayBuffer(file);
+}
+function parseImport(rows){
+  if(!rows||rows.length<2){showToast('File kosong / tidak ada data','error');return;}
+  const hdr=rows[0].map(h=>String(h||'').trim().toUpperCase());
+  const ix=name=>hdr.indexOf(name);
+  const iT=ix('TANGGAL'),iJ=ix('JENIS'),iP=ix('PROJECT'),iR=ix('REKENING'),iK=ix('KATEGORI'),iN=ix('NOMINAL'),iNo=ix('NOTES');
+  if(iT<0||iJ<0||iR<0||iK<0||iN<0){showToast('Header tidak lengkap. Pakai template (TANGGAL,JENIS,REKENING,KATEGORI,NOMINAL).','error');return;}
+  const acctNames=new Set([...state.banks.map(b=>b.NAMA),...state.ccs.map(c=>c.NAMA)]);
+  const projNames=new Set(state.projects.map(p=>p.NAMA));
+  const katNames=new Set(state.kategori.map(k=>k.NAMA));
+  const valid=[],errors=[],newProjMap={},newKatMap={};
+  for(let r=1;r<rows.length;r++){
+    const row=rows[r]; if(!row||row.every(c=>String(c||'').trim()===''))continue;
+    const excelRow=r+1;
+    const tgl=impDateISO(row[iT]);
+    const jenis=String(row[iJ]||'').trim();
+    const proj=String(iP>=0?row[iP]:'').trim();
+    const rek=String(row[iR]||'').trim();
+    const kat=String(row[iK]||'').trim();
+    const nominal=unfmtNum(row[iN]);
+    const notes=String(iNo>=0?row[iNo]:'').trim();
+    const errs=[];
+    if(!tgl)errs.push('tanggal tidak valid');
+    if(jenis!=='Pemasukan'&&jenis!=='Pengeluaran')errs.push('JENIS harus Pemasukan/Pengeluaran');
+    if(!rek)errs.push('rekening kosong'); else if(!acctNames.has(rek))errs.push('rekening "'+rek+'" tidak ada di master');
+    if(!kat)errs.push('kategori kosong');
+    if(!nominal||nominal<=0)errs.push('nominal kosong/0');
+    if(errs.length){errors.push({row:excelRow,msg:errs.join(', ')});continue;}
+    if(proj&&!projNames.has(proj)&&!newProjMap[proj])newProjMap[proj]={NAMA:proj,KLIEN:'',STATUS:'Jalan'};
+    if(!katNames.has(kat)&&!newKatMap[kat])newKatMap[kat]={NAMA:kat,KELOMPOK:(jenis==='Pemasukan'?'PEMASUKAN':'OPERASIONAL'),TIPE:jenis};
+    valid.push({TANGGAL:tgl,JENIS:jenis,PROJECT:proj,REKENING:rek,KATEGORI:kat,NOMINAL:nominal,NOTES:notes});
+  }
+  const newProjs=Object.values(newProjMap),newKats=Object.values(newKatMap);
+  importPayload={txns:valid,newProjs,newKats};
+  showImportPreview(valid,errors,newProjs,newKats);
+}
+function showImportPreview(valid,errors,newProjs,newKats){
+  const totMasuk=valid.filter(t=>t.JENIS==='Pemasukan').reduce((s,t)=>s+t.NOMINAL,0);
+  const totKeluar=valid.filter(t=>t.JENIS==='Pengeluaran').reduce((s,t)=>s+t.NOMINAL,0);
+  document.getElementById('drawerTitle').textContent='Preview Import';
+  let html=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+      <div class="metric"><div class="metric-label">Baris valid</div><div class="metric-value" style="color:var(--green)">${valid.length}</div></div>
+      <div class="metric"><div class="metric-label">Baris error</div><div class="metric-value" style="color:${errors.length?'var(--red)':'inherit'}">${errors.length}</div></div>
+    </div>
+    <div class="settings-row"><div class="settings-label">Total Pemasukan</div><div style="color:var(--green);font-weight:600">${fmt(totMasuk)}</div></div>
+    <div class="settings-row"><div class="settings-label">Total Pengeluaran</div><div style="color:var(--red);font-weight:600">${fmt(totKeluar)}</div></div>`;
+  if(newProjs.length)html+=`<div style="margin-top:10px"><b>Project baru (${newProjs.length}) akan dibuat:</b><div class="settings-sub">${newProjs.map(p=>esc(p.NAMA)).join(', ')}</div></div>`;
+  if(newKats.length)html+=`<div style="margin-top:10px"><b>Kategori baru (${newKats.length}) akan dibuat:</b><div class="settings-sub">${newKats.map(k=>esc(k.NAMA)+' ['+k.KELOMPOK+']').join(', ')}</div></div>`;
+  if(errors.length){
+    html+=`<div style="margin-top:12px;color:var(--red)"><b>Baris ditolak — perbaiki di Excel lalu import ulang:</b></div>
+      <div style="max-height:180px;overflow:auto;font-size:13px;margin-top:6px">${errors.map(e=>`<div style="padding:4px 0;border-bottom:1px solid #2a2a2a">Baris ${e.row}: ${esc(e.msg)}</div>`).join('')}</div>`;
+  }
+  html+=`<div style="margin-top:16px;display:flex;gap:8px">
+      <button class="btn-primary" style="flex:1" onclick="confirmImport()" ${valid.length?'':'disabled'}><i class="ti ti-database-import"></i> Konfirmasi Import (${valid.length})</button>
+      <button class="btn-secondary" onclick="closeDrawer()">Batal</button></div>`;
+  if(!valid.length)html+=`<div class="settings-sub" style="margin-top:8px;color:var(--red)">Tidak ada baris valid untuk diimport.</div>`;
+  document.getElementById('drawerBody').innerHTML=html;
+  drawerMode='import';
+  document.getElementById('drawerBg').classList.add('open');
+}
+async function confirmImport(){
+  if(!importPayload||!importPayload.txns.length){showToast('Tidak ada data','error');return;}
+  const n=importPayload.txns.length;
+  document.getElementById('drawerBody').innerHTML='<div style="text-align:center;padding:30px"><div class="spin" style="margin:0 auto 12px"></div>Mengimport '+n+' transaksi...</div>';
+  const res=await apiPost({action:'addTxnBatch',data:{...importPayload,USER:state.user}});
+  if(res&&!res.error){
+    importPayload=null;closeDrawer();
+    showToast('Import berhasil: '+(res.txn||n)+' transaksi ✓','success');
+    await syncAll();
+  }else{
+    showToast('Gagal import: '+((res&&res.error)||'koneksi'),'error');
+    closeDrawer();
+  }
 }
 function showToast(msg,type){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(type||'success');setTimeout(()=>t.classList.add('show'),10);setTimeout(()=>t.classList.remove('show'),2800);}
 function goPage(page){state.currentPage=page;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+page).classList.add('active');document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));const idx=['dashboard','transaksi','transfer','project','master'].indexOf(page);if(idx>=0)document.querySelectorAll('.nav-item')[idx].classList.add('active');document.getElementById('content').scrollTop=0;if(page==='master')renderMaster();if(page==='transfer')renderTransferPage();}

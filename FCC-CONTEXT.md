@@ -81,6 +81,21 @@ Tujuan: app tahan dipakai bertahun-tahun walau transaksi makin banyak.
 ### Belum dikerjakan (ditawarkan, user tunda)
 - **Optimistic save:** input terasa lambat karena `await apiPost` blokir UI nunggu Apps Script (1–3 dtk). Solusi: render lokal dulu, kirim server di background. Belum diterapkan.
 
+## ⭐ Perubahan v5 (Import Excel) — Juni 2026
+Tujuan: pindahkan catatan manual ke FCC secara massal lewat file Excel.
+
+### Template
+- `Template-Import-Transaksi-FCC.xlsx` (di root folder project). 3 tab: **Transaksi** (input: TANGGAL, JENIS, PROJECT, REKENING, KATEGORI, NOMINAL, NOTES + dropdown JENIS + 4 baris contoh abu-abu), **Petunjuk**, **Referensi** (daftar rekening/project/kategori valid + skema MASTER_BANK & MASTER_CC).
+
+### Client (index.html)
+- CDN baru: **SheetJS** (`xlsx@0.18.5`).
+- Settings: tombol **Import Excel** → file input tersembunyi (`#importFile`) → `handleImportFile()`.
+- Alur: `handleImportFile` (FileReader→XLSX.read, cellDates:true, ambil sheet /transaksi/i) → `parseImport` (match header case-insensitive, validasi per baris, normalisasi tanggal via `impDateISO` utk serial/Date/string dd-mm-yyyy & yyyy-mm-dd, `unfmtNum` nominal) → `showImportPreview` (drawer custom, `drawerMode='import'`: hitung valid/error/total + daftar project & kategori baru) → `confirmImport` (POST `addTxnBatch` lalu `syncAll`).
+- **Validasi REKENING ketat:** harus persis ada di MASTER_BANK/MASTER_CC, kalau tidak baris **ditolak & dilaporkan** (tidak auto-buat rekening). PROJECT & KATEGORI baru **auto-dibuat** (kategori: kelompok ditebak dari JENIS — Pemasukan→PEMASUKAN, Pengeluaran→OPERASIONAL).
+
+### Server (Code.gs) — action baru `addTxnBatch` (POST). **Wajib redeploy.**
+- Payload `{ txns:[...], newProjs:[...], newKats:[...], USER }`. Tulis master baru + transaksi pakai `setValues` (1 tulis, cepat utk banyak baris). ID prefix `IMP/PRI/KI`. `invalidateSummary` jalan otomatis di doPost → summary fresh saat sync berikutnya.
+
 ## Boleh edit manual di Google Sheets? BOLEH, dengan aturan:
 1. Jangan ubah baris HEADER / nama kolom / nama tab.
 2. Tiap baris WAJIB punya `ID` unik (kalau nambah manual, isi sendiri mis. `MAN001`) — kalau kosong, edit/hapus dari app tak bisa nemu baris.

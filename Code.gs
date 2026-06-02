@@ -133,6 +133,7 @@ function doPost(e) {
     let res;
     switch (action) {
       case 'addTxn':      res = addRow(ss, S.TXN, data); break;
+      case 'addTxnBatch': res = addTxnBatch(ss, data); break;
       case 'addBank':     res = addRow(ss, S.BANK, data); break;
       case 'addCC':       res = addRow(ss, S.CC, data); break;
       case 'addProj':     res = addRow(ss, S.PROJ, data); break;
@@ -259,6 +260,66 @@ function addRow(ss, sheetName, data) {
   if (iCreated >= 0 && !data['CREATED_AT']) row[iCreated] = new Date().toISOString();
   sheet.appendRow(row);
   return { ok: true, id: row[0] };
+}
+
+// ── IMPORT BATCH: banyak txn + master baru (proj/kat) sekali jalan ──
+// data = { txns:[{TANGGAL,JENIS,PROJECT,REKENING,KATEGORI,NOMINAL,NOTES}],
+//          newProjs:[{NAMA,KLIEN,STATUS}], newKats:[{NAMA,KELOMPOK,TIPE}], USER }
+function addTxnBatch(ss, data) {
+  const now = new Date().toISOString();
+  const user = data.USER || 'Import';
+  const out = { ok: true, txn: 0, proj: 0, kat: 0, projIds: {}, katIds: {} };
+
+  // 1) Master PROJECT baru
+  const newProjs = data.newProjs || [];
+  if (newProjs.length) {
+    const sh = ss.getSheetByName(S.PROJ);
+    const H = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    const rows = newProjs.map((p, k) => {
+      const id = 'PRI' + Date.now() + k;
+      out.projIds[p.NAMA] = id;
+      const o = { ID: id, NAMA: p.NAMA, KLIEN: p.KLIEN || '', TGL_MULAI: '',
+                  STATUS: p.STATUS || 'Jalan', NILAI_CONTRACT: 0, CREATED_AT: now };
+      return H.map(h => o[h] !== undefined ? o[h] : '');
+    });
+    sh.getRange(sh.getLastRow() + 1, 1, rows.length, H.length).setValues(rows);
+    out.proj = rows.length;
+  }
+
+  // 2) Master KATEGORI baru
+  const newKats = data.newKats || [];
+  if (newKats.length) {
+    const sh = ss.getSheetByName(S.KAT);
+    const H = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    const rows = newKats.map((c, k) => {
+      const id = 'KI' + Date.now() + k;
+      out.katIds[c.NAMA] = id;
+      const o = { ID: id, NAMA: c.NAMA, KELOMPOK: c.KELOMPOK || 'OPERASIONAL',
+                  TIPE: c.TIPE || 'Pengeluaran', CREATED_AT: now };
+      return H.map(h => o[h] !== undefined ? o[h] : '');
+    });
+    sh.getRange(sh.getLastRow() + 1, 1, rows.length, H.length).setValues(rows);
+    out.kat = rows.length;
+  }
+
+  // 3) TRANSAKSI batch (setValues = 1 tulis)
+  const txns = data.txns || [];
+  if (txns.length) {
+    const sh = ss.getSheetByName(S.TXN);
+    const H = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    const rows = txns.map((t, k) => {
+      const o = {
+        ID: 'IMP' + Date.now() + k,
+        TANGGAL: t.TANGGAL, JENIS: t.JENIS, PROJECT: t.PROJECT || '',
+        REKENING: t.REKENING, KATEGORI: t.KATEGORI, NOMINAL: t.NOMINAL,
+        NOTES: t.NOTES || '', TIPE_LOG: t.JENIS, CREATED_BY: user, CREATED_AT: now
+      };
+      return H.map(h => o[h] !== undefined ? o[h] : '');
+    });
+    sh.getRange(sh.getLastRow() + 1, 1, rows.length, H.length).setValues(rows);
+    out.txn = rows.length;
+  }
+  return out;
 }
 
 function addTransfer(ss, data) {
