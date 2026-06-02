@@ -218,6 +218,7 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
           <option value="">Semua</option><option>Pemasukan</option><option>Pengeluaran</option><option>Transfer</option><option>Reserve</option>
         </select>
       </div>
+      <div id="txnMonthTabs" style="display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:2px;-webkit-overflow-scrolling:touch"></div>
       <div id="txnList"></div>
     </div>
 
@@ -334,6 +335,9 @@ let state = {
   currentMasterTab: 'bank',
   currentProjTab: 'semua',
   expPeriod: 'month',
+  expGroup: 'ALL',
+  expFrom: '', expTo: '',
+  txnMonth: null, // null=belum diset (auto bulan terbaru), ''=Semua, 'YYYY-MM'=bulan tertentu
 };
 
 // ── UTILS ─────────────────────────────────────────────
@@ -894,18 +898,32 @@ async function loadMoreTxns(btn) {
     older.forEach(t => { if (!ids.has(t.ID)) { state.txns.push(t); added++; } });
     state.txnsSince = newSince;
     saveLocal();
-    renderTxn();
+    renderTxnMonthTabs();
+    filterTxn();
     showToast(added ? ('+' + added + ' transaksi lama dimuat') : 'Tidak ada transaksi lebih lama', 'success');
   } else {
-    renderTxn();
+    filterTxn();
     showToast('Gagal memuat transaksi lama', 'error');
   }
 }
 
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+function monthLabel(ym){ const p = ym.split('-'); return MONTH_NAMES[(+p[1])-1] + " '" + p[0].slice(2); }
+function renderTxnMonthTabs(){
+  const el = document.getElementById('txnMonthTabs'); if(!el) return;
+  const months = [...new Set(state.txns.map(t => String(t.TANGGAL).slice(0,7)).filter(Boolean))].sort().reverse();
+  if (state.txnMonth === null) state.txnMonth = months[0] || ''; // default: bulan terbaru
+  const pill = (val,label) => `<button onclick="setTxnMonth('${val}')" style="flex:none;padding:6px 13px;border-radius:16px;border:1px solid var(--border2);font-size:12px;cursor:pointer;white-space:nowrap;background:${state.txnMonth===val?'var(--green)':'transparent'};color:${state.txnMonth===val?'#06140d':'var(--text2)'};font-weight:${state.txnMonth===val?'700':'400'}">${label}</button>`;
+  let html = pill('','Semua') + months.map(m => pill(m, monthLabel(m))).join('');
+  if (API_URL) html += `<button onclick="loadMoreTxns(this)" style="flex:none;padding:6px 13px;border-radius:16px;border:1px dashed var(--border2);font-size:12px;cursor:pointer;white-space:nowrap;background:transparent;color:var(--text3)"><i class="ti ti-history"></i> lebih lama</button>`;
+  el.innerHTML = html;
+}
+function setTxnMonth(m){ state.txnMonth = m; renderTxnMonthTabs(); filterTxn(); }
 function filterTxn() {
   const q = document.getElementById('txnSearch').value.toLowerCase();
   const tipe = document.getElementById('txnTipeFilter').value;
   let data = [...state.txns];
+  if (state.txnMonth) data = data.filter(t => String(t.TANGGAL).slice(0,7) === state.txnMonth);
   if (q) data = data.filter(t => (String(t.PROJECT)+String(t.NOTES)+String(t.KATEGORI)).toLowerCase().includes(q));
   if (tipe) data = data.filter(t => t.TIPE_LOG === tipe || t.JENIS === tipe);
   renderTxn(data);
@@ -1067,7 +1085,7 @@ function renderMaster() {
         </div>
       `).join('')}
     `;
-    buildKatDonut('expCompDonut', kelompokComposition(state.expPeriod || 'month'));
+    buildKatDonut('expCompDonut', expComposition(state.expPeriod || 'month', state.expGroup || 'ALL'), expSliceClick);
   }
 }
 
@@ -1206,44 +1224,121 @@ function katComposition(txns) {
   });
   return Object.entries(m).filter(e => e[1] > 0).sort((a,b) => b[1]-a[1]);
 }
-// Komposisi pengeluaran per KATEGORI, dgn filter periode.
-// period 'all' pakai summary.katExp (all-time, sudah exclude transfer/reserve);
-// 'month'/'3m' hitung dari txn termuat (TIPE_LOG Pengeluaran saja).
-function kelompokComposition(period){
+// ── Komposisi pengeluaran: pilih KELOMPOK → rincian item kategori di dalamnya ──
+let _expCustomCache = null; // {from,to,txns} hasil fetch periode custom
+// Total pengeluaran per nama-kategori utk periode terpilih (exclude transfer/reserve)
+function expRawCats(period){
   const m = {};
   if (period === 'all' && state.summary && state.summary.katExp) {
-    Object.entries(state.summary.katExp).forEach(([kat,val]) => {
-      m[kat] = (m[kat]||0) + Number(val||0);
-    });
+    Object.entries(state.summary.katExp).forEach(([k,v]) => m[k] = (m[k]||0) + Number(v||0));
+    return m;
+  }
+  let src;
+  if (period === 'custom') {
+    src = (_expCustomCache && _expCustomCache.from===state.expFrom && _expCustomCache.to===state.expTo)
+          ? _expCustomCache.txns : [];
   } else {
     let cutoff = '';
     if (period === 'month') cutoff = today().slice(0,7) + '-01';
     else if (period === '3m') { const d=new Date(); d.setMonth(d.getMonth()-3); cutoff=d.toISOString().slice(0,10); }
-    state.txns.filter(t => t.JENIS==='Pengeluaran' && t.TIPE_LOG==='Pengeluaran' && (!cutoff || String(t.TANGGAL)>=cutoff))
-      .forEach(t => { const k = t.KATEGORI || 'Lainnya'; m[k] = (m[k]||0) + Number(t.NOMINAL||0); });
+    src = state.txns.filter(t => !cutoff || String(t.TANGGAL) >= cutoff);
   }
-  return Object.entries(m).filter(e => e[1] > 0).sort((a,b) => b[1]-a[1]);
+  src.filter(t => t.JENIS==='Pengeluaran' && t.TIPE_LOG==='Pengeluaran')
+     .forEach(t => { const k = t.KATEGORI || 'Lainnya'; m[k] = (m[k]||0) + Number(t.NOMINAL||0); });
+  return m;
 }
+// group 'ALL' → agregat per KELOMPOK; group spesifik → rincian kategori dlm kelompok itu
+function expComposition(period, group){
+  const cats = expRawCats(period);
+  const katGrp = {}; state.kategori.forEach(k => katGrp[k.NAMA] = k.KELOMPOK);
+  if (group && group !== 'ALL') {
+    return Object.entries(cats).filter(([k,v]) => v>0 && (katGrp[k]||'LAINNYA')===group).sort((a,b)=>b[1]-a[1]);
+  }
+  const g = {}; Object.entries(cats).forEach(([k,v]) => { const grp = katGrp[k]||'LAINNYA'; g[grp] = (g[grp]||0)+v; });
+  return Object.entries(g).filter(e => e[1]>0).sort((a,b)=>b[1]-a[1]);
+}
+function setExpGroup(v){ state.expGroup = v; renderMaster(); }
 function setExpPeriod(p){ state.expPeriod = p; renderMaster(); }
+async function applyExpCustom(){
+  const from = document.getElementById('expFrom').value, to = document.getElementById('expTo').value;
+  if (!from || !to) { showToast('Isi tanggal Dari & Sampai','error'); return; }
+  if (from > to) { showToast('Tanggal Dari melebihi Sampai','error'); return; }
+  state.expFrom = from; state.expTo = to; state.expPeriod = 'custom';
+  if (API_URL) {
+    showToast('Mengambil data periode...','success');
+    const res = await apiGet({ action:'getTxns', since:from, until:to });
+    _expCustomCache = { from, to, txns: Array.isArray(res) ? res : [] };
+  } else {
+    _expCustomCache = { from, to, txns: state.txns.filter(t => String(t.TANGGAL)>=from && String(t.TANGGAL)<=to) };
+  }
+  renderMaster();
+}
+let _expAllCache = null; // cache txn all-time utk detail periode 'Semua'
+// Klik slice/legend: di ALL → drill ke kelompok; di kelompok → buka daftar txn kategori
+function expSliceClick(name){
+  if ((state.expGroup||'ALL')==='ALL') setExpGroup(name);
+  else openExpTxnDetail(name);
+}
+async function expPeriodTxns(){
+  const period = state.expPeriod || 'month';
+  if (period==='custom') return _expCustomCache ? _expCustomCache.txns : [];
+  if (period==='all') {
+    if (!_expAllCache) {
+      if (API_URL) { const r = await apiGet({ action:'getTxns' }); _expAllCache = Array.isArray(r)?r:state.txns.slice(); }
+      else _expAllCache = state.txns.slice();
+    }
+    return _expAllCache;
+  }
+  let cutoff='';
+  if (period==='month') cutoff = today().slice(0,7)+'-01';
+  else if (period==='3m') { const d=new Date(); d.setMonth(d.getMonth()-3); cutoff=d.toISOString().slice(0,10); }
+  return state.txns.filter(t => !cutoff || String(t.TANGGAL)>=cutoff);
+}
+async function openExpTxnDetail(cat){
+  document.getElementById('drawerTitle').textContent = 'Pengeluaran: ' + cat;
+  document.getElementById('drawerBody').innerHTML = '<div style="text-align:center;padding:24px"><div class="spin" style="margin:0 auto"></div></div>';
+  document.getElementById('drawerBg').classList.add('open'); drawerMode='expdetail';
+  const all = await expPeriodTxns();
+  const rows = all.filter(t => t.JENIS==='Pengeluaran' && t.TIPE_LOG==='Pengeluaran' && (t.KATEGORI||'Lainnya')===cat)
+    .sort((a,b)=>String(b.TANGGAL).localeCompare(String(a.TANGGAL)));
+  const tot = rows.reduce((s,t)=>s+Number(t.NOMINAL||0),0);
+  const lbl = { month:'bulan ini','3m':'3 bulan terakhir',all:'semua waktu',custom:(state.expFrom+' s/d '+state.expTo) };
+  document.getElementById('drawerBody').innerHTML = `
+    <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Periode: ${lbl[state.expPeriod||'month']} · ${rows.length} transaksi · total <b style="color:var(--red)">${fmt(tot)}</b></div>
+    ${rows.length ? rows.map(detailTxnCard).join('') : '<div class="empty">Tidak ada transaksi</div>'}`;
+}
 function expCompCardHTML(){
   const period = state.expPeriod || 'month';
-  const entries = kelompokComposition(period);
+  const group  = state.expGroup || 'ALL';
+  const entries = expComposition(period, group);
   const total = entries.reduce((s,e)=>s+e[1],0);
-  const lbl = { month:'Bulan ini', '3m':'3 bulan', all:'Semua' };
-  const btns = ['month','3m','all'].map(p=>`<button onclick="setExpPeriod('${p}')" style="flex:none;padding:5px 12px;border-radius:16px;border:1px solid var(--border2);font-size:11px;cursor:pointer;background:${period===p?'var(--green)':'transparent'};color:${period===p?'#06140d':'var(--text2)'};font-weight:${period===p?'700':'400'}">${lbl[p]}</button>`).join('');
+  const groups = [...new Set(state.kategori.map(k=>k.KELOMPOK))];
+  const lbl = { month:'Bulan ini', '3m':'3 bulan', all:'Semua', custom:'Custom' };
+  const pills = ['month','3m','all','custom'].map(p=>`<button onclick="setExpPeriod('${p}')" style="flex:none;padding:5px 12px;border-radius:16px;border:1px solid var(--border2);font-size:11px;cursor:pointer;background:${period===p?'var(--green)':'transparent'};color:${period===p?'#06140d':'var(--text2)'};font-weight:${period===p?'700':'400'}">${lbl[p]}</button>`).join('');
+  const grpSel = `<select onchange="setExpGroup(this.value)" class="form-input" style="padding:6px 10px;font-size:12px;width:auto;min-width:150px">
+      <option value="ALL" ${group==='ALL'?'selected':''}>Semua kelompok (ringkasan)</option>
+      ${groups.map(g=>`<option value="${esc(g)}" ${group===g?'selected':''}>${esc(g)}</option>`).join('')}
+    </select>`;
+  const customBox = period==='custom'
+    ? `<div style="display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+        <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">Dari</div><input type="date" id="expFrom" value="${state.expFrom||''}" class="form-input" style="padding:6px 8px;font-size:12px;width:auto"></div>
+        <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">Sampai</div><input type="date" id="expTo" value="${state.expTo||''}" class="form-input" style="padding:6px 8px;font-size:12px;width:auto"></div>
+        <button class="btn-primary" style="padding:7px 14px;width:auto" onclick="applyExpCustom()">Terapkan</button>
+      </div>` : '';
+  const title = group==='ALL' ? 'Komposisi Pengeluaran · per Kelompok' : 'Rincian Pengeluaran · '+esc(group);
   const legend = entries.length
-    ? entries.map((e,i)=>`<div style="cursor:default"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${KAT_PALETTE[i%KAT_PALETTE.length]};margin-right:5px;vertical-align:middle"></span>${esc(e[0])}: <b>${fmtS(e[1])}</b> <span style="color:var(--text3)">(${Math.round(e[1]/total*100)}%)</span></div>`).join('')
-    : '<div style="color:var(--text3);font-size:11px">Belum ada pengeluaran di periode ini</div>';
+    ? entries.map((e,i)=>`<div onclick="expSliceClick('${esc(e[0]).replace(/'/g,"\\'")}')" style="cursor:pointer"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${KAT_PALETTE[i%KAT_PALETTE.length]};margin-right:5px;vertical-align:middle"></span>${esc(e[0])}: <b>${fmtS(e[1])}</b> <span style="color:var(--text3)">(${Math.round(e[1]/total*100)}%)</span> <i class="ti ti-chevron-right" style="font-size:11px;color:var(--text3);vertical-align:middle"></i></div>`).join('')
+    : `<div style="color:var(--text3);font-size:11px">${period==='custom'&&!_expCustomCache?'Pilih tanggal lalu Terapkan.':'Belum ada pengeluaran di periode ini.'}</div>`;
   return `<div class="card" style="margin-bottom:12px">
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px">
-      <div class="card-title" style="margin:0">Komposisi Pengeluaran · per Kategori</div>
-      <div style="display:flex;gap:6px">${btns}</div>
-    </div>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Total keluar: <b style="color:var(--red)">${fmt(total)}</b></div>
+    <div class="card-title" style="margin:0 0 8px">${title}</div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">${grpSel}<div style="display:flex;gap:6px;flex-wrap:wrap">${pills}</div></div>
+    ${customBox}
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Total keluar: <b style="color:var(--red)">${fmt(total)}</b>${group!=='ALL'?' · '+entries.length+' kategori':''}</div>
     <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
       <div style="position:relative;height:150px;width:150px;flex-shrink:0"><canvas id="expCompDonut"></canvas></div>
       <div style="font-size:12px;line-height:2;flex:1;min-width:140px">${legend}</div>
     </div>
+    ${group==='ALL'?'<div style="font-size:10px;color:var(--text3);margin-top:8px">Pilih kelompok di atas untuk lihat rincian kategorinya.</div>':''}
   </div>`;
 }
 function donutCardHTML(canvasId, entries) {
@@ -1258,14 +1353,17 @@ function donutCardHTML(canvasId, entries) {
     </div>
   </div>`;
 }
-function buildKatDonut(canvasId, entries) {
+function buildKatDonut(canvasId, entries, onClickName) {
   if (!entries.length) return;
   destroyChart(canvasId);
   const el = document.getElementById(canvasId); if (!el) return;
   _chartInstances[canvasId] = new Chart(el, {
     type: 'doughnut',
     data: { labels: entries.map(e=>e[0]), datasets:[{ data: entries.map(e=>e[1]), backgroundColor: entries.map((e,i)=>KAT_PALETTE[i%KAT_PALETTE.length]), borderWidth:0, hoverOffset:6 }] },
-    options: { responsive:true, maintainAspectRatio:false, cutout:'62%', plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ label: ctx => ` ${ctx.label}: ${fmt(ctx.raw)}` } } } }
+    options: { responsive:true, maintainAspectRatio:false, cutout:'62%',
+      onHover: onClickName ? (e,els)=>{ e.native.target.style.cursor = els.length?'pointer':'default'; } : undefined,
+      onClick: onClickName ? (e,els)=>{ if(els.length){ const lbl = entries[els[0].index] && entries[els[0].index][0]; if(lbl) onClickName(lbl); } } : undefined,
+      plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ label: ctx => ` ${ctx.label}: ${fmt(ctx.raw)}` } } } }
   });
 }
 function detailTxnCard(t) {
@@ -1820,7 +1918,7 @@ async function confirmImport(){
 }
 function showToast(msg,type){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(type||'success');setTimeout(()=>t.classList.add('show'),10);setTimeout(()=>t.classList.remove('show'),2800);}
 function goPage(page){state.currentPage=page;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+page).classList.add('active');document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));const idx=['dashboard','transaksi','transfer','project','master'].indexOf(page);if(idx>=0)document.querySelectorAll('.nav-item')[idx].classList.add('active');document.getElementById('content').scrollTop=0;if(page==='master')renderMaster();if(page==='transfer')renderTransferPage();}
-function renderAll(){renderDashboard();filterTxn();renderProject();if(state.currentPage==='master')renderMaster();if(state.currentPage==='transfer')renderTransferPage();}
+function renderAll(){renderDashboard();renderTxnMonthTabs();filterTxn();renderProject();if(state.currentPage==='master')renderMaster();if(state.currentPage==='transfer')renderTransferPage();}
 if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{});}
 let logoTimer;
 document.querySelector('.topbar-title').addEventListener('touchstart',()=>{logoTimer=setTimeout(()=>openDrawer('settings'),800);});
