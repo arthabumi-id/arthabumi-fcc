@@ -342,7 +342,7 @@ let state = {
   currentMasterTab: 'bank',
   currentProjTab: 'semua',
   expPeriod: 'month',
-  expGroup: 'ALL',
+  expGroup: 'ALL', expJenis: 'Pengeluaran',
   expFrom: '', expTo: '',
   txnMonth: null, // null=belum diset (auto bulan terbaru), ''=Semua, 'YYYY-MM'=bulan tertentu
 };
@@ -1224,7 +1224,7 @@ function renderMaster() {
         </div>
       `).join('')}
     `;
-    buildKatDonut('expCompDonut', expComposition(state.expPeriod || 'month', state.expGroup || 'ALL'), expSliceClick);
+    buildKatDonut('expCompDonut', expComposition(state.expPeriod || 'month', state.expGroup || 'ALL', state.expJenis || 'Pengeluaran'), expSliceClick);
   }
 }
 
@@ -1365,10 +1365,11 @@ function katComposition(txns) {
 }
 // ── Komposisi pengeluaran: pilih KELOMPOK → rincian item kategori di dalamnya ──
 let _expCustomCache = null; // {from,to,txns} hasil fetch periode custom
-// Total pengeluaran per nama-kategori utk periode terpilih (exclude transfer/reserve)
-function expRawCats(period){
+// Total per nama-kategori utk periode terpilih (exclude transfer/reserve/kasbon via TIPE_LOG)
+function expRawCats(period, jenis){
+  jenis = jenis || 'Pengeluaran';
   const m = {};
-  if (period === 'all' && state.summary && state.summary.katExp) {
+  if (jenis==='Pengeluaran' && period === 'all' && state.summary && state.summary.katExp) {
     Object.entries(state.summary.katExp).forEach(([k,v]) => m[k] = (m[k]||0) + Number(v||0));
     return m;
   }
@@ -1376,25 +1377,42 @@ function expRawCats(period){
   if (period === 'custom') {
     src = (_expCustomCache && _expCustomCache.from===state.expFrom && _expCustomCache.to===state.expTo)
           ? _expCustomCache.txns : [];
+  } else if (period === 'all') {
+    if (_expAllCache) src = _expAllCache; else { ensureExpAll(); src = state.txns; }
   } else {
     let cutoff = '';
     if (period === 'month') cutoff = today().slice(0,7) + '-01';
     else if (period === '3m') { const d=new Date(); d.setMonth(d.getMonth()-3); cutoff=d.toISOString().slice(0,10); }
     src = state.txns.filter(t => !cutoff || String(t.TANGGAL) >= cutoff);
   }
-  src.filter(t => t.JENIS==='Pengeluaran' && t.TIPE_LOG==='Pengeluaran')
+  src.filter(t => t.JENIS===jenis && t.TIPE_LOG===jenis)
      .forEach(t => { const k = t.KATEGORI || 'Lainnya'; m[k] = (m[k]||0) + Number(t.NOMINAL||0); });
   return m;
 }
-// group 'ALL' → agregat per KELOMPOK; group spesifik → rincian kategori dlm kelompok itu
-function expComposition(period, group){
-  const cats = expRawCats(period);
+// Pemasukan → selalu per kategori. Pengeluaran → group 'ALL' agregat per KELOMPOK; group spesifik → kategori dlm kelompok.
+function expComposition(period, group, jenis){
+  jenis = jenis || 'Pengeluaran';
+  const cats = expRawCats(period, jenis);
+  if (jenis==='Pemasukan') {
+    return Object.entries(cats).filter(e => e[1]>0).sort((a,b)=>b[1]-a[1]);
+  }
   const katGrp = {}; state.kategori.forEach(k => katGrp[k.NAMA] = k.KELOMPOK);
   if (group && group !== 'ALL') {
     return Object.entries(cats).filter(([k,v]) => v>0 && (katGrp[k]||'LAINNYA')===group).sort((a,b)=>b[1]-a[1]);
   }
   const g = {}; Object.entries(cats).forEach(([k,v]) => { const grp = katGrp[k]||'LAINNYA'; g[grp] = (g[grp]||0)+v; });
   return Object.entries(g).filter(e => e[1]>0).sort((a,b)=>b[1]-a[1]);
+}
+function setExpJenis(j){ state.expJenis = j; renderMaster(); }
+let _expAllLoading = false;
+function ensureExpAll(){
+  if (_expAllCache || _expAllLoading || !API_URL) return;
+  _expAllLoading = true;
+  apiGet({ action:'getTxns' }).then(r => {
+    _expAllCache = Array.isArray(r) ? r : [];
+    _expAllLoading = false;
+    if (state.currentPage==='master' && state.currentMasterTab==='kat') renderMaster();
+  });
 }
 function setExpGroup(v){ state.expGroup = v; renderMaster(); }
 function setExpPeriod(p){ state.expPeriod = p; renderMaster(); }
@@ -1415,8 +1433,9 @@ async function applyExpCustom(){
 let _expAllCache = null; // cache txn all-time utk detail periode 'Semua'
 // Klik slice/legend: di ALL → drill ke kelompok; di kelompok → buka daftar txn kategori
 function expSliceClick(name){
+  if ((state.expJenis||'Pengeluaran')==='Pemasukan') { openExpTxnDetail(name,'Pemasukan'); return; }
   if ((state.expGroup||'ALL')==='ALL') setExpGroup(name);
-  else openExpTxnDetail(name);
+  else openExpTxnDetail(name,'Pengeluaran');
 }
 async function expPeriodTxns(){
   const period = state.expPeriod || 'month';
@@ -1433,12 +1452,13 @@ async function expPeriodTxns(){
   else if (period==='3m') { const d=new Date(); d.setMonth(d.getMonth()-3); cutoff=d.toISOString().slice(0,10); }
   return state.txns.filter(t => !cutoff || String(t.TANGGAL)>=cutoff);
 }
-async function openExpTxnDetail(cat){
-  document.getElementById('drawerTitle').textContent = 'Pengeluaran: ' + cat;
+async function openExpTxnDetail(cat, jenis){
+  jenis = jenis || 'Pengeluaran';
+  document.getElementById('drawerTitle').textContent = jenis + ': ' + cat;
   document.getElementById('drawerBody').innerHTML = '<div style="text-align:center;padding:24px"><div class="spin" style="margin:0 auto"></div></div>';
   document.getElementById('drawerBg').classList.add('open'); drawerMode='expdetail';
   const all = await expPeriodTxns();
-  const rows = all.filter(t => t.JENIS==='Pengeluaran' && t.TIPE_LOG==='Pengeluaran' && (t.KATEGORI||'Lainnya')===cat)
+  const rows = all.filter(t => t.JENIS===jenis && t.TIPE_LOG===jenis && (t.KATEGORI||'Lainnya')===cat)
     .sort((a,b)=>String(b.TANGGAL).localeCompare(String(a.TANGGAL)));
   const tot = rows.reduce((s,t)=>s+Number(t.NOMINAL||0),0);
   const lbl = { month:'bulan ini','3m':'3 bulan terakhir',all:'semua waktu',custom:(state.expFrom+' s/d '+state.expTo) };
@@ -1449,12 +1469,15 @@ async function openExpTxnDetail(cat){
 function expCompCardHTML(){
   const period = state.expPeriod || 'month';
   const group  = state.expGroup || 'ALL';
-  const entries = expComposition(period, group);
+  const jenis  = state.expJenis || 'Pengeluaran';
+  const isInc  = jenis === 'Pemasukan';
+  const entries = expComposition(period, group, jenis);
   const total = entries.reduce((s,e)=>s+e[1],0);
   const groups = [...new Set(state.kategori.map(k=>k.KELOMPOK))];
   const lbl = { month:'Bulan ini', '3m':'3 bulan', all:'Semua', custom:'Custom' };
+  const jenisToggle = ['Pengeluaran','Pemasukan'].map(j=>`<button onclick="setExpJenis('${j}')" style="flex:1;padding:6px 12px;border-radius:16px;border:1px solid var(--border2);font-size:12px;cursor:pointer;background:${jenis===j?(j==='Pemasukan'?'var(--green)':'var(--red)'):'transparent'};color:${jenis===j?'#06140d':'var(--text2)'};font-weight:${jenis===j?'700':'400'}">${j}</button>`).join('');
   const pills = ['month','3m','all','custom'].map(p=>`<button onclick="setExpPeriod('${p}')" style="flex:none;padding:5px 12px;border-radius:16px;border:1px solid var(--border2);font-size:11px;cursor:pointer;background:${period===p?'var(--green)':'transparent'};color:${period===p?'#06140d':'var(--text2)'};font-weight:${period===p?'700':'400'}">${lbl[p]}</button>`).join('');
-  const grpSel = `<select onchange="setExpGroup(this.value)" class="form-input" style="padding:6px 10px;font-size:12px;width:auto;min-width:150px">
+  const grpSel = isInc ? '' : `<select onchange="setExpGroup(this.value)" class="form-input" style="padding:6px 10px;font-size:12px;width:auto;min-width:150px">
       <option value="ALL" ${group==='ALL'?'selected':''}>Semua kelompok (ringkasan)</option>
       ${groups.map(g=>`<option value="${esc(g)}" ${group===g?'selected':''}>${esc(g)}</option>`).join('')}
     </select>`;
@@ -1464,20 +1487,23 @@ function expCompCardHTML(){
         <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">Sampai</div><input type="date" id="expTo" value="${state.expTo||''}" class="form-input" style="padding:6px 8px;font-size:12px;width:auto"></div>
         <button class="btn-primary" style="padding:7px 14px;width:auto" onclick="applyExpCustom()">Terapkan</button>
       </div>` : '';
-  const title = group==='ALL' ? 'Komposisi Pengeluaran · per Kelompok' : 'Rincian Pengeluaran · '+esc(group);
+  const title = isInc ? 'Komposisi Pemasukan · per Kategori'
+    : (group==='ALL' ? 'Komposisi Pengeluaran · per Kelompok' : 'Rincian Pengeluaran · '+esc(group));
+  const emptyMsg = (period==='custom'&&!_expCustomCache) ? 'Pilih tanggal lalu Terapkan.' : ('Belum ada '+(isInc?'pemasukan':'pengeluaran')+' di periode ini.');
   const legend = entries.length
     ? entries.map((e,i)=>`<div onclick="expSliceClick('${esc(e[0]).replace(/'/g,"\\'")}')" style="cursor:pointer"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${KAT_PALETTE[i%KAT_PALETTE.length]};margin-right:5px;vertical-align:middle"></span>${esc(e[0])}: <b>${fmtS(e[1])}</b> <span style="color:var(--text3)">(${Math.round(e[1]/total*100)}%)</span> <i class="ti ti-chevron-right" style="font-size:11px;color:var(--text3);vertical-align:middle"></i></div>`).join('')
-    : `<div style="color:var(--text3);font-size:11px">${period==='custom'&&!_expCustomCache?'Pilih tanggal lalu Terapkan.':'Belum ada pengeluaran di periode ini.'}</div>`;
+    : `<div style="color:var(--text3);font-size:11px">${emptyMsg}</div>`;
   return `<div class="card" style="margin-bottom:12px">
     <div class="card-title" style="margin:0 0 8px">${title}</div>
+    <div style="display:flex;gap:6px;margin-bottom:10px">${jenisToggle}</div>
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">${grpSel}<div style="display:flex;gap:6px;flex-wrap:wrap">${pills}</div></div>
     ${customBox}
-    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Total keluar: <b style="color:var(--red)">${fmt(total)}</b>${group!=='ALL'?' · '+entries.length+' kategori':''}</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Total ${isInc?'masuk':'keluar'}: <b style="color:${isInc?'var(--green)':'var(--red)'}">${fmt(total)}</b>${(isInc||group!=='ALL')?' · '+entries.length+' kategori':''}</div>
     <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
       <div style="position:relative;height:150px;width:150px;flex-shrink:0"><canvas id="expCompDonut"></canvas></div>
       <div style="font-size:12px;line-height:2;flex:1;min-width:140px">${legend}</div>
     </div>
-    ${group==='ALL'?'<div style="font-size:10px;color:var(--text3);margin-top:8px">Pilih kelompok di atas untuk lihat rincian kategorinya.</div>':''}
+    ${(!isInc&&group==='ALL')?'<div style="font-size:10px;color:var(--text3);margin-top:8px">Pilih kelompok di atas untuk lihat rincian kategorinya.</div>':''}
   </div>`;
 }
 function donutCardHTML(canvasId, entries) {

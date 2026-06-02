@@ -1,4 +1,4 @@
-# FCC Arthabumi — Context & Status (v10)
+# FCC Arthabumi — Context & Status (v11)
 
 ## Apa itu FCC?
 Financial Control Center — web app pribadi Eddy untuk tracking keuangan bisnis Arthabumi (kontraktor/interior). Single-user, dihosting di GitHub Pages.
@@ -125,6 +125,9 @@ Client-side (index.html).
 - **Code.gs actions baru (wajib redeploy):** `addKasbon` (tulis ledger KASBON + bila `REKENING` dipilih tulis 1 TXN: Pinjam→Pengeluaran 'Kasbon Keluar', Kembali→Pemasukan 'Kasbon Masuk', TIPE_LOG `Kasbon`), `deleteKasbon` (hapus baris KASBON by REF_ID + TXN yg NOTES memuat refId). Saldo rekening akurat; TIPE_LOG Kasbon → tidak masuk laba/komposisi.
 - **PENTING (revisi):** Kembali BAIK Tunai MAUPUN Potong Gaji = uang MASUK ke rekening pilihan & sisa kasbon turun (rekening selalu wajib, bukan hanya Tunai). Untuk Potong Gaji, user catat gaji PENUH terpisah di Transaksi → selisih ter-offset oleh kasbon-masuk ini. Metode hanya label pembeda.
 - **Client:** nav baru **Kasbon** (`ti-wallet`, idx 4, Master geser ke 5), `state.kasbon` (di syncAll/forceRefresh/saveLocal). Halaman `page-kasbon` (`renderKasbon`): kartu Total Kasbon Beredar + daftar karyawan diurut sisa, klik → `openKasbonDetail` (ringkasan pinjam/kembali/sisa + riwayat + tombol catat + hapus per baris). Input `openKasbon(prefName)` drawer (`drawerMode='kasbon'`): nama (datalist karyawan, custom boleh), Jenis, Metode (muncul saat Kembali; Pinjam selalu Tunai), Rekening (saat Tunai), nominal/tanggal/notes → `saveKasbon` POST addKasbon lalu syncAll. Helper `kasbonAgg`/`kasbonEmployees`/`onKasbonJenis`/`onKasbonMetode`/`delKasbon`. **Potong Gaji** = sisa kasbon turun tanpa gerak uang (gaji dicatat terpisah dgn nominal sudah dipotong).
+
+## ⭐ Perubahan v11 (Komposisi Pemasukan) — Juni 2026
+Client-only (index.html). Kartu komposisi di Master>Kategori kini ada **toggle Pengeluaran/Pemasukan** (`state.expJenis`, `setExpJenis`). `expRawCats(period,jenis)` & `expComposition(period,group,jenis)` & `openExpTxnDetail(cat,jenis)` digeneralisasi (filter `JENIS===jenis && TIPE_LOG===jenis`). Pemasukan → selalu per KATEGORI (dropdown kelompok disembunyikan), warna hijau. Pengeluaran → tetap drill kelompok→kategori. Income 'all' tidak ada di summary → `ensureExpAll()` fetch `getTxns` full sekali lalu re-render (`_expAllCache`, `_expAllLoading`). Klik slice income → detail txn pemasukan kategori itu.
 
 ## Boleh edit manual di Google Sheets? BOLEH, dengan aturan:
 1. Jangan ubah baris HEADER / nama kolom / nama tab.
