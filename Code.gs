@@ -141,6 +141,7 @@ function doPost(e) {
       case 'addTransfer': res = addTransfer(ss, data); break;
       case 'deleteTransfer': res = deleteTransfer(ss, data); break;
       case 'addReserve':  res = addReserve(ss, data); break;
+      case 'payCCReserve': res = payCCReserve(ss, data); break;
       case 'updateRow':   res = updateRow(ss, data); break;
       case 'deleteRow':   res = deleteRow(ss, data); break;
       case 'init':        res = initSheets(); break;
@@ -331,6 +332,18 @@ function addTransfer(ss, data) {
   txnSheet.appendRow(['ID'+Date.now()+'B', data.TANGGAL, 'Pemasukan', '', data.KE, 'Transfer Masuk', data.NOMINAL, '[TRANSFER '+refId+'] dari '+data.DARI+' '+data.NOTES, 'Transfer', data.USER, now]);
   ss.getSheetByName(S.TRANSFER).appendRow(['ID'+Date.now(), data.TANGGAL, data.DARI, data.KE, data.NOMINAL, data.NOTES, refId, data.USER, now]);
   return { ok: true, refId };
+}
+
+// Bayar tagihan CC memakai dana RESERVE yang sudah disisihkan.
+// Uang sudah keluar dari bank saat reserve dibuat → di sini bank TIDAK disentuh.
+// Efek: tagihan CC turun (Pemasukan ke CC) + pot reserve turun (RESERVE_LOG negatif).
+function payCCReserve(ss, data) {
+  const now = new Date().toISOString();
+  const ref = 'PAYR' + Date.now();
+  const amt = Math.abs(Number(data.NOMINAL) || 0);
+  ss.getSheetByName(S.TXN).appendRow(['ID'+Date.now(), data.TANGGAL, 'Pemasukan', '', data.CC, 'Bayar CC (Reserve)', amt, '[BAYAR CC dari Reserve '+ref+'] '+(data.NOTES||''), 'Reserve', data.USER, now]);
+  ss.getSheetByName(S.RESERVE).appendRow(['ID'+Date.now(), data.TANGGAL, '(release)', data.CC, -amt, 'Pakai reserve bayar CC '+(data.NOTES||''), data.USER, now]);
+  return { ok: true, ref: ref };
 }
 
 function addReserve(ss, data) {

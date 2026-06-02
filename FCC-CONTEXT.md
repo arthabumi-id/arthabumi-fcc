@@ -1,4 +1,4 @@
-# FCC Arthabumi — Context & Status (v8)
+# FCC Arthabumi — Context & Status (v9)
 
 ## Apa itu FCC?
 Financial Control Center — web app pribadi Eddy untuk tracking keuangan bisnis Arthabumi (kontraktor/interior). Single-user, dihosting di GitHub Pages.
@@ -112,6 +112,13 @@ Murni client-side (index.html).
 Client-side (index.html).
 - **Donut komposisi bisa diklik:** `buildKatDonut(canvasId,entries,onClickName)` kini terima callback opsional (slice & hover pointer). Di kartu komposisi (tab Kategori): klik slice/legend saat group=ALL → drill ke kelompok itu (`setExpGroup`); saat sudah di satu kelompok → `openExpTxnDetail(kategori)` buka drawer daftar transaksi. Sumber txn: `expPeriodTxns()` (month/3m dari txn termuat, custom dari `_expCustomCache`, all dari `_expAllCache` hasil `getTxns` full). Legend tiap baris ada chevron.
 - **Tab bulan di halaman Transaksi:** `#txnMonthTabs` (scroll horizontal). `renderTxnMonthTabs()` bikin pill 'Semua' + tiap bulan (YYYY-MM, label `monthLabel` mis. "Jun '26") + pill "lebih lama" (panggil `loadMoreTxns`). `state.txnMonth` (null=auto bulan terbaru, ''=Semua). `setTxnMonth` → `filterTxn` (filter `slice(0,7)===txnMonth`). Dipanggil di `renderAll` & `loadMoreTxns`. Tombol "muat lebih lama" lama di bawah list tak lagi muncul (digantikan pill).
+
+## ⭐ Perubahan v9 (Bayar Kartu Kredit) — Juni 2026
+- **Drawer `paycc`** (`openDrawer('paycc', ccId)`), dibuka via tombol **Bayar** di kartu CC (Master > Kartu Kredit). Form: pilih kartu (tampil Tagihan `getCCOut` & Reserve tersedia `reserveFunds`), sumber dana, nominal (default=tagihan), tanggal, notes. Helper `onPayCCChange`/`onPayCCSrc`.
+- **Sumber = Bank:** `saveDrawer` panggil `addTransfer` (DARI=bank, KE=CC) → saldo bank ↓, tagihan CC ↓. Tanpa ubah backend.
+- **Sumber = Reserve:** action baru Code.gs **`payCCReserve`** (POST, **wajib redeploy**): tulis 1 TXN Pemasukan ke CC (TIPE_LOG Reserve, KATEGORI 'Bayar CC (Reserve)') → tagihan ↓, dan 1 RESERVE_LOG **negatif** (DARI_REKENING '(release)') → pot reserve ↓. **Bank tidak disentuh** karena dana sudah keluar saat reserve dibuat (over siklus reserve→bayar, angka konsisten). Validasi nominal ≤ reserve tersedia + konfirmasi.
+- Setelah simpan → `syncAll` (state authoritative). Keduanya TIPE_LOG Transfer/Reserve → tidak masuk laba/komposisi pengeluaran.
+- CATATAN model: saat reserve dibuat, saldo bank langsung ↓ (TXN Pengeluaran Reserve) & Net Cash = Bank − Reserve (saat ada reserve, Net Cash sengaja konservatif/understated; lunas saat dibayar).
 
 ## Boleh edit manual di Google Sheets? BOLEH, dengan aturan:
 1. Jangan ubah baris HEADER / nama kolom / nama tab.

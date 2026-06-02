@@ -1057,6 +1057,7 @@ function renderMaster() {
               ${out>0?`<div style="font-size:12px;font-weight:700;color:var(--red);margin-top:3px">${fmt(out)}</div>`:''}
               ${res>0?`<div style="font-size:10px;color:var(--blue)">res: ${fmtS(res)}</div>`:''}
               <div style="display:flex;gap:5px;margin-top:6px;justify-content:flex-end" onclick="event.stopPropagation()">
+                <button class="btn-danger" style="background:#0a2a1e;color:var(--green);border-color:#2dd4a040" onclick="openDrawer('paycc','${c.ID}')">Bayar</button>
                 <button class="btn-danger" onclick="editCC('${c.ID}')">Edit</button>
                 <button class="btn-danger" onclick="deleteItem('ccs','${c.ID}','MASTER_CC')">Hapus</button>
               </div>
@@ -1639,7 +1640,7 @@ function openFAB() {
 
 function openDrawer(mode, editId = null) {
   drawerMode = mode; drawerEditId = editId;
-  const titleMap = { txn: editId?'Edit Transaksi':'Tambah Transaksi', proj: editId?'Edit Project':'Tambah Project', bank: editId?'Edit Rekening':'Tambah Rekening', cc: editId?'Edit Kartu Kredit':'Tambah Kartu Kredit', kat: editId?'Edit Kategori':'Tambah Kategori', settings: 'Settings' };
+  const titleMap = { txn: editId?'Edit Transaksi':'Tambah Transaksi', proj: editId?'Edit Project':'Tambah Project', bank: editId?'Edit Rekening':'Tambah Rekening', cc: editId?'Edit Kartu Kredit':'Tambah Kartu Kredit', kat: editId?'Edit Kategori':'Tambah Kategori', paycc:'Bayar Kartu Kredit', settings: 'Settings' };
   document.getElementById('drawerTitle').textContent = titleMap[mode] || 'Form';
   const allRek = [...state.banks.map(b=>b.NAMA), ...state.ccs.map(c=>c.NAMA)];
 
@@ -1713,6 +1714,33 @@ function openDrawer(mode, editId = null) {
       <button class="btn-primary" onclick="saveDrawer()"><i class="ti ti-device-floppy"></i> Simpan</button>
       ${editId?`<button class="btn-secondary" onclick="deleteItem('kategori','${editId}','MASTER_KATEGORI');closeDrawer()">Hapus Kategori</button>`:''}
     `;
+  } else if (mode === 'paycc') {
+    const cc = editId ? state.ccs.find(x=>x.ID===editId) : state.ccs[0];
+    const out = cc ? getCCOut(cc.NAMA) : 0;
+    const resv = cc ? (state.reserveFunds[cc.NAMA]||0) : 0;
+    const banks = state.banks.map(b=>b.NAMA);
+    document.getElementById('drawerBody').innerHTML = `
+      <div class="form-group"><label class="form-label">Kartu Kredit</label>
+        <select class="form-input" id="pc_cc" onchange="onPayCCChange()">${state.ccs.map(c=>`<option value="${esc(c.NAMA)}" ${cc&&c.NAMA===cc.NAMA?'selected':''}>${esc(c.NAMA)}</option>`).join('')}</select></div>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <div class="card" style="flex:1;padding:8px 10px;margin:0"><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Tagihan</div><div id="pc_out" style="font-size:14px;font-weight:700;color:var(--red)">${fmt(out)}</div></div>
+        <div class="card" style="flex:1;padding:8px 10px;margin:0"><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Reserve tersedia</div><div id="pc_resv" style="font-size:14px;font-weight:700;color:var(--blue)">${fmt(resv)}</div></div>
+      </div>
+      <div class="form-group"><label class="form-label">Sumber Dana</label>
+        <select class="form-input" id="pc_src" onchange="onPayCCSrc()">
+          <option value="bank">Rekening Bank</option>
+          <option value="reserve">Dana Reserve kartu ini</option>
+        </select></div>
+      <div class="form-group" id="pc_bankWrap"><label class="form-label">Dari Rekening</label>
+        <select class="form-input" id="pc_bank">${banks.map(n=>`<option>${esc(n)}</option>`).join('')}</select></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Nominal</label><input class="form-input" id="pc_nominal" type="text" inputmode="numeric" value="${out>0?fmtInput(out):''}" oninput="fmtMoneyInput(this)" placeholder="0"></div>
+        <div class="form-group"><label class="form-label">Tanggal</label><input class="form-input" id="pc_tgl" type="date" value="${today()}"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Catatan</label><input class="form-input" id="pc_notes" placeholder="opsional"></div>
+      <button class="btn-primary" onclick="saveDrawer()"><i class="ti ti-credit-card"></i> Bayar</button>
+      <div class="settings-sub" style="margin-top:8px">Bank: saldo bank turun & tagihan turun. Reserve: tagihan turun & pot reserve turun (bank tidak berubah, karena dana sudah disisihkan sebelumnya).</div>
+    `;
   } else if (mode === 'settings') {
     document.getElementById('drawerBody').innerHTML = `
       <div class="settings-row"><div><div class="settings-label">API URL</div><div class="settings-sub">${API_URL?'Tersimpan':'Belum diset'}</div></div><button class="btn-danger" onclick="setApiUrl()">Ubah</button></div>
@@ -1780,6 +1808,28 @@ async function saveDrawer() {
     if(eid){const i=state.kategori.findIndex(x=>x.ID===eid);state.kategori[i]=obj;}else state.kategori.push(obj);
     if(API_URL)await apiPost({action:eid?'updateRow':'addKat',data:eid?{sheet:'MASTER_KATEGORI',id:eid,updates:obj}:obj});
     saveLocal();renderMaster();showToast(eid?'Kategori diperbarui':'Kategori ditambahkan','success');
+  } else if (mode === 'paycc') {
+    const ccName=document.getElementById('pc_cc').value;
+    const src=document.getElementById('pc_src').value;
+    const nominal=unfmtNum(document.getElementById('pc_nominal').value);
+    const tgl=document.getElementById('pc_tgl').value;
+    const notes=document.getElementById('pc_notes').value;
+    if(!ccName||!nominal||!tgl){showToast('Kartu, nominal, tanggal wajib diisi','error');return;}
+    if(src==='reserve'){
+      const avail=state.reserveFunds[ccName]||0;
+      if(nominal>avail){showToast('Nominal melebihi reserve tersedia ('+fmt(avail)+')','error');return;}
+      if(!confirm('Bayar '+ccName+' sebesar '+fmt(nominal)+' dari dana reserve?\nTagihan & pot reserve berkurang, saldo bank tidak berubah.'))return;
+      if(API_URL)await apiPost({action:'payCCReserve',data:{TANGGAL:tgl,CC:ccName,NOMINAL:nominal,NOTES:notes,USER:state.user}});
+      showToast('Bayar '+ccName+' '+fmt(nominal)+' dari reserve ✓','success');
+    } else {
+      const bank=document.getElementById('pc_bank').value;
+      if(!bank){showToast('Pilih rekening bank','error');return;}
+      if(API_URL)await apiPost({action:'addTransfer',data:{TANGGAL:tgl,DARI:bank,KE:ccName,NOMINAL:nominal,NOTES:notes||'Bayar CC',USER:state.user}});
+      showToast('Bayar '+ccName+' '+fmt(nominal)+' dari '+bank+' ✓','success');
+    }
+    closeDrawer();
+    if(API_URL)await syncAll(); else { renderMaster(); renderDashboard(); }
+    return;
   }
   closeDrawer();
 }
@@ -1791,6 +1841,19 @@ function editProj(id){openDrawer('proj',id);}
 function editBank(id){openDrawer('bank',id);}
 function editCC(id){openDrawer('cc',id);}
 function editKat(id){openDrawer('kat',id);}
+function onPayCCChange(){
+  const ccName=document.getElementById('pc_cc').value;
+  const out=getCCOut(ccName), resv=state.reserveFunds[ccName]||0;
+  document.getElementById('pc_out').textContent=fmt(out);
+  document.getElementById('pc_resv').textContent=fmt(resv);
+  const nm=document.getElementById('pc_nominal'); if(nm) nm.value=out>0?fmtInput(out):'';
+  onPayCCSrc();
+}
+function onPayCCSrc(){
+  const src=document.getElementById('pc_src').value;
+  const wrap=document.getElementById('pc_bankWrap');
+  if(wrap) wrap.style.display = (src==='reserve')?'none':'block';
+}
 // Format input nominal dengan titik ribuan saat diketik
 function fmtMoneyInput(el){const raw=String(el.value).replace(/[^\d]/g,'');el.value=raw?Number(raw).toLocaleString('id-ID'):'';}
 function unfmtNum(v){return parseFloat(String(v).replace(/[^\d]/g,''))||0;}
