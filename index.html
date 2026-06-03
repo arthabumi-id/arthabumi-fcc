@@ -212,10 +212,13 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
 
     <!-- TRANSAKSI -->
     <div class="page" id="page-transaksi">
-      <div style="display:flex;gap:8px;margin-bottom:14px">
-        <input class="form-input" style="flex:1;padding:9px 12px;font-size:13px" id="txnSearch" placeholder="🔍 Cari project / notes..." oninput="filterTxn()">
+      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+        <input class="form-input" style="flex:1;min-width:140px;padding:9px 12px;font-size:13px" id="txnSearch" placeholder="🔍 Cari project / notes..." oninput="filterTxn()">
         <select class="form-input" style="width:auto;padding:9px 30px 9px 10px;font-size:12px" id="txnTipeFilter" onchange="filterTxn()">
-          <option value="">Semua</option><option>Pemasukan</option><option>Pengeluaran</option><option>Transfer</option><option>Reserve</option>
+          <option value="">Semua tipe</option><option>Pemasukan</option><option>Pengeluaran</option><option>Transfer</option><option>Reserve</option>
+        </select>
+        <select class="form-input" style="width:auto;padding:9px 30px 9px 10px;font-size:12px" id="txnRekFilter" onchange="filterTxn()">
+          <option value="">Semua rekening</option>
         </select>
       </div>
       <div id="txnMonthTabs" style="display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:2px;-webkit-overflow-scrolling:touch"></div>
@@ -1123,6 +1126,7 @@ async function loadMoreTxns(btn) {
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
 function monthLabel(ym){ const p = ym.split('-'); return MONTH_NAMES[(+p[1])-1] + " '" + p[0].slice(2); }
 function renderTxnMonthTabs(){
+  fillRekFilter();
   const el = document.getElementById('txnMonthTabs'); if(!el) return;
   const months = [...new Set(state.txns.map(t => String(t.TANGGAL).slice(0,7)).filter(Boolean))].sort().reverse();
   if (state.txnMonth === null) state.txnMonth = months[0] || ''; // default: bulan terbaru
@@ -1132,13 +1136,22 @@ function renderTxnMonthTabs(){
   el.innerHTML = html;
 }
 function setTxnMonth(m){ state.txnMonth = m; renderTxnMonthTabs(); filterTxn(); }
+// Isi opsi dropdown filter rekening (bank + CC), pertahankan pilihan saat ini.
+function fillRekFilter(){
+  const sel = document.getElementById('txnRekFilter'); if(!sel) return;
+  const cur = sel.value;
+  const names = [...state.banks.map(b=>b.NAMA), ...state.ccs.map(c=>c.NAMA)];
+  sel.innerHTML = '<option value="">Semua rekening</option>' + names.map(n=>`<option value="${esc(n)}" ${cur===n?'selected':''}>${esc(n)}</option>`).join('');
+}
 function filterTxn() {
   const q = document.getElementById('txnSearch').value.toLowerCase();
   const tipe = document.getElementById('txnTipeFilter').value;
+  const rek = document.getElementById('txnRekFilter').value;
   let data = [...state.txns];
   if (state.txnMonth) data = data.filter(t => String(t.TANGGAL).slice(0,7) === state.txnMonth);
   if (q) data = data.filter(t => (String(t.PROJECT)+String(t.NOTES)+String(t.KATEGORI)).toLowerCase().includes(q));
   if (tipe) data = data.filter(t => t.TIPE_LOG === tipe || t.JENIS === tipe);
+  if (rek) data = data.filter(t => t.REKENING === rek);
   renderTxn(data);
 }
 
