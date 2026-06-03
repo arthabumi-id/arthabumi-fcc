@@ -1,4 +1,4 @@
-# FCC Arthabumi — Context & Status (v16)
+# FCC Arthabumi — Context & Status (v15)
 
 ## Apa itu FCC?
 Financial Control Center — web app pribadi Eddy untuk tracking keuangan bisnis Arthabumi (kontraktor/interior). Single-user, dihosting di GitHub Pages.
@@ -153,25 +153,6 @@ Tab baru **Forecast** (nav idx 5, Master geser ke idx 6). Proyeksi saldo kas 90 
 ## ⭐ Perubahan v15 (Filter rekening di Transaksi) — Juni 2026
 Client-only (index.html), tanpa redeploy. Tab Transaksi: tambah dropdown ketiga **"Semua rekening"** (`#txnRekFilter`) berisi semua bank + CC. Helper `fillRekFilter()` (isi opsi dari `state.banks`+`state.ccs`, pertahankan pilihan) dipanggil di `renderTxnMonthTabs`. `filterTxn` tambah `if(rek) data=data.filter(t=>t.REKENING===rek)`. Bisa dikombinasi dgn filter tipe + search + tab bulan. Bekerja pada txn termuat (±120 hari); riwayat penuh tetap via drawer Detail Akun. Header label diperjelas: "Semua tipe" / "Semua rekening". Container filter diberi `flex-wrap`.
 
-## ⭐ Perubahan v16 (Optimistic Save + Piutang Termin & Reminder) — Juni 2026
-Dua fitur. **Wajib redeploy Code.gs** (ada sheet & action baru). sw.js cache **fcc-arthabumi-v6**.
-
-### #3 Optimistic Save (client-only, index.html)
-- Input tidak lagi nunggu Apps Script. Pola: state lokal di-update + drawer ditutup + UI dirender SEKETIKA, POST jalan di latar.
-- Antrian: `state.pending` + localStorage `fcc_pending_ops`. Helper `loadPending/savePending/bgPost/sendOp/retryPending/renderPendingBar`. Bar mengambang `#pendingBar` (atas nav): "Menyimpan N…" (biru) atau "N gagal — Kirim ulang" (merah). Op gagal TIDAK hilang (keputusan user A1: tampil + tombol kirim ulang). `syncAll` panggil `retryPending()` di awal.
-- Yang dikonversi `await apiPost`→`bgPost` (non-blocking): saveDrawer txn/proj/bank/cc/kat, addKat inline, deleteItem, saveJadwal/delJadwal, savePiutang/delPiutang. **paycc, transfer, reserve, kasbon, payPiutang, confirmImport TETAP blocking** (perlu syncAll utk angka authoritative server).
-
-### #1 Piutang Termin Klien + Reminder
-**Sheet baru `PIUTANG`** (wajib redeploy): `ID,PROJECT,KLIEN,TERMIN,NOMINAL,JATUH_TEMPO,STATUS,TGL_BAYAR,REKENING,REF_ID,NOTES,CREATED_BY,CREATED_AT`. STATUS=`Belum`/`Lunas`.
-- **Code.gs actions baru:** `addPiutang` (catat termin, belum gerak uang), `payPiutang` (set Lunas + tulis 1 TXN Pemasukan KATEGORI 'Pelunasan' TIPE_LOG 'Pemasukan' → masuk laba/saldo project; NOMINAL boleh beda dari termin = bayar sebagian/lebih [B-Q1]; auto-buat kategori 'Pelunasan' via `ensureKat` [B-Q2]). Edit/hapus termin Belum pakai `updateRow`/`deleteRow` generik (sheet:'PIUTANG'). Masuk `getBundle`/`getAllData` (`piutang`), doGet `getPiutang`.
-- **Client (index.html):** `state.piutang` (di syncAll/forceRefresh/saveLocal/loadOffline). Nav baru **Piutang** (`ti-cash`, idx 6, Master geser idx 7) + badge merah jumlah overdue (`#piutangBadge`, `updatePiutangBadge`). Halaman `page-piutang` (`renderPiutang`): kartu Total Piutang Beredar + Jatuh tempo ≤7hr + Lewat tempo; list termin per status (Belum/overdue diurut jatuh tempo + rekap Lunas). `piutangRow`, status via `piutangStatus`/`_piuDue`/`_daysBetween` (overdue=jatuh tempo<hari ini & belum lunas; warna amber/merah/hijau).
-- Drawer: `openPiutang`/`savePiutang` (input termin manual [B-Q3]; pilih project auto-isi klien via `onPiutangProj`), `payPiutangUI`/`doPayPiutang` (pilih rekening tujuan + nominal default termin + tgl), `delPiutang` (termin Lunas TIDAK bisa dihapus — sudah ada TXN).
-- **Reminder banner** `#dashPiutangReminder` di atas Dashboard (`renderPiutangReminder`): tampil bila ada overdue / due ≤7hr, list ringkas, klik → halaman Piutang. Dipanggil di `renderAll`.
-- **Forecast integration:** `buildForecast` tambah event pemasukan dari `state.piutang` STATUS=Belum & jatuh tempo dalam horizon (overdue TIDAK diproyeksi — konservatif, hanya muncul di reminder). Event type 'piutang' di list forecast bisa di-tap → halaman Piutang.
-
-### ⚠️ Catatan verifikasi v16
-Saat dibuat, mount Linux (bash) freeze di ukuran file LAMA (index.html 140085 byte, Code.gs 23141 byte) → `node --check` tidak bisa jalan atas isi baru (truncated). Syntax diaudit MANUAL via Read tool (balance brace/template OK). **Saat buka di browser, kalau ada error JS, cek console.** File asli (Read/Edit tool) sudah lengkap & benar.
-
 ## Boleh edit manual di Google Sheets? BOLEH, dengan aturan:
 1. Jangan ubah baris HEADER / nama kolom / nama tab.
 2. Tiap baris WAJIB punya `ID` unik (kalau nambah manual, isi sendiri mis. `MAN001`) — kalau kosong, edit/hapus dari app tak bisa nemu baris.
@@ -194,10 +175,4 @@ CC-BCA-KRIS (BCA 431657XXXX0015), CC-BCA-JCB, CC-CIMB-JCB (X10), CC-CIMB-ACCOR (
 
 ## Known issues / catatan
 - API URL hilang jika "Clear site data" → set ulang via long-press title → Settings → Set API URL.
-- Edit transaksi LAMA dari Account Detail: txn yg di luar window recent mungkin tidak ada di `state.txns` → fitur edit bisa meleset. (belum di-handle penuh; aman utk txn yg sedang tampil.)
-- Tier 2 (belum dikerjakan, baru perlu saat sheet > ~5.000 baris): arsip per tahun (`TRANSAKSI_2026`, dst) supaya sheet aktif tetap kecil.
-
-## Catatan kerja untuk chat baru
-- Mount Linux (bash) sering LAG menampilkan file besar yg baru ditulis Write tool — verifikasi syntax via file asli (Read tool) atau copy ke folder outputs. File asli di `E:\...\arthabumi-fcc\` = yg di-track GitHub Desktop.
-- Test syntax JS: `node --check` (extract blok `<script>` dari index.html).
-- Jangan `git commit` via bash — user push manual via GitHub Desktop.
+- Edit transaksi LAMA dari Account Detail: txn yg di luar window recent mungkin tidak ada di `state.txns

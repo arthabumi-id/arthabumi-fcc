@@ -15,7 +15,7 @@ const SUMMARY_KEY = 'fcc_summary_v3';
 const S = {
   TXN: 'TRANSAKSI', BANK: 'MASTER_BANK', CC: 'MASTER_CC', PROJ: 'MASTER_PROJECT',
   KAT: 'MASTER_KATEGORI', TRANSFER: 'TRANSFER_LOG', RESERVE: 'RESERVE_LOG', KASBON: 'KASBON',
-  JADWAL: 'JADWAL', PIUTANG: 'PIUTANG',
+  JADWAL: 'JADWAL',
 };
 
 const HEADERS = {
@@ -31,10 +31,6 @@ const HEADERS = {
   // JENIS: Pemasukan/Pengeluaran. FREKUENSI: 'sekali' (TGL=yyyy-MM-dd) | 'bulanan' (TGL=tanggal 1-31).
   // AKTIF: 1/0. PROJECT opsional (label saja). Tidak masuk TRANSAKSI/summary — murni proyeksi.
   [S.JADWAL]:   ['ID','JENIS','NAMA','NOMINAL','FREKUENSI','TGL','AKTIF','PROJECT','NOTES','CREATED_BY','CREATED_AT'],
-  // PIUTANG = termin kontrak klien yg belum/sudah dibayar.
-  // STATUS: 'Belum' / 'Lunas'. Saat Lunas → tulis 1 TXN Pemasukan (lihat payPiutang).
-  // Termin STATUS='Belum' dengan JATUH_TEMPO ≤ horizon dipakai client utk proyeksi Forecast.
-  [S.PIUTANG]:  ['ID','PROJECT','KLIEN','TERMIN','NOMINAL','JATUH_TEMPO','STATUS','TGL_BAYAR','REKENING','REF_ID','NOTES','CREATED_BY','CREATED_AT'],
 };
 
 // ── INIT ─────────────────────────────────────────────────────
@@ -130,7 +126,6 @@ function doGet(e) {
       case 'getTransfers': return json(getSheet(ss, S.TRANSFER));
       case 'getReserves':  return json(getSheet(ss, S.RESERVE));
       case 'getJadwal':    return json(getSheet(ss, S.JADWAL));
-      case 'getPiutang':   return json(getSheet(ss, S.PIUTANG));
       default:             return json({ error: 'Unknown action' });
     }
   } catch (err) { return json({ error: err.message }); }
@@ -157,8 +152,6 @@ function doPost(e) {
       case 'addKasbon':   res = addKasbon(ss, data); break;
       case 'deleteKasbon':res = deleteKasbon(ss, data); break;
       case 'addJadwal':   res = addJadwal(ss, data); break;
-      case 'addPiutang':  res = addPiutang(ss, data); break;
-      case 'payPiutang':  res = payPiutang(ss, data); break;
       case 'updateRow':   res = updateRow(ss, data); break;
       case 'deleteRow':   res = deleteRow(ss, data); break;
       case 'init':        res = initSheets(); break;
@@ -181,7 +174,6 @@ function getBundle(ss, params) {
     reserves:  getSheet(ss, S.RESERVE),
     kasbon:    getSheet(ss, S.KASBON),
     jadwal:    getSheet(ss, S.JADWAL),
-    piutang:   getSheet(ss, S.PIUTANG),
     summary:   getSummary(ss),
     txns:      getTxns(ss, { since: since }),
     since:     since,
@@ -250,7 +242,6 @@ function getAllData(ss) {
     kategori: getSheet(ss, S.KAT), txns: getSheet(ss, S.TXN),
     transfers: getSheet(ss, S.TRANSFER), reserves: getSheet(ss, S.RESERVE),
     kasbon: getSheet(ss, S.KASBON), jadwal: getSheet(ss, S.JADWAL),
-    piutang: getSheet(ss, S.PIUTANG),
   };
 }
 
@@ -418,82 +409,6 @@ function addJadwal(ss, data) {
   };
   sh.appendRow(HEADERS[S.JADWAL].map(h => o[h] !== undefined ? o[h] : ''));
   return { ok: true, id: id };
-}
-
-// PIUTANG: termin kontrak klien. addPiutang hanya catat termin (belum gerak uang).
-// Murni daftar tagihan + dipakai client utk Forecast. Saldo/laba belum terpengaruh.
-function addPiutang(ss, data) {
-  let sh = ss.getSheetByName(S.PIUTANG);
-  if (!sh) {
-    sh = ss.insertSheet(S.PIUTANG);
-    sh.appendRow(HEADERS[S.PIUTANG]);
-    sh.getRange(1,1,1,HEADERS[S.PIUTANG].length).setFontWeight('bold').setBackground('#1a1a2e').setFontColor('#ffffff');
-    sh.setFrozenRows(1);
-  }
-  const now = new Date().toISOString();
-  const id = data.ID || ('PIU' + Date.now());
-  const o = {
-    ID: id, PROJECT: data.PROJECT || '', KLIEN: data.KLIEN || '', TERMIN: data.TERMIN || '',
-    NOMINAL: Math.abs(Number(data.NOMINAL)||0), JATUH_TEMPO: data.JATUH_TEMPO || '',
-    STATUS: data.STATUS || 'Belum', TGL_BAYAR: data.TGL_BAYAR || '', REKENING: data.REKENING || '',
-    REF_ID: data.REF_ID || '', NOTES: data.NOTES || '',
-    CREATED_BY: data.USER || data.CREATED_BY || '', CREATED_AT: now,
-  };
-  sh.appendRow(HEADERS[S.PIUTANG].map(h => o[h] !== undefined ? o[h] : ''));
-  return { ok: true, id: id };
-}
-
-// Tandai termin Lunas: update baris PIUTANG (STATUS/TGL_BAYAR/REKENING/NOMINAL) +
-// tulis 1 TXN Pemasukan nyata (KATEGORI 'Pelunasan', TIPE_LOG 'Pemasukan' → masuk
-// laba & saldo project). NOMINAL boleh beda dari termin (klien bayar sebagian/lebih).
-function payPiutang(ss, data) {
-  const id = String(data.ID || '');
-  if (!id) return { error: 'ID termin required' };
-  const sh = ss.getSheetByName(S.PIUTANG);
-  if (!sh || sh.getLastRow() <= 1) return { error: 'PIUTANG kosong' };
-  const all = sh.getRange(1, 1, sh.getLastRow(), sh.getLastColumn()).getValues();
-  const H = all[0];
-  const iId = H.indexOf('ID');
-  let rowIdx = -1;
-  for (let i = 1; i < all.length; i++) if (String(all[i][iId]) === id) { rowIdx = i; break; }
-  if (rowIdx < 0) return { error: 'Termin tidak ditemukan' };
-
-  const now = new Date().toISOString();
-  const ref = 'PAYP' + Date.now();
-  const amt = Math.abs(Number(data.NOMINAL) || Number(all[rowIdx][H.indexOf('NOMINAL')]) || 0);
-  const tgl = data.TGL_BAYAR || new Date().toISOString().slice(0,10);
-  const rek = data.REKENING || '';
-  const proj = all[rowIdx][H.indexOf('PROJECT')] || '';
-  const termin = all[rowIdx][H.indexOf('TERMIN')] || '';
-  if (!rek) return { error: 'Rekening tujuan wajib' };
-
-  // 1) update baris PIUTANG
-  const setCol = (key, val) => { const c = H.indexOf(key); if (c >= 0) all[rowIdx][c] = val; };
-  setCol('STATUS', 'Lunas'); setCol('TGL_BAYAR', tgl); setCol('REKENING', rek);
-  setCol('NOMINAL', amt); setCol('REF_ID', ref);
-  sh.getRange(rowIdx + 1, 1, 1, H.length).setValues([all[rowIdx]]);
-
-  // 2) pastikan kategori 'Pelunasan' ada di master (auto-buat bila belum)
-  ensureKat(ss, 'Pelunasan', 'PEMASUKAN', 'Pemasukan');
-  // 3) TXN Pemasukan nyata
-  ss.getSheetByName(S.TXN).appendRow(['ID'+Date.now(), tgl, 'Pemasukan', proj, rek, 'Pelunasan', amt,
-    '[PIUTANG '+ref+'] '+termin+' '+(data.NOTES||''), 'Pemasukan', data.USER||'', now]);
-  return { ok: true, ref: ref };
-}
-
-// Pastikan 1 kategori ada di MASTER_KATEGORI; tambah bila belum (case-insensitive).
-function ensureKat(ss, nama, kelompok, tipe) {
-  const sh = ss.getSheetByName(S.KAT);
-  if (!sh) return;
-  const last = sh.getLastRow();
-  if (last > 1) {
-    const names = sh.getRange(2, 1, last - 1, sh.getLastColumn()).getValues();
-    const iN = HEADERS[S.KAT].indexOf('NAMA');
-    for (let i = 0; i < names.length; i++) {
-      if (String(names[i][iN]).toLowerCase() === String(nama).toLowerCase()) return;
-    }
-  }
-  sh.appendRow(['K'+Date.now(), kelompok, nama, tipe, new Date().toISOString()]);
 }
 
 // Hapus 1 entri kasbon (by REF_ID) + baris TXN terkait (NOTES memuat refId).

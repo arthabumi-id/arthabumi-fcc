@@ -203,7 +203,6 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
   <div class="content" id="content">
     <!-- DASHBOARD -->
     <div class="page active" id="page-dashboard">
-      <div id="dashPiutangReminder"></div>
       <div id="dashMetrics"></div>
       <div id="dashCharts"></div>
       <div id="dashSaldo"></div>
@@ -303,16 +302,7 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
       <button class="btn-primary" style="margin-bottom:12px" onclick="openJadwal()"><i class="ti ti-plus"></i> Tambah Jadwal (termin / rutin)</button>
       <div id="forecastContent"></div>
     </div>
-
-    <!-- PIUTANG -->
-    <div class="page" id="page-piutang">
-      <button class="btn-primary" style="margin-bottom:12px" onclick="openPiutang()"><i class="ti ti-plus"></i> Tambah Termin</button>
-      <div id="piutangList"></div>
-    </div>
   </div>
-
-  <!-- PENDING / OPTIMISTIC SAVE BAR -->
-  <div id="pendingBar" style="display:none;position:fixed;left:50%;transform:translateX(-50%);bottom:74px;z-index:90;max-width:92%;padding:7px 12px;border-radius:20px;font-size:12px;font-weight:600;box-shadow:0 4px 14px rgba(0,0,0,.4);align-items:center;gap:8px"></div>
 
   <!-- BOTTOM NAV -->
   <nav class="bottom-nav">
@@ -322,7 +312,6 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
     <button class="nav-item" onclick="goPage('project')"><i class="ti ti-hammer"></i><span>Project</span></button>
     <button class="nav-item" onclick="goPage('kasbon')"><i class="ti ti-wallet"></i><span>Kasbon</span></button>
     <button class="nav-item" onclick="goPage('forecast')"><i class="ti ti-chart-line"></i><span>Forecast</span></button>
-    <button class="nav-item" onclick="goPage('piutang')" style="position:relative"><i class="ti ti-cash"></i><span>Piutang</span><span id="piutangBadge" style="display:none;position:absolute;top:3px;right:50%;transform:translateX(14px);background:var(--red);color:#fff;font-size:9px;font-weight:700;min-width:15px;height:15px;line-height:15px;border-radius:8px;padding:0 3px"></span></button>
     <button class="nav-item" onclick="goPage('master')"><i class="ti ti-settings"></i><span>Master</span></button>
   </nav>
 
@@ -367,8 +356,6 @@ let state = {
   expGroup: 'ALL', expJenis: 'Pengeluaran',
   expFrom: '', expTo: '',
   txnMonth: null, // null=belum diset (auto bulan terbaru), ''=Semua, 'YYYY-MM'=bulan tertentu
-  piutang: [],    // termin klien (sheet PIUTANG)
-  pending: [],    // antrian operasi optimistic save yg belum/ gagal terkirim ke server
 };
 
 // ── UTILS ─────────────────────────────────────────────
@@ -405,19 +392,16 @@ function saveLocal() {
   localStorage.setItem('fcc_data', JSON.stringify({
     banks: state.banks, ccs: state.ccs, projects: state.projects,
     kategori: state.kategori, txns: state.txns, transfers: state.transfers,
-    reserves: state.reserves, kasbon: state.kasbon, jadwal: state.jadwal, piutang: state.piutang, summary: state.summary, txnsSince: state.txnsSince
+    reserves: state.reserves, kasbon: state.kasbon, jadwal: state.jadwal, summary: state.summary, txnsSince: state.txnsSince
   }));
 }
 
 function loadOfflineData() {
-  loadPending();
   const saved = localStorage.getItem('fcc_data');
   if (saved) {
     const d = JSON.parse(saved);
     Object.assign(state, d);
     computeReserve();
-    renderPendingBar();
-    if(state.pending.some(p=>p.status==='failed')) setTimeout(()=>renderPendingBar(),100);
     renderAll();
     showToast('Data offline dimuat', 'success');
   } else {
@@ -604,49 +588,7 @@ async function apiPost(body) {
   } catch { return null; }
 }
 
-// ── OPTIMISTIC SAVE / ANTRIAN BACKGROUND ──────────────
-// Pola: state lokal sudah di-update duluan (applySummaryDelta + push ke array),
-// drawer ditutup & UI dirender SEKETIKA, lalu POST ke server jalan di latar.
-// Gagal → op ditandai 'failed' & muncul tombol "Kirim ulang" (tidak hilang).
-function loadPending(){ try{ state.pending = JSON.parse(localStorage.getItem('fcc_pending_ops')||'[]'); }catch{ state.pending=[]; } }
-function savePending(){ try{ localStorage.setItem('fcc_pending_ops', JSON.stringify(state.pending)); }catch{} }
-function bgPost(body, label){
-  if(!API_URL) return;                       // offline penuh: tetap masuk antrian utk kirim ulang nanti
-  const op = { id: uid(), body, label: label||body.action, status:'sending', ts: Date.now() };
-  state.pending.push(op); savePending(); renderPendingBar();
-  sendOp(op);
-}
-async function sendOp(op){
-  op.status='sending'; renderPendingBar();
-  try{
-    const res = await fetch(API_URL, { method:'POST', body: JSON.stringify({...op.body, pin: state.pin, USER: state.user}) });
-    const j = await res.json();
-    if(j && !j.error){ state.pending = state.pending.filter(p=>p.id!==op.id); savePending(); renderPendingBar(); }
-    else { op.status='failed'; op.err=(j&&j.error)||'ditolak server'; savePending(); renderPendingBar(); }
-  }catch(e){ op.status='failed'; op.err='koneksi'; savePending(); renderPendingBar(); }
-}
-function retryPending(){
-  if(!API_URL){ showToast('API URL belum diset','error'); return; }
-  state.pending.filter(p=>p.status==='failed').forEach(sendOp);
-}
-function renderPendingBar(){
-  const bar = document.getElementById('pendingBar'); if(!bar) return;
-  const failed = state.pending.filter(p=>p.status==='failed');
-  const sending = state.pending.filter(p=>p.status==='sending');
-  if(!state.pending.length){ bar.style.display='none'; return; }
-  bar.style.display='flex';
-  if(failed.length){
-    bar.style.background='#3a1010'; bar.style.border='1px solid var(--red)'; bar.style.color='var(--red)';
-    bar.innerHTML = `<i class="ti ti-alert-triangle"></i> ${failed.length} gagal tersimpan`+
-      `<button onclick="retryPending()" style="margin-left:4px;background:var(--red);color:#fff;border:none;border-radius:14px;padding:4px 12px;font-size:12px;font-weight:700;cursor:pointer">Kirim ulang</button>`;
-  } else {
-    bar.style.background='#0a2233'; bar.style.border='1px solid #5b9cf6'; bar.style.color='#9ccbff';
-    bar.innerHTML = `<div class="spin" style="width:11px;height:11px;border-width:2px"></div> Menyimpan ${sending.length}…`;
-  }
-}
-
 async function syncAll() {
-  retryPending(); // kirim ulang op yg sempat gagal sebelum tarik data baru
   const btn = document.querySelector('.sync-btn');
   btn.innerHTML = '<div class="spin" style="width:12px;height:12px;border-width:2px"></div>';
   
@@ -674,7 +616,6 @@ async function syncAll() {
     state.reserves = data.reserves || state.reserves;
     state.kasbon = data.kasbon || state.kasbon;
     state.jadwal = data.jadwal || state.jadwal;
-    state.piutang = data.piutang || state.piutang || [];
     state.summary = data.summary || null; // null bila pakai getAll lama → accessor fallback ke txns
     state.txnsSince = data.since || state.txnsSince;
     computeReserve();
@@ -996,16 +937,6 @@ function buildForecast(horizon){
       if(diff>=0 && diff<=horizon) events.push({date:d,amount:amt,label:j.NAMA,type:'jadwal',jenis:j.JENIS,id:j.ID});
     }
   });
-  // Piutang termin belum lunas → proyeksi pemasukan pada jatuh tempo (dalam horizon).
-  // Overdue (jatuh tempo sudah lewat) sengaja TIDAK diproyeksi otomatis — ditandai di reminder,
-  // supaya forecast tetap konservatif (tidak asal asumsi uang telat pasti masuk).
-  (state.piutang||[]).forEach(p=>{
-    if(String(p.STATUS)==='Lunas') return;
-    const amt=Math.abs(Number(p.NOMINAL)||0); if(!amt) return;
-    const due=String(p.JATUH_TEMPO||'').slice(0,10); if(!due) return;
-    const diff=_daysBetween(today(),due);
-    if(diff>=0 && diff<=horizon) events.push({date:due,amount:amt,label:(p.KLIEN||p.PROJECT||'Termin')+' · '+(p.TERMIN||''),type:'piutang',jenis:'Pemasukan',id:p.ID});
-  });
   const burn=dailyBurn();
   const series=[]; let bal=start;
   for(let i=0;i<=horizon;i++){
@@ -1051,14 +982,14 @@ function renderForecast(){
   else html+=f.events.map(e=>{
     const inc=e.amount>=0;
     const del=(e.type==='jadwal'&&e.id)?`<button class="btn-secondary" style="padding:5px 9px;font-size:11px;color:var(--red);margin:0" onclick="delJadwal('${e.id}')">Hapus</button>`:'';
-    const tap=(e.type==='jadwal'&&e.id)?`onclick="openJadwal('${e.id}')" style="cursor:pointer;`:(e.type==='piutang'&&e.id)?`onclick="goPage('piutang')" style="cursor:pointer;`:`style="`;
+    const tap=(e.type==='jadwal'&&e.id)?`onclick="openJadwal('${e.id}')" style="cursor:pointer;`:`style="`;
     return `<div class="card" ${tap}padding:10px 12px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:10px">
-      <div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.label)}</div><div style="font-size:10px;color:var(--text3)">${e.date} · ${e.type==='cc'?'Tagihan CC':e.type==='piutang'?'Termin klien':(e.jenis||'')}</div></div>
+      <div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.label)}</div><div style="font-size:10px;color:var(--text3)">${e.date} · ${e.type==='cc'?'Tagihan CC':(e.jenis||'')}</div></div>
       <div style="font-weight:700;color:${inc?'var(--green)':'var(--red)'};white-space:nowrap">${inc?'+':'−'}${fmt(e.amount)}</div>
       ${del}
     </div>`;
   }).join('');
-  html+=`<div class="settings-sub" style="margin-top:12px;line-height:1.6">Asumsi: titik awal = total saldo bank. Keluar rutin = rata-rata pengeluaran operasional 90 hari terakhir (termasuk gaji mingguan; tidak termasuk transfer/reserve/kasbon). Tagihan CC saat ini dibayar pada jatuh tempo terdekat (reserve dipakai dulu). Pemasukan dari jadwal termin yang kamu input + piutang termin belum lunas (jatuh tempo dalam 90 hari) — proyeksi sengaja konservatif (termin yg sudah lewat tempo tidak diproyeksi). Ambang aman bisa diatur di Settings.</div>`;
+  html+=`<div class="settings-sub" style="margin-top:12px;line-height:1.6">Asumsi: titik awal = total saldo bank. Keluar rutin = rata-rata pengeluaran operasional 90 hari terakhir (termasuk gaji mingguan; tidak termasuk transfer/reserve/kasbon). Tagihan CC saat ini dibayar pada jatuh tempo terdekat (reserve dipakai dulu). Pemasukan HANYA dari jadwal termin yang kamu input — proyeksi sengaja konservatif. Ambang aman bisa diatur di Settings.</div>`;
   document.getElementById('forecastContent').innerHTML=html;
   // grafik (ambil tiap 3 hari supaya label tidak padat)
   const pts=f.series.filter((_,i)=>i%3===0);
@@ -1121,13 +1052,13 @@ async function saveJadwal(editId){
   const obj={ID:editId||uid(),JENIS:jenis,NAMA:nama,NOMINAL:nominal,FREKUENSI:frek,TGL:tgl,AKTIF:1,PROJECT:proj,NOTES:notes,CREATED_BY:state.user,CREATED_AT:now};
   if(editId){const i=state.jadwal.findIndex(x=>x.ID===editId);if(i>=0)state.jadwal[i]=obj;else state.jadwal.push(obj);}
   else state.jadwal.push(obj);
-  if(API_URL){ if(editId) bgPost({action:'updateRow',data:{sheet:'JADWAL',id:editId,updates:obj}},'Jadwal '+nama); else bgPost({action:'addJadwal',data:obj},'Jadwal '+nama); }
+  if(API_URL){ if(editId) await apiPost({action:'updateRow',data:{sheet:'JADWAL',id:editId,updates:obj}}); else await apiPost({action:'addJadwal',data:obj}); }
   saveLocal(); closeDrawer(); renderForecast(); showToast(editId?'Jadwal diperbarui':'Jadwal ditambahkan','success');
 }
 async function delJadwal(id){
   if(!confirm('Hapus jadwal ini?'))return;
   state.jadwal=(state.jadwal||[]).filter(x=>x.ID!==id);
-  if(API_URL)bgPost({action:'deleteRow',data:{sheet:'JADWAL',id}},'Hapus jadwal');
+  if(API_URL)await apiPost({action:'deleteRow',data:{sheet:'JADWAL',id}});
   saveLocal(); closeDrawer(); renderForecast(); showToast('Jadwal dihapus','success');
 }
 function setSafeThreshold(){
@@ -1137,186 +1068,6 @@ function setSafeThreshold(){
   state.safeThreshold=n; localStorage.setItem('fcc_safe_threshold',String(n));
   showToast('Ambang aman = '+fmt(n),'success');
   if(state.currentPage==='forecast')renderForecast();
-}
-
-// ── PIUTANG TERMIN ────────────────────────────────────
-function _piuDue(p){ return String(p.JATUH_TEMPO||'').slice(0,10); }
-function piutangStatus(p){
-  if(String(p.STATUS)==='Lunas') return 'lunas';
-  const due=_piuDue(p);
-  if(due && _daysBetween(today(),due)<0) return 'overdue';
-  return 'belum';
-}
-function piutangAgg(){
-  let beredar=0,dueWeek=0,overdue=0,cntBelum=0,cntOver=0;
-  (state.piutang||[]).forEach(p=>{
-    if(String(p.STATUS)==='Lunas') return;
-    const nom=Number(p.NOMINAL)||0; beredar+=nom; cntBelum++;
-    const st=piutangStatus(p);
-    if(st==='overdue'){overdue+=nom;cntOver++;}
-    else{ const due=_piuDue(p); if(due){const d=_daysBetween(today(),due); if(d>=0&&d<=7)dueWeek+=nom;} }
-  });
-  return {beredar,dueWeek,overdue,cntBelum,cntOver};
-}
-function piutangOverdueCount(){ return (state.piutang||[]).filter(p=>piutangStatus(p)==='overdue').length; }
-function updatePiutangBadge(){
-  const b=document.getElementById('piutangBadge'); if(!b)return;
-  const n=piutangOverdueCount();
-  if(n>0){b.style.display='block';b.textContent=n;}else b.style.display='none';
-}
-function renderPiutangReminder(){
-  const el=document.getElementById('dashPiutangReminder'); if(!el)return;
-  const items=(state.piutang||[]).filter(p=>{
-    const st=piutangStatus(p);
-    if(st==='overdue')return true;
-    if(st==='belum'){const due=_piuDue(p); if(due){const d=_daysBetween(today(),due);return d>=0&&d<=7;}}
-    return false;
-  }).sort((a,b)=>_piuDue(a).localeCompare(_piuDue(b)));
-  if(!items.length){el.innerHTML='';return;}
-  el.innerHTML=`<div class="card" onclick="goPage('piutang')" style="cursor:pointer;margin-bottom:12px;background:#2a1408;border:1px solid var(--amber)">
-    <div style="display:flex;align-items:center;justify-content:space-between">
-      <div style="font-weight:700;color:var(--amber)"><i class="ti ti-bell-ringing"></i> Termin perlu ditagih (${items.length})</div>
-      <i class="ti ti-chevron-right" style="color:var(--text3)"></i></div>
-    <div style="margin-top:6px;display:flex;flex-direction:column;gap:4px">
-    ${items.slice(0,4).map(p=>{const st=piutangStatus(p);const due=_piuDue(p);const dd=_daysBetween(today(),due);
-      const lbl=st==='overdue'?`<span style="color:var(--red)">lewat ${Math.abs(dd)} hr</span>`:`<span style="color:var(--amber)">${dd} hr lagi</span>`;
-      return `<div style="font-size:11px;color:var(--text2);display:flex;justify-content:space-between;gap:8px"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.KLIEN||p.PROJECT||'—')} · ${esc(p.TERMIN||'')}</span><span style="white-space:nowrap">${fmtS(p.NOMINAL)} · ${lbl}</span></div>`;}).join('')}
-    ${items.length>4?`<div style="font-size:10px;color:var(--text3)">+${items.length-4} lagi…</div>`:''}
-    </div></div>`;
-}
-function renderPiutang(){
-  const ag=piutangAgg();
-  const list=(state.piutang||[]).slice();
-  const belum=list.filter(p=>String(p.STATUS)!=='Lunas').sort((a,b)=>_piuDue(a).localeCompare(_piuDue(b)));
-  const lunas=list.filter(p=>String(p.STATUS)==='Lunas').sort((a,b)=>String(b.TGL_BAYAR||'').localeCompare(String(a.TGL_BAYAR||'')));
-  let html=`<div class="card" style="margin-bottom:12px;background:linear-gradient(135deg,#0a2a1e,#0d1f2d);border:1px solid #2bd47d30">
-    <div class="metric-label">Total Piutang Beredar</div>
-    <div class="metric-value" style="font-size:24px;color:${ag.beredar>0?'var(--amber)':'var(--green)'}">${fmt(ag.beredar)}</div>
-    <div class="metric-sub">${ag.cntBelum} termin belum lunas</div></div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
-    <div class="metric"><div class="metric-label">Jatuh tempo ≤7 hari</div><div class="metric-value" style="font-size:16px;color:var(--amber)">${fmt(ag.dueWeek)}</div></div>
-    <div class="metric"><div class="metric-label">Lewat tempo</div><div class="metric-value" style="font-size:16px;color:${ag.cntOver?'var(--red)':'inherit'}">${fmt(ag.overdue)}</div><div class="metric-sub">${ag.cntOver} termin</div></div>
-  </div>`;
-  html+=`<div style="font-size:12px;font-weight:700;margin:6px 0 8px">Belum Lunas (${belum.length})</div>`;
-  html+= belum.length? belum.map(piutangRow).join('') : '<div class="empty">Tidak ada termin tertunggak. Tekan "Tambah Termin".</div>';
-  if(lunas.length){
-    html+=`<div style="font-size:12px;font-weight:700;margin:16px 0 8px">Sudah Lunas · Rekap (${lunas.length})</div>`;
-    html+=lunas.map(piutangRow).join('');
-  }
-  document.getElementById('piutangList').innerHTML=html;
-}
-function piutangRow(p){
-  const st=piutangStatus(p);
-  const due=_piuDue(p);
-  const col=st==='lunas'?'var(--green)':st==='overdue'?'var(--red)':'var(--amber)';
-  const badge=st==='lunas'?'Lunas':st==='overdue'?'Lewat tempo':'Belum';
-  const dd=due?_daysBetween(today(),due):null;
-  const sub=st==='lunas'
-    ? ('dibayar '+(String(p.TGL_BAYAR||'').slice(0,10)||'—')+(p.REKENING?' · '+esc(p.REKENING):''))
-    : (due?(due+(dd<0?` · lewat ${Math.abs(dd)} hari`:` · ${dd} hari lagi`)):'tanpa jatuh tempo');
-  const actions=st==='lunas'
-    ? `<div style="text-align:right;margin-top:4px"><button style="font-size:10px;background:transparent;border:none;color:var(--text3);cursor:pointer" onclick="delPiutang('${p.ID}')">hapus</button></div>`
-    : `<div style="display:flex;gap:5px;margin-top:8px;justify-content:flex-end">
-         <button class="btn-secondary" style="padding:5px 10px;font-size:11px;margin:0" onclick="openPiutang('${p.ID}')">Edit</button>
-         <button class="btn-primary" style="padding:5px 12px;font-size:11px;margin:0" onclick="payPiutangUI('${p.ID}')">Tandai Lunas</button></div>`;
-  return `<div class="card" style="padding:11px 13px;margin-bottom:8px">
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
-      <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.KLIEN||p.PROJECT||'—')} · ${esc(p.TERMIN||'')}</div>
-        <div style="font-size:10px;color:var(--text3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.PROJECT||'')}</div>
-        <div style="font-size:11px;color:${col};margin-top:3px">${badge} · ${sub}</div>
-      </div>
-      <div style="text-align:right;flex-shrink:0"><div style="font-size:15px;font-weight:700;color:${col}">${fmt(p.NOMINAL)}</div></div>
-    </div>
-    ${actions}
-  </div>`;
-}
-function openPiutang(editId){
-  editId=editId||null;
-  const p=editId?(state.piutang||[]).find(x=>x.ID===editId):null;
-  document.getElementById('drawerTitle').textContent=editId?'Edit Termin':'Tambah Termin';
-  document.getElementById('drawerBody').innerHTML=`
-    <div class="form-group"><label class="form-label">Project</label>
-      <select class="form-input" id="pi_proj" onchange="onPiutangProj()"><option value="">— Pilih project —</option>${state.projects.map(x=>`<option ${p&&p.PROJECT===x.NAMA?'selected':''}>${esc(x.NAMA)}</option>`).join('')}</select></div>
-    <div class="form-group"><label class="form-label">Klien</label><input class="form-input" id="pi_klien" value="${p?esc(p.KLIEN||''):''}" placeholder="otomatis dari project"></div>
-    <div class="form-group"><label class="form-label">Termin / Keterangan</label><input class="form-input" id="pi_termin" value="${p?esc(p.TERMIN||''):''}" placeholder="mis. DP 30%, Progress 1, Pelunasan"></div>
-    <div class="form-row">
-      <div class="form-group"><label class="form-label">Nominal</label><input class="form-input" id="pi_nominal" type="text" inputmode="numeric" value="${p?fmtInput(p.NOMINAL):''}" oninput="fmtMoneyInput(this)" placeholder="0"></div>
-      <div class="form-group"><label class="form-label">Jatuh Tempo</label><input class="form-input" id="pi_due" type="date" value="${p?String(p.JATUH_TEMPO||'').slice(0,10):''}"></div>
-    </div>
-    <div class="form-group"><label class="form-label">Catatan</label><input class="form-input" id="pi_notes" value="${p?esc(p.NOTES||''):''}" placeholder="opsional"></div>
-    <button class="btn-primary" onclick="savePiutang('${editId||''}')"><i class="ti ti-device-floppy"></i> Simpan</button>
-    ${editId&&p&&String(p.STATUS)!=='Lunas'?`<button class="btn-secondary" style="color:var(--red)" onclick="delPiutang('${editId}')">Hapus Termin</button>`:''}
-    <div class="settings-sub" style="margin-top:8px">Termin belum lunas dengan jatuh tempo ≤90 hari otomatis masuk proyeksi Forecast. Saat klien bayar, tekan "Tandai Lunas" → otomatis jadi transaksi Pemasukan.</div>`;
-  drawerMode='piutang'; drawerEditId=editId||null;
-  document.getElementById('drawerBg').classList.add('open');
-}
-function onPiutangProj(){
-  const nm=document.getElementById('pi_proj').value;
-  const pr=state.projects.find(x=>x.NAMA===nm);
-  const kl=document.getElementById('pi_klien');
-  if(pr&&pr.KLIEN&&kl&&!kl.value)kl.value=pr.KLIEN;
-}
-function savePiutang(editId){
-  editId=editId||null;
-  const proj=document.getElementById('pi_proj').value;
-  const klien=(document.getElementById('pi_klien').value||'').trim();
-  const termin=(document.getElementById('pi_termin').value||'').trim();
-  const nominal=unfmtNum(document.getElementById('pi_nominal').value);
-  const due=document.getElementById('pi_due').value;
-  const notes=document.getElementById('pi_notes').value;
-  if(!termin||!nominal){showToast('Termin & nominal wajib diisi','error');return;}
-  const old=editId?(state.piutang||[]).find(x=>x.ID===editId):null;
-  const now=new Date().toISOString();
-  const obj={ID:editId||uid(),PROJECT:proj,KLIEN:klien,TERMIN:termin,NOMINAL:nominal,JATUH_TEMPO:due,
-    STATUS:old?old.STATUS:'Belum',TGL_BAYAR:old?(old.TGL_BAYAR||''):'',REKENING:old?(old.REKENING||''):'',REF_ID:old?(old.REF_ID||''):'',NOTES:notes,CREATED_BY:state.user,CREATED_AT:old?(old.CREATED_AT||now):now};
-  state.piutang=state.piutang||[];
-  if(editId){const i=state.piutang.findIndex(x=>x.ID===editId);if(i>=0)state.piutang[i]=obj;else state.piutang.push(obj);}else state.piutang.push(obj);
-  if(API_URL){ if(editId) bgPost({action:'updateRow',data:{sheet:'PIUTANG',id:editId,updates:obj}},'Termin '+termin); else bgPost({action:'addPiutang',data:obj},'Termin '+termin); }
-  saveLocal(); closeDrawer(); renderPiutang(); renderPiutangReminder(); updatePiutangBadge(); if(state.currentPage==='forecast')renderForecast();
-  showToast(editId?'Termin diperbarui':'Termin ditambahkan','success');
-}
-function payPiutangUI(id){
-  const p=(state.piutang||[]).find(x=>x.ID===id); if(!p)return;
-  const banks=state.banks.map(b=>b.NAMA);
-  document.getElementById('drawerTitle').textContent='Tandai Lunas';
-  document.getElementById('drawerBody').innerHTML=`
-    <div class="settings-row"><div class="settings-label">${esc(p.KLIEN||p.PROJECT||'')} · ${esc(p.TERMIN||'')}</div><div style="font-weight:700">${fmt(p.NOMINAL)}</div></div>
-    <div class="form-group"><label class="form-label">Rekening tujuan (uang masuk)</label><select class="form-input" id="pp_rek">${banks.map(n=>`<option>${esc(n)}</option>`).join('')}</select></div>
-    <div class="form-row">
-      <div class="form-group"><label class="form-label">Nominal diterima</label><input class="form-input" id="pp_nominal" type="text" inputmode="numeric" value="${fmtInput(p.NOMINAL)}" oninput="fmtMoneyInput(this)"></div>
-      <div class="form-group"><label class="form-label">Tanggal bayar</label><input class="form-input" id="pp_tgl" type="date" value="${today()}"></div>
-    </div>
-    <button class="btn-primary" onclick="doPayPiutang('${id}')"><i class="ti ti-check"></i> Konfirmasi Lunas</button>
-    <div class="settings-sub" style="margin-top:8px">Tercatat sebagai transaksi Pemasukan (kategori "Pelunasan") ke rekening terpilih & masuk laba project. Nominal boleh diubah bila klien bayar sebagian/lebih.</div>`;
-  drawerMode='paypiutang'; drawerEditId=null;
-  document.getElementById('drawerBg').classList.add('open');
-}
-async function doPayPiutang(id){
-  const rek=document.getElementById('pp_rek').value;
-  const nominal=unfmtNum(document.getElementById('pp_nominal').value);
-  const tgl=document.getElementById('pp_tgl').value;
-  if(!rek||!nominal||!tgl){showToast('Rekening, nominal, tanggal wajib diisi','error');return;}
-  closeDrawer();
-  showToast('Termin ditandai lunas ✓','success');
-  if(API_URL){
-    const res=await apiPost({action:'payPiutang',data:{ID:id,REKENING:rek,NOMINAL:nominal,TGL_BAYAR:tgl,USER:state.user}});
-    if(res&&res.error){showToast('Gagal: '+res.error,'error');}
-    await syncAll();
-  } else {
-    const p=(state.piutang||[]).find(x=>x.ID===id);
-    if(p){p.STATUS='Lunas';p.TGL_BAYAR=tgl;p.REKENING=rek;p.NOMINAL=nominal;}
-    saveLocal(); renderPiutang(); renderPiutangReminder(); updatePiutangBadge();
-  }
-}
-function delPiutang(id){
-  const p=(state.piutang||[]).find(x=>x.ID===id);
-  if(p&&String(p.STATUS)==='Lunas'){showToast('Termin lunas tidak bisa dihapus (sudah ada transaksi terkait)','error');return;}
-  if(!confirm('Hapus termin ini?'))return;
-  state.piutang=(state.piutang||[]).filter(x=>x.ID!==id);
-  if(API_URL)bgPost({action:'deleteRow',data:{sheet:'PIUTANG',id}},'Hapus termin');
-  saveLocal(); closeDrawer(); renderPiutang(); renderPiutangReminder(); updatePiutangBadge(); if(state.currentPage==='forecast')renderForecast();
-  showToast('Termin dihapus','success');
 }
 
 // ── RENDER TRANSAKSI ──────────────────────────────────
@@ -2410,215 +2161,9 @@ async function saveDrawer() {
     if(katObj0&&katObj0.KELOMPOK==='PROJECT'&&!proj){
       if(!confirm('Kategori "'+kat+'" termasuk kelompok PROJECT, tapi Project belum dipilih.\n\nSimpan tanpa project?'))return;
     }
-    if(newKatObj){state.kategori.push(newKatObj);if(API_URL)bgPost({action:'addKat',data:newKatObj},'Kategori '+newKatObj.NAMA);showToast('Kategori baru "'+newKatObj.NAMA+'" ditambahkan','success');}
+    if(newKatObj){state.kategori.push(newKatObj);if(API_URL)await apiPost({action:'addKat',data:newKatObj});showToast('Kategori baru "'+newKatObj.NAMA+'" ditambahkan','success');}
     const obj={ID:eid||uid(),TANGGAL:tgl,JENIS:jenis,PROJECT:proj,REKENING:rek,KATEGORI:kat,NOMINAL:nominal,NOTES:notes,TIPE_LOG:jenis,CREATED_BY:state.user,CREATED_AT:now};
     let oldT=null;
     if(eid){const i=state.txns.findIndex(x=>x.ID===eid);if(i>=0){oldT=state.txns[i];state.txns[i]=obj;}else state.txns.unshift(obj);}else state.txns.unshift(obj);
     if(oldT)applySummaryDelta(oldT,-1); applySummaryDelta(obj,1);
-    if(API_URL)bgPost({action:eid?'updateRow':'addTxn',data:eid?{sheet:'TRANSAKSI',id:eid,updates:obj}:obj},(eid?'Edit ':'')+'Transaksi '+fmt(nominal));
-    saveLocal();renderDashboard();renderTxn();renderProject();showToast(eid?'Transaksi diperbarui':'Transaksi tersimpan','success');
-  } else if (mode === 'proj') {
-    const obj={ID:eid||uid(),NAMA:document.getElementById('fp_nama').value,KLIEN:document.getElementById('fp_klien').value,TGL_MULAI:document.getElementById('fp_tgl').value,STATUS:document.getElementById('fp_status').value,NILAI_CONTRACT:unfmtNum(document.getElementById('fp_nilai').value),CREATED_AT:now};
-    if(!obj.NAMA){showToast('Nama project wajib diisi','error');return;}
-    if(eid){const i=state.projects.findIndex(x=>x.ID===eid);state.projects[i]=obj;}else state.projects.unshift(obj);
-    if(API_URL)bgPost({action:eid?'updateRow':'addProj',data:eid?{sheet:'MASTER_PROJECT',id:eid,updates:obj}:obj},(eid?'Edit ':'')+'Project '+obj.NAMA);
-    saveLocal();renderProject();renderDashboard();showToast(eid?'Project diperbarui':'Project ditambahkan','success');
-  } else if (mode === 'bank') {
-    const obj={ID:eid||uid(),NAMA:document.getElementById('fb_nama').value,BANK:document.getElementById('fb_bank').value,TIPE:document.getElementById('fb_tipe').value,SALDO_AWAL:unfmtNum(document.getElementById('fb_saldo').value),CREATED_AT:now};
-    if(!obj.NAMA){showToast('Nama rekening wajib diisi','error');return;}
-    if(eid){const i=state.banks.findIndex(x=>x.ID===eid);state.banks[i]=obj;}else state.banks.push(obj);
-    if(API_URL)bgPost({action:eid?'updateRow':'addBank',data:eid?{sheet:'MASTER_BANK',id:eid,updates:obj}:obj},(eid?'Edit ':'')+'Rekening '+obj.NAMA);
-    saveLocal();renderMaster();renderDashboard();showToast(eid?'Rekening diperbarui':'Rekening ditambahkan','success');
-  } else if (mode === 'cc') {
-    const obj={ID:eid||uid(),NAMA:document.getElementById('fc_nama').value,BANK:document.getElementById('fc_bank').value,LIMIT:unfmtNum(document.getElementById('fc_limit').value),JATUH_TEMPO:parseInt(document.getElementById('fc_tempo').value)||25,CREATED_AT:now};
-    if(!obj.NAMA){showToast('Nama kartu wajib diisi','error');return;}
-    if(eid){const i=state.ccs.findIndex(x=>x.ID===eid);state.ccs[i]=obj;}else state.ccs.push(obj);
-    if(API_URL)bgPost({action:eid?'updateRow':'addCC',data:eid?{sheet:'MASTER_CC',id:eid,updates:obj}:obj},(eid?'Edit ':'')+'Kartu '+obj.NAMA);
-    saveLocal();renderMaster();renderDashboard();showToast(eid?'Kartu diperbarui':'Kartu ditambahkan','success');
-  } else if (mode === 'kat') {
-    const obj={ID:eid||uid(),NAMA:document.getElementById('fk_nama').value,KELOMPOK:document.getElementById('fk_kelompok').value,TIPE:document.getElementById('fk_tipe').value,CREATED_AT:now};
-    if(!obj.NAMA){showToast('Nama kategori wajib diisi','error');return;}
-    if(eid){const i=state.kategori.findIndex(x=>x.ID===eid);state.kategori[i]=obj;}else state.kategori.push(obj);
-    if(API_URL)bgPost({action:eid?'updateRow':'addKat',data:eid?{sheet:'MASTER_KATEGORI',id:eid,updates:obj}:obj},(eid?'Edit ':'')+'Kategori '+obj.NAMA);
-    saveLocal();renderMaster();showToast(eid?'Kategori diperbarui':'Kategori ditambahkan','success');
-  } else if (mode === 'paycc') {
-    const ccName=document.getElementById('pc_cc').value;
-    const src=document.getElementById('pc_src').value;
-    const nominal=unfmtNum(document.getElementById('pc_nominal').value);
-    const tgl=document.getElementById('pc_tgl').value;
-    const notes=document.getElementById('pc_notes').value;
-    if(!ccName||!nominal||!tgl){showToast('Kartu, nominal, tanggal wajib diisi','error');return;}
-    if(src==='reserve'){
-      const avail=state.reserveFunds[ccName]||0;
-      if(nominal>avail){showToast('Nominal melebihi reserve tersedia ('+fmt(avail)+')','error');return;}
-      if(!confirm('Bayar '+ccName+' sebesar '+fmt(nominal)+' dari dana reserve?\nTagihan & pot reserve berkurang, saldo bank tidak berubah.'))return;
-      if(API_URL)await apiPost({action:'payCCReserve',data:{TANGGAL:tgl,CC:ccName,NOMINAL:nominal,NOTES:notes,USER:state.user}});
-      showToast('Bayar '+ccName+' '+fmt(nominal)+' dari reserve ✓','success');
-    } else {
-      const bank=document.getElementById('pc_bank').value;
-      if(!bank){showToast('Pilih rekening bank','error');return;}
-      if(API_URL)await apiPost({action:'addTransfer',data:{TANGGAL:tgl,DARI:bank,KE:ccName,NOMINAL:nominal,NOTES:notes||'Bayar CC',USER:state.user}});
-      showToast('Bayar '+ccName+' '+fmt(nominal)+' dari '+bank+' ✓','success');
-    }
-    closeDrawer();
-    if(API_URL)await syncAll(); else { renderMaster(); renderDashboard(); }
-    return;
-  }
-  closeDrawer();
-}
-
-function closeDrawer(){document.getElementById('drawerBg').classList.remove('open');drawerMode=null;drawerEditId=null;}
-function deleteItem(stateKey,id,sheetName){state[stateKey]=state[stateKey].filter(x=>x.ID!==id);if(API_URL)bgPost({action:'deleteRow',data:{sheet:sheetName,id}},'Hapus '+sheetName);saveLocal();renderAll();showToast('Dihapus','success');}
-function editTxn(id){openDrawer('txn',id);}
-function editProj(id){openDrawer('proj',id);}
-function editBank(id){openDrawer('bank',id);}
-function editCC(id){openDrawer('cc',id);}
-function editKat(id){openDrawer('kat',id);}
-function onPayCCChange(){
-  const ccName=document.getElementById('pc_cc').value;
-  const out=getCCOut(ccName), resv=state.reserveFunds[ccName]||0;
-  document.getElementById('pc_out').textContent=fmt(out);
-  document.getElementById('pc_resv').textContent=fmt(resv);
-  const nm=document.getElementById('pc_nominal'); if(nm) nm.value=out>0?fmtInput(out):'';
-  onPayCCSrc();
-}
-function onPayCCSrc(){
-  const src=document.getElementById('pc_src').value;
-  const wrap=document.getElementById('pc_bankWrap');
-  if(wrap) wrap.style.display = (src==='reserve')?'none':'block';
-}
-// Format input nominal dengan titik ribuan saat diketik
-function fmtMoneyInput(el){const raw=String(el.value).replace(/[^\d]/g,'');el.value=raw?Number(raw).toLocaleString('id-ID'):'';}
-function unfmtNum(v){return parseFloat(String(v).replace(/[^\d]/g,''))||0;}
-function fmtInput(n){const x=Number(String(n).replace(/[^\d]/g,''));return!x||isNaN(x)?'':x.toLocaleString('id-ID');}
-function onKatChange(){
-  const sel=document.getElementById('f_kat'),wrap=document.getElementById('f_kat_new_wrap');
-  if(!sel||!wrap)return;
-  const isNew=sel.value==='__NEW__';
-  wrap.style.display=isNew?'block':'none';
-  if(isNew)setTimeout(()=>{const i=document.getElementById('f_kat_new');if(i)i.focus();},50);
-}
-function setApiUrl(){const url=prompt('API URL:',API_URL);if(url!==null){API_URL=url.trim();localStorage.setItem('fcc_api_url',API_URL);showToast('API URL disimpan','success');closeDrawer();syncAll();}}
-// Buang cache summary di server lalu tarik data segar — dipakai setelah edit manual di Sheets
-async function forceRefresh(){
-  if(!API_URL){showToast('API URL belum diset','error');return;}
-  showToast('Menghitung ulang dari Sheets...','success');
-  const data=await apiGet({action:'clearCache'});
-  if(data&&!data.error){
-    state.banks=data.banks||state.banks;state.ccs=data.ccs||state.ccs;state.projects=data.projects||state.projects;
-    state.kategori=data.kategori||state.kategori;state.txns=data.txns||state.txns;state.transfers=data.transfers||state.transfers;
-    state.reserves=data.reserves||state.reserves;state.kasbon=data.kasbon||state.kasbon;state.jadwal=data.jadwal||state.jadwal;state.piutang=data.piutang||state.piutang||[];state.summary=data.summary||null;state.txnsSince=data.since||state.txnsSince;
-    computeReserve();saveLocal();renderAll();closeDrawer();showToast('Total dihitung ulang ✓','success');
-  } else { showToast('Gagal refresh','error'); }
-}
-// ── IMPORT EXCEL ──────────────────────────────────────
-let importPayload=null;
-function impDateISO(v){
-  if(v instanceof Date && !isNaN(v)){const y=v.getFullYear(),m=String(v.getMonth()+1).padStart(2,'0'),d=String(v.getDate()).padStart(2,'0');return y+'-'+m+'-'+d;}
-  if(typeof v==='number'){const dt=new Date(Math.round((v-25569)*86400*1000));if(!isNaN(dt)){return dt.toISOString().slice(0,10);}}
-  const s=String(v||'').trim();
-  let m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-  if(m)return m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0');
-  m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
-  if(m)return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
-  return null;
-}
-function handleImportFile(ev){
-  const file=ev.target.files[0]; ev.target.value=''; if(!file)return;
-  if(!API_URL){showToast('API URL belum diset','error');return;}
-  const rd=new FileReader();
-  rd.onload=e=>{
-    try{
-      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true});
-      const shName=wb.SheetNames.find(n=>/transaksi/i.test(n))||wb.SheetNames[0];
-      const rows=XLSX.utils.sheet_to_json(wb.Sheets[shName],{header:1,raw:true,defval:''});
-      parseImport(rows);
-    }catch(err){showToast('Gagal baca file: '+err.message,'error');}
-  };
-  rd.readAsArrayBuffer(file);
-}
-function parseImport(rows){
-  if(!rows||rows.length<2){showToast('File kosong / tidak ada data','error');return;}
-  const hdr=rows[0].map(h=>String(h||'').trim().toUpperCase());
-  const ix=name=>hdr.indexOf(name);
-  const iT=ix('TANGGAL'),iJ=ix('JENIS'),iP=ix('PROJECT'),iR=ix('REKENING'),iK=ix('KATEGORI'),iKel=ix('KELOMPOK'),iN=ix('NOMINAL'),iNo=ix('NOTES');
-  if(iT<0||iJ<0||iR<0||iK<0||iN<0){showToast('Header tidak lengkap. Pakai template (TANGGAL,JENIS,REKENING,KATEGORI,NOMINAL).','error');return;}
-  const acctNames=new Set([...state.banks.map(b=>b.NAMA),...state.ccs.map(c=>c.NAMA)]);
-  const projNames=new Set(state.projects.map(p=>p.NAMA));
-  const katNames=new Set(state.kategori.map(k=>k.NAMA));
-  const valid=[],errors=[],newProjMap={},newKatMap={};
-  for(let r=1;r<rows.length;r++){
-    const row=rows[r]; if(!row||row.every(c=>String(c||'').trim()===''))continue;
-    const excelRow=r+1;
-    const tgl=impDateISO(row[iT]);
-    const jenis=String(row[iJ]||'').trim();
-    const proj=String(iP>=0?row[iP]:'').trim();
-    const rek=String(row[iR]||'').trim();
-    const kat=String(row[iK]||'').trim();
-    const kel=String(iKel>=0?row[iKel]:'').trim().toUpperCase();
-    const nominal=unfmtNum(row[iN]);
-    const notes=String(iNo>=0?row[iNo]:'').trim();
-    const errs=[];
-    if(!tgl)errs.push('tanggal tidak valid');
-    if(jenis!=='Pemasukan'&&jenis!=='Pengeluaran')errs.push('JENIS harus Pemasukan/Pengeluaran');
-    if(!rek)errs.push('rekening kosong'); else if(!acctNames.has(rek))errs.push('rekening "'+rek+'" tidak ada di master');
-    if(!kat)errs.push('kategori kosong');
-    if(!nominal||nominal<=0)errs.push('nominal kosong/0');
-    if(errs.length){errors.push({row:excelRow,msg:errs.join(', ')});continue;}
-    if(proj&&!projNames.has(proj)&&!newProjMap[proj])newProjMap[proj]={NAMA:proj,KLIEN:'',STATUS:'Jalan'};
-    if(!katNames.has(kat)&&!newKatMap[kat])newKatMap[kat]={NAMA:kat,KELOMPOK:(kel||(jenis==='Pemasukan'?'PEMASUKAN':'OPERASIONAL')),TIPE:jenis};
-    valid.push({TANGGAL:tgl,JENIS:jenis,PROJECT:proj,REKENING:rek,KATEGORI:kat,NOMINAL:nominal,NOTES:notes});
-  }
-  const newProjs=Object.values(newProjMap),newKats=Object.values(newKatMap);
-  importPayload={txns:valid,newProjs,newKats};
-  showImportPreview(valid,errors,newProjs,newKats);
-}
-function showImportPreview(valid,errors,newProjs,newKats){
-  const totMasuk=valid.filter(t=>t.JENIS==='Pemasukan').reduce((s,t)=>s+t.NOMINAL,0);
-  const totKeluar=valid.filter(t=>t.JENIS==='Pengeluaran').reduce((s,t)=>s+t.NOMINAL,0);
-  document.getElementById('drawerTitle').textContent='Preview Import';
-  let html=`
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
-      <div class="metric"><div class="metric-label">Baris valid</div><div class="metric-value" style="color:var(--green)">${valid.length}</div></div>
-      <div class="metric"><div class="metric-label">Baris error</div><div class="metric-value" style="color:${errors.length?'var(--red)':'inherit'}">${errors.length}</div></div>
-    </div>
-    <div class="settings-row"><div class="settings-label">Total Pemasukan</div><div style="color:var(--green);font-weight:600">${fmt(totMasuk)}</div></div>
-    <div class="settings-row"><div class="settings-label">Total Pengeluaran</div><div style="color:var(--red);font-weight:600">${fmt(totKeluar)}</div></div>`;
-  if(newProjs.length)html+=`<div style="margin-top:10px"><b>Project baru (${newProjs.length}) akan dibuat:</b><div class="settings-sub">${newProjs.map(p=>esc(p.NAMA)).join(', ')}</div></div>`;
-  if(newKats.length)html+=`<div style="margin-top:10px"><b>Kategori baru (${newKats.length}) akan dibuat:</b><div class="settings-sub">${newKats.map(k=>esc(k.NAMA)+' ['+k.KELOMPOK+']').join(', ')}</div></div>`;
-  if(errors.length){
-    html+=`<div style="margin-top:12px;color:var(--red)"><b>Baris ditolak — perbaiki di Excel lalu import ulang:</b></div>
-      <div style="max-height:180px;overflow:auto;font-size:13px;margin-top:6px">${errors.map(e=>`<div style="padding:4px 0;border-bottom:1px solid #2a2a2a">Baris ${e.row}: ${esc(e.msg)}</div>`).join('')}</div>`;
-  }
-  html+=`<div style="margin-top:16px;display:flex;gap:8px">
-      <button class="btn-primary" style="flex:1" onclick="confirmImport()" ${valid.length?'':'disabled'}><i class="ti ti-database-import"></i> Konfirmasi Import (${valid.length})</button>
-      <button class="btn-secondary" onclick="closeDrawer()">Batal</button></div>`;
-  if(!valid.length)html+=`<div class="settings-sub" style="margin-top:8px;color:var(--red)">Tidak ada baris valid untuk diimport.</div>`;
-  document.getElementById('drawerBody').innerHTML=html;
-  drawerMode='import';
-  document.getElementById('drawerBg').classList.add('open');
-}
-async function confirmImport(){
-  if(!importPayload||!importPayload.txns.length){showToast('Tidak ada data','error');return;}
-  const n=importPayload.txns.length;
-  document.getElementById('drawerBody').innerHTML='<div style="text-align:center;padding:30px"><div class="spin" style="margin:0 auto 12px"></div>Mengimport '+n+' transaksi...</div>';
-  const res=await apiPost({action:'addTxnBatch',data:{...importPayload,USER:state.user}});
-  if(res&&!res.error){
-    importPayload=null;closeDrawer();
-    showToast('Import berhasil: '+(res.txn||n)+' transaksi ✓','success');
-    await syncAll();
-  }else{
-    showToast('Gagal import: '+((res&&res.error)||'koneksi'),'error');
-    closeDrawer();
-  }
-}
-function showToast(msg,type){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(type||'success');setTimeout(()=>t.classList.add('show'),10);setTimeout(()=>t.classList.remove('show'),2800);}
-function goPage(page){state.currentPage=page;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+page).classList.add('active');document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));const idx=['dashboard','transaksi','transfer','project','kasbon','forecast','piutang','master'].indexOf(page);if(idx>=0)document.querySelectorAll('.nav-item')[idx].classList.add('active');document.getElementById('content').scrollTop=0;if(page==='master')renderMaster();if(page==='transfer')renderTransferPage();if(page==='kasbon')renderKasbon();if(page==='forecast')renderForecast();if(page==='piutang')renderPiutang();}
-function renderAll(){renderDashboard();renderTxnMonthTabs();filterTxn();renderProject();renderPiutangReminder();updatePiutangBadge();if(state.currentPage==='master')renderMaster();if(state.currentPage==='transfer')renderTransferPage();if(state.currentPage==='kasbon')renderKasbon();if(state.currentPage==='forecast')renderForecast();if(state.currentPage==='piutang')renderPiutang();}
-if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{});}
-let logoTimer;
-document.querySelector('.topbar-title').addEventListener('touchstart',()=>{logoTimer=setTimeout(()=>openDrawer('settings'),800);});
-document.querySelector('.topbar-title').addEventListener('touchend',()=>clearTimeout(logoTimer));
-document.querySelector('.topbar-title').addEventListener('click',()=>openDrawer('settings'));
-</script>
-</body>
+    if(API_URL)await apiPost({a
