@@ -1,4 +1,4 @@
-# FCC Arthabumi — Context & Status (v14)
+# FCC Arthabumi — Context & Status (v15)
 
 ## Apa itu FCC?
 Financial Control Center — web app pribadi Eddy untuk tracking keuangan bisnis Arthabumi (kontraktor/interior). Single-user, dihosting di GitHub Pages.
@@ -149,6 +149,9 @@ Tab baru **Forecast** (nav idx 5, Master geser ke idx 6). Proyeksi saldo kas 90 
 - UI `renderForecast()`: kartu Saldo Sekarang + proyeksi 30/60/90 (warna ikut ambang aman), banner peringatan/aman (titik kas terendah), grafik garis Chart.js (`fcChart`, ambil tiap 3 hr + garis ambang aman merah putus2), daftar kejadian 90 hr (jadwal bisa di-tap edit / hapus, tagihan CC otomatis), catatan asumsi.
 - Drawer `jadwal` (`openJadwal`/`saveJadwal`/`delJadwal`/`onJadwalFrek`) — input form jadwal. Settings: row **Ambang Aman Kas** (`setSafeThreshold`, prompt).
 - `goPage`/`renderAll` include 'forecast'. sw.js cache **fcc-arthabumi-v5**.
+
+## ⭐ Perubahan v15 (Filter rekening di Transaksi) — Juni 2026
+Client-only (index.html), tanpa redeploy. Tab Transaksi: tambah dropdown ketiga **"Semua rekening"** (`#txnRekFilter`) berisi semua bank + CC. Helper `fillRekFilter()` (isi opsi dari `state.banks`+`state.ccs`, pertahankan pilihan) dipanggil di `renderTxnMonthTabs`. `filterTxn` tambah `if(rek) data=data.filter(t=>t.REKENING===rek)`. Bisa dikombinasi dgn filter tipe + search + tab bulan. Bekerja pada txn termuat (±120 hari); riwayat penuh tetap via drawer Detail Akun. Header label diperjelas: "Semua tipe" / "Semua rekening". Container filter diberi `flex-wrap`.
 
 ## Boleh edit manual di Google Sheets? BOLEH, dengan aturan:
 1. Jangan ubah baris HEADER / nama kolom / nama tab.
