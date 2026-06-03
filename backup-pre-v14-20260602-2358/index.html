@@ -293,12 +293,6 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
       <button class="btn-primary" style="margin-bottom:12px" onclick="openKasbon()"><i class="ti ti-plus"></i> Catat Kasbon</button>
       <div id="kasbonList"></div>
     </div>
-
-    <!-- FORECAST -->
-    <div class="page" id="page-forecast">
-      <button class="btn-primary" style="margin-bottom:12px" onclick="openJadwal()"><i class="ti ti-plus"></i> Tambah Jadwal (termin / rutin)</button>
-      <div id="forecastContent"></div>
-    </div>
   </div>
 
   <!-- BOTTOM NAV -->
@@ -308,7 +302,6 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
     <button class="nav-item" onclick="goPage('transfer')"><i class="ti ti-transfer"></i><span>Transfer</span></button>
     <button class="nav-item" onclick="goPage('project')"><i class="ti ti-hammer"></i><span>Project</span></button>
     <button class="nav-item" onclick="goPage('kasbon')"><i class="ti ti-wallet"></i><span>Kasbon</span></button>
-    <button class="nav-item" onclick="goPage('forecast')"><i class="ti ti-chart-line"></i><span>Forecast</span></button>
     <button class="nav-item" onclick="goPage('master')"><i class="ti ti-settings"></i><span>Master</span></button>
   </nav>
 
@@ -340,9 +333,8 @@ let state = {
   pin: '',
   user: 'Eddy',
   banks: [], ccs: [], projects: [], kategori: [],
-  txns: [], transfers: [], reserves: [], kasbon: [], jadwal: [],
+  txns: [], transfers: [], reserves: [], kasbon: [],
   reserveFunds: {}, // computed: cc_name -> total
-  safeThreshold: Number(localStorage.getItem('fcc_safe_threshold')) || 0, // ambang aman kas (forecast)
   summary: null,    // agregat penuh dari server (saldo/proj/bulan/kategori)
   txnsSince: null,  // batas tanggal txn terlama yg sudah dimuat ke client
   online: false,
@@ -389,7 +381,7 @@ function saveLocal() {
   localStorage.setItem('fcc_data', JSON.stringify({
     banks: state.banks, ccs: state.ccs, projects: state.projects,
     kategori: state.kategori, txns: state.txns, transfers: state.transfers,
-    reserves: state.reserves, kasbon: state.kasbon, jadwal: state.jadwal, summary: state.summary, txnsSince: state.txnsSince
+    reserves: state.reserves, kasbon: state.kasbon, summary: state.summary, txnsSince: state.txnsSince
   }));
 }
 
@@ -612,7 +604,6 @@ async function syncAll() {
     state.transfers = data.transfers || state.transfers;
     state.reserves = data.reserves || state.reserves;
     state.kasbon = data.kasbon || state.kasbon;
-    state.jadwal = data.jadwal || state.jadwal;
     state.summary = data.summary || null; // null bila pakai getAll lama → accessor fallback ke txns
     state.txnsSince = data.since || state.txnsSince;
     computeReserve();
@@ -871,200 +862,6 @@ function renderCharts() {
       }
     });
   }
-}
-
-// ── CASHFLOW FORECAST ─────────────────────────────────
-// Proyeksi saldo kas 90 hari. Murni client-side dari data yg sudah ada +
-// jadwal termin manual (sheet JADWAL). Sengaja konservatif: pemasukan HANYA
-// dari jadwal yg diinput user; tidak menebak pemasukan otomatis.
-function _addDaysISO(iso, n){ const d=new Date(String(iso).slice(0,10)+'T00:00:00'); d.setDate(d.getDate()+n); return _ymd(d.getFullYear(), d.getMonth()+1, d.getDate()); }
-function _ymd(y,m,d){ return y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0'); }
-function _daysBetween(a,b){ return Math.round((new Date(String(b).slice(0,10)+'T00:00:00')-new Date(String(a).slice(0,10)+'T00:00:00'))/86400000); }
-const fmtSigned = n => (n<0?'−':'') + fmt(n);
-
-// Rata-rata pengeluaran operasional harian dari txn termuat (≤120 hari).
-// HANYA TIPE_LOG 'Pengeluaran' → exclude Transfer/Reserve/Kasbon. Termasuk gaji mingguan.
-function dailyBurn(){
-  const span=90, since=_addDaysISO(today(),-span), now=today();
-  const exp=state.txns.filter(t=>t.JENIS==='Pengeluaran' && t.TIPE_LOG==='Pengeluaran'
-    && String(t.TANGGAL).slice(0,10)>=since && String(t.TANGGAL).slice(0,10)<=now);
-  const tot=exp.reduce((s,t)=>s+Number(t.NOMINAL||0),0);
-  let cover=since;
-  if(state.txnsSince && String(state.txnsSince).slice(0,10)>since) cover=String(state.txnsSince).slice(0,10);
-  const days=Math.max(1,_daysBetween(cover,now));
-  return tot/days;
-}
-
-// Tanggal kemunculan (day 1..31) tiap bulan dalam window ke depan.
-function _monthlyDates(day, horizon){
-  day=Math.min(31,Math.max(1,Number(day)||1));
-  const t0=new Date(today()+'T00:00:00'); const y=t0.getFullYear(), m=t0.getMonth(); // m 0-based
-  const out=[];
-  for(let k=0;k<5;k++){
-    let mm=m+k, yy=y+Math.floor(mm/12); mm=((mm%12)+12)%12;
-    const dim=new Date(yy,mm+1,0).getDate();
-    const iso=_ymd(yy,mm+1,Math.min(day,dim));
-    const diff=_daysBetween(today(),iso);
-    if(diff>=0 && diff<=horizon) out.push(iso);
-  }
-  return out;
-}
-
-function buildForecast(horizon){
-  horizon=horizon||90;
-  const start=state.banks.reduce((s,b)=>s+getSaldo(b.NAMA).saldo,0);
-  const events=[];
-  // Tagihan CC saat ini → bayar pada jatuh tempo terdekat; porsi dari bank = tagihan − reserve.
-  state.ccs.forEach(c=>{
-    const out=getCCOut(c.NAMA); if(out<=0) return;
-    const resv=state.reserveFunds[c.NAMA]||0;
-    const fromBank=Math.max(0,out-resv); if(fromBank<=0) return;
-    const ds=_monthlyDates(c.JATUH_TEMPO,horizon);
-    if(ds.length) events.push({date:ds[0],amount:-fromBank,label:'Tagihan '+c.NAMA,type:'cc'});
-  });
-  // Jadwal manual (termin masuk / pengeluaran terjadwal)
-  (state.jadwal||[]).forEach(j=>{
-    const aktif=!(String(j.AKTIF)==='0'||j.AKTIF===0||j.AKTIF===false);
-    if(!aktif) return;
-    const amt=(j.JENIS==='Pemasukan'?1:-1)*Math.abs(Number(j.NOMINAL)||0); if(!amt) return;
-    if(j.FREKUENSI==='bulanan'){
-      _monthlyDates(j.TGL,horizon).forEach(d=>events.push({date:d,amount:amt,label:j.NAMA,type:'jadwal',jenis:j.JENIS,id:j.ID}));
-    } else {
-      const d=String(j.TGL).slice(0,10), diff=_daysBetween(today(),d);
-      if(diff>=0 && diff<=horizon) events.push({date:d,amount:amt,label:j.NAMA,type:'jadwal',jenis:j.JENIS,id:j.ID});
-    }
-  });
-  const burn=dailyBurn();
-  const series=[]; let bal=start;
-  for(let i=0;i<=horizon;i++){
-    const d=_addDaysISO(today(),i);
-    if(i>0) bal-=burn;
-    events.filter(e=>e.date===d).forEach(e=>bal+=e.amount);
-    series.push({date:d,balance:bal});
-  }
-  const at=k=>series[Math.min(k,series.length-1)].balance;
-  let min={balance:series[0].balance,date:series[0].date};
-  series.forEach(p=>{ if(p.balance<min.balance) min={balance:p.balance,date:p.date}; });
-  events.sort((a,b)=>a.date.localeCompare(b.date));
-  return {start,burn,events,series,d30:at(30),d60:at(60),d90:at(90),min};
-}
-
-function renderForecast(){
-  const f=buildForecast(90);
-  const th=state.safeThreshold||0;
-  const col=v=> v>=th?'var(--green)':'var(--red)';
-  const breach=f.min.balance<th;
-  let html=`<div class="metric-grid" style="margin-bottom:12px">
-    <div class="metric wide" style="background:linear-gradient(135deg,#0a2233,#0d1f2d);border:1px solid #5b9cf630">
-      <div class="metric-label">Saldo Kas Sekarang</div>
-      <div class="metric-value" style="font-size:24px">${fmt(f.start)}</div>
-      <div class="metric-sub">Estimasi keluar rutin ${fmt(f.burn)}/hari (rata-rata 90 hari)</div>
-    </div>
-    <div class="metric"><div class="metric-label">Proyeksi 30 hari</div><div class="metric-value" style="color:${col(f.d30)}">${fmtSigned(f.d30)}</div><div class="metric-sub">${_addDaysISO(today(),30)}</div></div>
-    <div class="metric"><div class="metric-label">Proyeksi 60 hari</div><div class="metric-value" style="color:${col(f.d60)}">${fmtSigned(f.d60)}</div><div class="metric-sub">${_addDaysISO(today(),60)}</div></div>
-    <div class="metric"><div class="metric-label">Proyeksi 90 hari</div><div class="metric-value" style="color:${col(f.d90)}">${fmtSigned(f.d90)}</div><div class="metric-sub">${_addDaysISO(today(),90)}</div></div>
-  </div>`;
-  if(breach){
-    html+=`<div class="card" style="margin-bottom:12px;background:#2a0d0d;border:1px solid var(--red)">
-      <div style="font-weight:700;color:var(--red)"><i class="ti ti-alert-triangle"></i> Peringatan kas</div>
-      <div style="font-size:12px;color:var(--text2);margin-top:4px">Kas diproyeksi turun ke ${fmtSigned(f.min.balance)} pada ${f.min.date}${th>0?' (di bawah ambang aman '+fmt(th)+')':''}. Pertimbangkan percepat termin masuk atau tunda pengeluaran besar.</div></div>`;
-  } else {
-    html+=`<div class="card" style="margin-bottom:12px;background:#0a2a1e;border:1px solid var(--green)">
-      <div style="font-weight:700;color:var(--green)"><i class="ti ti-circle-check"></i> Kas aman</div>
-      <div style="font-size:12px;color:var(--text2);margin-top:4px">Titik kas terendah ${fmtSigned(f.min.balance)} pada ${f.min.date}.</div></div>`;
-  }
-  html+=`<div class="card" style="margin-bottom:12px"><div style="font-size:12px;font-weight:700;margin-bottom:8px">Proyeksi Saldo Kas 90 Hari</div><div style="height:200px"><canvas id="fcChart"></canvas></div></div>`;
-  html+=`<div style="font-size:12px;font-weight:700;margin:14px 0 8px">Kejadian terjadwal (90 hari)</div>`;
-  if(!f.events.length) html+=`<div class="empty">Belum ada kejadian. Tambah jadwal termin / pengeluaran rutin — tagihan CC muncul otomatis.</div>`;
-  else html+=f.events.map(e=>{
-    const inc=e.amount>=0;
-    const del=(e.type==='jadwal'&&e.id)?`<button class="btn-secondary" style="padding:5px 9px;font-size:11px;color:var(--red);margin:0" onclick="delJadwal('${e.id}')">Hapus</button>`:'';
-    const tap=(e.type==='jadwal'&&e.id)?`onclick="openJadwal('${e.id}')" style="cursor:pointer;`:`style="`;
-    return `<div class="card" ${tap}padding:10px 12px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:10px">
-      <div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.label)}</div><div style="font-size:10px;color:var(--text3)">${e.date} · ${e.type==='cc'?'Tagihan CC':(e.jenis||'')}</div></div>
-      <div style="font-weight:700;color:${inc?'var(--green)':'var(--red)'};white-space:nowrap">${inc?'+':'−'}${fmt(e.amount)}</div>
-      ${del}
-    </div>`;
-  }).join('');
-  html+=`<div class="settings-sub" style="margin-top:12px;line-height:1.6">Asumsi: titik awal = total saldo bank. Keluar rutin = rata-rata pengeluaran operasional 90 hari terakhir (termasuk gaji mingguan; tidak termasuk transfer/reserve/kasbon). Tagihan CC saat ini dibayar pada jatuh tempo terdekat (reserve dipakai dulu). Pemasukan HANYA dari jadwal termin yang kamu input — proyeksi sengaja konservatif. Ambang aman bisa diatur di Settings.</div>`;
-  document.getElementById('forecastContent').innerHTML=html;
-  // grafik (ambil tiap 3 hari supaya label tidak padat)
-  const pts=f.series.filter((_,i)=>i%3===0);
-  const labels=pts.map(p=>p.date.slice(5)), data=pts.map(p=>p.balance/1e6);
-  destroyChart('fcChart');
-  const el=document.getElementById('fcChart'); if(!el) return;
-  Chart.defaults.color='#9090a8';
-  _chartInstances['fcChart']=new Chart(el,{
-    type:'line',
-    data:{labels,datasets:[
-      {label:'Saldo proyeksi',data,borderColor:'#5b9cf6',backgroundColor:'rgba(91,156,246,0.12)',fill:true,tension:0.25,pointRadius:0,borderWidth:2},
-      {label:'Ambang aman',data:labels.map(()=>th/1e6),borderColor:'#f06a6a',borderDash:[5,4],pointRadius:0,borderWidth:1,fill:false}
-    ]},
-    options:{responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>' '+ctx.raw.toFixed(1)+'jt'}}},
-      scales:{x:{grid:{color:'#2e2e3e'},ticks:{maxTicksLimit:8,font:{size:9}}},y:{grid:{color:'#2e2e3e'},ticks:{callback:v=>v+'jt'}}}}
-  });
-}
-
-// Drawer input jadwal
-function openJadwal(editId){
-  const j=editId?(state.jadwal||[]).find(x=>x.ID===editId):null;
-  document.getElementById('drawerTitle').textContent=editId?'Edit Jadwal':'Tambah Jadwal';
-  document.getElementById('drawerBody').innerHTML=`
-    <div class="form-row">
-      <div class="form-group"><label class="form-label">Jenis</label><select class="form-input" id="jd_jenis"><option value="Pemasukan" ${!j||j.JENIS==='Pemasukan'?'selected':''}>Pemasukan (termin masuk)</option><option value="Pengeluaran" ${j&&j.JENIS==='Pengeluaran'?'selected':''}>Pengeluaran</option></select></div>
-      <div class="form-group"><label class="form-label">Frekuensi</label><select class="form-input" id="jd_frek" onchange="onJadwalFrek()"><option value="sekali" ${!j||j.FREKUENSI==='sekali'?'selected':''}>Sekali</option><option value="bulanan" ${j&&j.FREKUENSI==='bulanan'?'selected':''}>Tiap bulan</option></select></div>
-    </div>
-    <div class="form-group"><label class="form-label">Nama / Keterangan</label><input class="form-input" id="jd_nama" value="${j?esc(j.NAMA):''}" placeholder="mis. Termin 2 Proj Wishnu"></div>
-    <div class="form-group"><label class="form-label">Project (opsional)</label><select class="form-input" id="jd_proj"><option value="">— Tidak ada —</option>${state.projects.map(p=>`<option ${j&&j.PROJECT===p.NAMA?'selected':''}>${esc(p.NAMA)}</option>`).join('')}</select></div>
-    <div class="form-row">
-      <div class="form-group"><label class="form-label">Nominal</label><input class="form-input" id="jd_nominal" type="text" inputmode="numeric" value="${j?fmtInput(j.NOMINAL):''}" oninput="fmtMoneyInput(this)" placeholder="0"></div>
-      <div class="form-group" id="jd_tglWrap"><label class="form-label">Tanggal</label><input class="form-input" id="jd_tgl" type="date" value="${j&&j.FREKUENSI!=='bulanan'?String(j.TGL).slice(0,10):today()}"></div>
-      <div class="form-group" id="jd_domWrap" style="display:none"><label class="form-label">Tgl (1-31)</label><input class="form-input" id="jd_dom" type="number" min="1" max="31" value="${j&&j.FREKUENSI==='bulanan'?j.TGL:1}"></div>
-    </div>
-    <div class="form-group"><label class="form-label">Catatan</label><input class="form-input" id="jd_notes" value="${j?esc(j.NOTES||''):''}" placeholder="opsional"></div>
-    <button class="btn-primary" onclick="saveJadwal('${editId||''}')"><i class="ti ti-device-floppy"></i> Simpan</button>
-    ${editId?`<button class="btn-secondary" style="color:var(--red)" onclick="delJadwal('${editId}')">Hapus Jadwal</button>`:''}
-    <div class="settings-sub" style="margin-top:8px">Jadwal hanya untuk proyeksi cashflow — tidak menambah saldo/transaksi. Saat termin benar-benar masuk, catat seperti biasa di Transaksi.</div>`;
-  drawerMode='jadwal'; drawerEditId=editId||null;
-  document.getElementById('drawerBg').classList.add('open');
-  onJadwalFrek();
-}
-function onJadwalFrek(){
-  const f=document.getElementById('jd_frek').value;
-  document.getElementById('jd_tglWrap').style.display=f==='bulanan'?'none':'block';
-  document.getElementById('jd_domWrap').style.display=f==='bulanan'?'block':'none';
-}
-async function saveJadwal(editId){
-  editId=editId||null;
-  const jenis=document.getElementById('jd_jenis').value;
-  const frek=document.getElementById('jd_frek').value;
-  const nama=(document.getElementById('jd_nama').value||'').trim();
-  const proj=document.getElementById('jd_proj').value;
-  const nominal=unfmtNum(document.getElementById('jd_nominal').value);
-  const notes=document.getElementById('jd_notes').value;
-  const tgl=frek==='bulanan'?String(parseInt(document.getElementById('jd_dom').value)||1):document.getElementById('jd_tgl').value;
-  if(!nama||!nominal||!tgl){showToast('Nama, nominal, tanggal wajib diisi','error');return;}
-  const now=new Date().toISOString();
-  const obj={ID:editId||uid(),JENIS:jenis,NAMA:nama,NOMINAL:nominal,FREKUENSI:frek,TGL:tgl,AKTIF:1,PROJECT:proj,NOTES:notes,CREATED_BY:state.user,CREATED_AT:now};
-  if(editId){const i=state.jadwal.findIndex(x=>x.ID===editId);if(i>=0)state.jadwal[i]=obj;else state.jadwal.push(obj);}
-  else state.jadwal.push(obj);
-  if(API_URL){ if(editId) await apiPost({action:'updateRow',data:{sheet:'JADWAL',id:editId,updates:obj}}); else await apiPost({action:'addJadwal',data:obj}); }
-  saveLocal(); closeDrawer(); renderForecast(); showToast(editId?'Jadwal diperbarui':'Jadwal ditambahkan','success');
-}
-async function delJadwal(id){
-  if(!confirm('Hapus jadwal ini?'))return;
-  state.jadwal=(state.jadwal||[]).filter(x=>x.ID!==id);
-  if(API_URL)await apiPost({action:'deleteRow',data:{sheet:'JADWAL',id}});
-  saveLocal(); closeDrawer(); renderForecast(); showToast('Jadwal dihapus','success');
-}
-function setSafeThreshold(){
-  const v=prompt('Ambang aman kas (Rp). Forecast beri peringatan bila proyeksi kas turun di bawah angka ini. Isi 0 untuk nonaktif.', state.safeThreshold||0);
-  if(v===null)return;
-  const n=unfmtNum(v);
-  state.safeThreshold=n; localStorage.setItem('fcc_safe_threshold',String(n));
-  showToast('Ambang aman = '+fmt(n),'success');
-  if(state.currentPage==='forecast')renderForecast();
 }
 
 // ── RENDER TRANSAKSI ──────────────────────────────────
@@ -2115,7 +1912,6 @@ function openDrawer(mode, editId = null) {
     document.getElementById('drawerBody').innerHTML = `
       <div class="settings-row"><div><div class="settings-label">API URL</div><div class="settings-sub">${API_URL?'Tersimpan':'Belum diset'}</div></div><button class="btn-danger" onclick="setApiUrl()">Ubah</button></div>
       <div class="settings-row"><div><div class="settings-label">Sheet ID</div><div class="settings-sub">${SHEET_ID.slice(0,16)}...</div></div></div>
-      <div class="settings-row"><div><div class="settings-label">Ambang Aman Kas (Forecast)</div><div class="settings-sub">${state.safeThreshold?fmt(state.safeThreshold):'Rp 0 — peringatan saat kas ≤ 0'}</div></div><button class="btn-danger" onclick="setSafeThreshold()">Ubah</button></div>
       <div class="settings-row"><div><div class="settings-label">Hitung Ulang Total</div><div class="settings-sub">Pakai setelah edit manual di Google Sheets</div></div><button class="btn-danger" onclick="forceRefresh()">Refresh</button></div>
       <div class="settings-row"><div><div class="settings-label">Import Excel</div><div class="settings-sub">Tambah banyak transaksi dari file .xlsx (template)</div></div><button class="btn-danger" onclick="document.getElementById('importFile').click()">Import</button></div>
       <input type="file" id="importFile" accept=".xlsx,.xls" style="display:none" onchange="handleImportFile(event)">
@@ -2245,7 +2041,7 @@ async function forceRefresh(){
   if(data&&!data.error){
     state.banks=data.banks||state.banks;state.ccs=data.ccs||state.ccs;state.projects=data.projects||state.projects;
     state.kategori=data.kategori||state.kategori;state.txns=data.txns||state.txns;state.transfers=data.transfers||state.transfers;
-    state.reserves=data.reserves||state.reserves;state.kasbon=data.kasbon||state.kasbon;state.jadwal=data.jadwal||state.jadwal;state.summary=data.summary||null;state.txnsSince=data.since||state.txnsSince;
+    state.reserves=data.reserves||state.reserves;state.kasbon=data.kasbon||state.kasbon;state.summary=data.summary||null;state.txnsSince=data.since||state.txnsSince;
     computeReserve();saveLocal();renderAll();closeDrawer();showToast('Total dihitung ulang ✓','success');
   } else { showToast('Gagal refresh','error'); }
 }
@@ -2351,8 +2147,8 @@ async function confirmImport(){
   }
 }
 function showToast(msg,type){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(type||'success');setTimeout(()=>t.classList.add('show'),10);setTimeout(()=>t.classList.remove('show'),2800);}
-function goPage(page){state.currentPage=page;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+page).classList.add('active');document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));const idx=['dashboard','transaksi','transfer','project','kasbon','forecast','master'].indexOf(page);if(idx>=0)document.querySelectorAll('.nav-item')[idx].classList.add('active');document.getElementById('content').scrollTop=0;if(page==='master')renderMaster();if(page==='transfer')renderTransferPage();if(page==='kasbon')renderKasbon();if(page==='forecast')renderForecast();}
-function renderAll(){renderDashboard();renderTxnMonthTabs();filterTxn();renderProject();if(state.currentPage==='master')renderMaster();if(state.currentPage==='transfer')renderTransferPage();if(state.currentPage==='kasbon')renderKasbon();if(state.currentPage==='forecast')renderForecast();}
+function goPage(page){state.currentPage=page;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+page).classList.add('active');document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));const idx=['dashboard','transaksi','transfer','project','kasbon','master'].indexOf(page);if(idx>=0)document.querySelectorAll('.nav-item')[idx].classList.add('active');document.getElementById('content').scrollTop=0;if(page==='master')renderMaster();if(page==='transfer')renderTransferPage();if(page==='kasbon')renderKasbon();}
+function renderAll(){renderDashboard();renderTxnMonthTabs();filterTxn();renderProject();if(state.currentPage==='master')renderMaster();if(state.currentPage==='transfer')renderTransferPage();if(state.currentPage==='kasbon')renderKasbon();}
 if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{});}
 let logoTimer;
 document.querySelector('.topbar-title').addEventListener('touchstart',()=>{logoTimer=setTimeout(()=>openDrawer('settings'),800);});

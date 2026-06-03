@@ -15,7 +15,6 @@ const SUMMARY_KEY = 'fcc_summary_v3';
 const S = {
   TXN: 'TRANSAKSI', BANK: 'MASTER_BANK', CC: 'MASTER_CC', PROJ: 'MASTER_PROJECT',
   KAT: 'MASTER_KATEGORI', TRANSFER: 'TRANSFER_LOG', RESERVE: 'RESERVE_LOG', KASBON: 'KASBON',
-  JADWAL: 'JADWAL',
 };
 
 const HEADERS = {
@@ -27,10 +26,6 @@ const HEADERS = {
   [S.TRANSFER]: ['ID','TANGGAL','DARI','KE','NOMINAL','NOTES','REF_ID','CREATED_BY','CREATED_AT'],
   [S.RESERVE]:  ['ID','TANGGAL','DARI_REKENING','UNTUK_CC','NOMINAL','NOTES','CREATED_BY','CREATED_AT'],
   [S.KASBON]:   ['ID','TANGGAL','KARYAWAN','JENIS','NOMINAL','METODE','REKENING','NOTES','REF_ID','CREATED_BY','CREATED_AT'],
-  // JADWAL = pemasukan/pengeluaran terjadwal untuk Cashflow Forecast.
-  // JENIS: Pemasukan/Pengeluaran. FREKUENSI: 'sekali' (TGL=yyyy-MM-dd) | 'bulanan' (TGL=tanggal 1-31).
-  // AKTIF: 1/0. PROJECT opsional (label saja). Tidak masuk TRANSAKSI/summary — murni proyeksi.
-  [S.JADWAL]:   ['ID','JENIS','NAMA','NOMINAL','FREKUENSI','TGL','AKTIF','PROJECT','NOTES','CREATED_BY','CREATED_AT'],
 };
 
 // ── INIT ─────────────────────────────────────────────────────
@@ -125,7 +120,6 @@ function doGet(e) {
       case 'getTxns':      return json(getTxns(ss, e.parameter));
       case 'getTransfers': return json(getSheet(ss, S.TRANSFER));
       case 'getReserves':  return json(getSheet(ss, S.RESERVE));
-      case 'getJadwal':    return json(getSheet(ss, S.JADWAL));
       default:             return json({ error: 'Unknown action' });
     }
   } catch (err) { return json({ error: err.message }); }
@@ -151,7 +145,6 @@ function doPost(e) {
       case 'payCCReserve': res = payCCReserve(ss, data); break;
       case 'addKasbon':   res = addKasbon(ss, data); break;
       case 'deleteKasbon':res = deleteKasbon(ss, data); break;
-      case 'addJadwal':   res = addJadwal(ss, data); break;
       case 'updateRow':   res = updateRow(ss, data); break;
       case 'deleteRow':   res = deleteRow(ss, data); break;
       case 'init':        res = initSheets(); break;
@@ -173,7 +166,6 @@ function getBundle(ss, params) {
     transfers: getSheet(ss, S.TRANSFER),
     reserves:  getSheet(ss, S.RESERVE),
     kasbon:    getSheet(ss, S.KASBON),
-    jadwal:    getSheet(ss, S.JADWAL),
     summary:   getSummary(ss),
     txns:      getTxns(ss, { since: since }),
     since:     since,
@@ -241,7 +233,7 @@ function getAllData(ss) {
     banks: getSheet(ss, S.BANK), ccs: getSheet(ss, S.CC), projects: getSheet(ss, S.PROJ),
     kategori: getSheet(ss, S.KAT), txns: getSheet(ss, S.TXN),
     transfers: getSheet(ss, S.TRANSFER), reserves: getSheet(ss, S.RESERVE),
-    kasbon: getSheet(ss, S.KASBON), jadwal: getSheet(ss, S.JADWAL),
+    kasbon: getSheet(ss, S.KASBON),
   };
 }
 
@@ -388,29 +380,6 @@ function addKasbon(ss, data) {
   }
   return { ok: true, ref: ref };
 }
-// JADWAL: pemasukan/pengeluaran terjadwal untuk Cashflow Forecast.
-// Murni proyeksi — TIDAK menulis ke TRANSAKSI & tidak mempengaruhi saldo/laba.
-// Edit & hapus pakai action generik updateRow/deleteRow (sheet:'JADWAL').
-function addJadwal(ss, data) {
-  let sh = ss.getSheetByName(S.JADWAL);
-  if (!sh) {
-    sh = ss.insertSheet(S.JADWAL);
-    sh.appendRow(HEADERS[S.JADWAL]);
-    sh.getRange(1,1,1,HEADERS[S.JADWAL].length).setFontWeight('bold').setBackground('#1a1a2e').setFontColor('#ffffff');
-    sh.setFrozenRows(1);
-  }
-  const now = new Date().toISOString();
-  const id = data.ID || ('JDW' + Date.now());
-  const o = {
-    ID: id, JENIS: data.JENIS, NAMA: data.NAMA || '', NOMINAL: Math.abs(Number(data.NOMINAL)||0),
-    FREKUENSI: data.FREKUENSI || 'sekali', TGL: data.TGL || '',
-    AKTIF: (data.AKTIF === undefined ? 1 : data.AKTIF), PROJECT: data.PROJECT || '',
-    NOTES: data.NOTES || '', CREATED_BY: data.USER || data.CREATED_BY || '', CREATED_AT: now,
-  };
-  sh.appendRow(HEADERS[S.JADWAL].map(h => o[h] !== undefined ? o[h] : ''));
-  return { ok: true, id: id };
-}
-
 // Hapus 1 entri kasbon (by REF_ID) + baris TXN terkait (NOTES memuat refId).
 function deleteKasbon(ss, data) {
   const ref = String(data.refId || '');

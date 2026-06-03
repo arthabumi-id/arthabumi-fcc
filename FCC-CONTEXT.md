@@ -1,4 +1,4 @@
-# FCC Arthabumi — Context & Status (v13)
+# FCC Arthabumi — Context & Status (v14)
 
 ## Apa itu FCC?
 Financial Control Center — web app pribadi Eddy untuk tracking keuangan bisnis Arthabumi (kontraktor/interior). Single-user, dihosting di GitHub Pages.
@@ -134,6 +134,21 @@ Client-only (index.html), tanpa redeploy. Form Rekening (mode 'bank') kini punya
 
 ## ⭐ Perubahan v13 (Urut kategori alfabet) — Juni 2026
 Client-only. Di `renderMaster` tab 'kat': kelompok di-`sort(localeCompare)` & kategori dalam tiap kelompok di-`sort` by NAMA (localeCompare). Hanya tampilan, tidak mengubah data/urutan di Sheets.
+
+## ⭐ Perubahan v14 (Cashflow Forecast 30/60/90) — Juni 2026
+Tab baru **Forecast** (nav idx 5, Master geser ke idx 6). Proyeksi saldo kas 90 hari ke depan.
+
+### Sheet baru `JADWAL` (wajib redeploy Code.gs)
+- Kolom: `ID,JENIS,NAMA,NOMINAL,FREKUENSI,TGL,AKTIF,PROJECT,NOTES,CREATED_BY,CREATED_AT`. JENIS=Pemasukan/Pengeluaran. FREKUENSI=`sekali` (TGL=yyyy-MM-dd) | `bulanan` (TGL=tanggal 1-31). AKTIF=1/0. Murni proyeksi — TIDAK menulis ke TRANSAKSI, tidak mempengaruhi saldo/laba.
+- Code.gs: `S.JADWAL` + HEADERS + masuk `getBundle`/`getAllData`; action **`addJadwal`** (POST, auto-create sheet pola KASBON) + `getJadwal` (GET). Edit/hapus pakai action generik `updateRow`/`deleteRow` (sheet:'JADWAL').
+
+### Client (index.html) — murni client-side selain JADWAL di atas
+- `state.jadwal` (di syncAll/forceRefresh/saveLocal/loadOfflineData), `state.safeThreshold` (localStorage `fcc_safe_threshold`, default 0).
+- Helper: `buildForecast(days)` (gabung saldo bank awal − burn harian + jadwal + tagihan CC), `dailyBurn()` (rata-rata pengeluaran operasional 90 hr: HANYA TIPE_LOG 'Pengeluaran' → exclude transfer/reserve/kasbon; termasuk gaji mingguan), `_monthlyDates/_addDaysISO/_ymd/_daysBetween`, `fmtSigned`.
+- **Model proyeksi (keputusan v14):** titik awal = total saldo bank (BUKAN net cash; reserve sudah keluar dari bank saat dibuat). Tagihan CC saat ini dibayar pada jatuh tempo terdekat, porsi dari bank = `out − reserve` (reserve dipakai dulu). Pemasukan HANYA dari jadwal termin manual (konservatif, kontraktor lumpy). Verifikasi numerik: skenario uji cocok 100% dengan hitung manual.
+- UI `renderForecast()`: kartu Saldo Sekarang + proyeksi 30/60/90 (warna ikut ambang aman), banner peringatan/aman (titik kas terendah), grafik garis Chart.js (`fcChart`, ambil tiap 3 hr + garis ambang aman merah putus2), daftar kejadian 90 hr (jadwal bisa di-tap edit / hapus, tagihan CC otomatis), catatan asumsi.
+- Drawer `jadwal` (`openJadwal`/`saveJadwal`/`delJadwal`/`onJadwalFrek`) — input form jadwal. Settings: row **Ambang Aman Kas** (`setSafeThreshold`, prompt).
+- `goPage`/`renderAll` include 'forecast'. sw.js cache **fcc-arthabumi-v5**.
 
 ## Boleh edit manual di Google Sheets? BOLEH, dengan aturan:
 1. Jangan ubah baris HEADER / nama kolom / nama tab.
