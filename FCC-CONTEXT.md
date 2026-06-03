@@ -172,6 +172,9 @@ Dua fitur. **Wajib redeploy Code.gs** (ada sheet & action baru). sw.js cache **f
 ### ⚠️ Catatan verifikasi v16
 Saat dibuat, mount Linux (bash) freeze di ukuran file LAMA (index.html 140085 byte, Code.gs 23141 byte) → `node --check` tidak bisa jalan atas isi baru (truncated). Syntax diaudit MANUAL via Read tool (balance brace/template OK). **Saat buka di browser, kalau ada error JS, cek console.** File asli (Read/Edit tool) sudah lengkap & benar.
 
+## ⭐ Perubahan v16.1 (Kategori type-ahead) — Juni 2026
+Client-only (index.html), tanpa redeploy. Field Kategori di drawer Transaksi: dari `<select>` jadi `<input list=f_kat_list>` + `<datalist>` (autocomplete saat ketik). Opsi datalist diurut abjad (`localeCompare 'id'`). Ketik nama cocok master → dipakai (normalisasi casing); ketik nama baru → `f_kat_new_wrap` muncul minta KELOMPOK lalu auto-buat kategori (via bgPost addKat) saat simpan. Opsi `__NEW__` & input `f_kat_new` lama dihapus; `onKatChange` cek keberadaan di `state.kategori` (case-insensitive). saveDrawer txn disesuaikan (tidak lagi cek `__NEW__`).
+
 ## Boleh edit manual di Google Sheets? BOLEH, dengan aturan:
 1. Jangan ubah baris HEADER / nama kolom / nama tab.
 2. Tiap baris WAJIB punya `ID` unik (kalau nambah manual, isi sendiri mis. `MAN001`) — kalau kosong, edit/hapus dari app tak bisa nemu baris.

@@ -2284,12 +2284,10 @@ function openDrawer(mode, editId = null) {
       </div>
       <div class="form-group"><label class="form-label">Project</label><select class="form-input" id="f_proj"><option value="">— Tidak ada —</option>${state.projects.map(p=>`<option ${t&&t.PROJECT===p.NAMA?'selected':''}>${p.NAMA}</option>`).join('')}</select></div>
       <div class="form-group"><label class="form-label">Rekening</label><select class="form-input" id="f_rek">${allRek.map(n=>`<option ${t&&t.REKENING===n?'selected':''}>${n}</option>`).join('')}</select></div>
-      <div class="form-group"><label class="form-label">Kategori</label><select class="form-input" id="f_kat" onchange="onKatChange()">${state.kategori.map(k=>`<option ${t&&t.KATEGORI===k.NAMA?'selected':''}>${k.NAMA}</option>`).join('')}<option value="__NEW__">➕ Tambah kategori baru…</option></select></div>
+      <div class="form-group"><label class="form-label">Kategori</label><input class="form-input" id="f_kat" list="f_kat_list" autocomplete="off" placeholder="Ketik / pilih kategori…" value="${t?esc(t.KATEGORI):''}" oninput="onKatChange()"><datalist id="f_kat_list">${[...state.kategori].sort((a,b)=>String(a.NAMA).localeCompare(String(b.NAMA),'id')).map(k=>`<option value="${esc(k.NAMA)}">${esc(k.KELOMPOK)}</option>`).join('')}</datalist></div>
       <div class="form-group" id="f_kat_new_wrap" style="display:none">
-        <div class="form-row">
-          <div class="form-group"><label class="form-label">Nama Kategori Baru</label><input class="form-input" id="f_kat_new" placeholder="Nama kategori..."></div>
-          <div class="form-group"><label class="form-label">Kelompok</label><select class="form-input" id="f_kat_new_grp"><option>OPERASIONAL</option><option>PEMASUKAN</option><option>PROJECT</option><option>PRIBADI</option><option>FINANCIAL</option></select></div>
-        </div>
+        <div class="settings-sub" style="margin-bottom:6px;color:var(--amber)"><i class="ti ti-plus"></i> Kategori baru — pilih kelompoknya:</div>
+        <select class="form-input" id="f_kat_new_grp"><option>OPERASIONAL</option><option>PEMASUKAN</option><option>PROJECT</option><option>PRIBADI</option><option>FINANCIAL</option></select>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Nominal (Rp)</label><input class="form-input" type="text" inputmode="numeric" id="f_nominal" value="${t?fmtInput(t.NOMINAL):''}" placeholder="0" oninput="fmtMoneyInput(this)"></div>
@@ -2393,16 +2391,15 @@ async function saveDrawer() {
   if (mode === 'txn') {
     const tgl=document.getElementById('f_tgl').value,jenis=document.getElementById('f_jenis').value;
     const proj=document.getElementById('f_proj').value,rek=document.getElementById('f_rek').value;
-    let kat=document.getElementById('f_kat').value;const nominal=unfmtNum(document.getElementById('f_nominal').value);
+    let kat=(document.getElementById('f_kat').value||'').trim();const nominal=unfmtNum(document.getElementById('f_nominal').value);
     const notes=document.getElementById('f_notes').value;
-    // Kategori baru otomatis ditambahkan ke MASTER_KATEGORI bila belum ada
+    // Kategori: ketik bebas. Bila cocok master (case-insensitive) → pakai nama master.
+    // Bila belum ada → otomatis dibuat (kelompok dari dropdown yg muncul).
     let newKatObj=null;
-    if(kat==='__NEW__'){
-      const nm=(document.getElementById('f_kat_new').value||'').trim();
-      if(!nm){showToast('Nama kategori baru wajib diisi','error');return;}
-      const exist=state.kategori.find(k=>String(k.NAMA).toLowerCase()===nm.toLowerCase());
+    if(kat){
+      const exist=state.kategori.find(k=>String(k.NAMA).toLowerCase()===kat.toLowerCase());
       if(exist){kat=exist.NAMA;}
-      else{const grp=document.getElementById('f_kat_new_grp').value;newKatObj={ID:uid(),NAMA:nm,KELOMPOK:grp,TIPE:jenis,CREATED_AT:now};kat=nm;}
+      else{const grp=document.getElementById('f_kat_new_grp').value;newKatObj={ID:uid(),NAMA:kat,KELOMPOK:grp,TIPE:jenis,CREATED_AT:now};}
     }
     if(!tgl||!rek||!kat||!nominal){showToast('Tanggal, rekening, kategori, nominal wajib diisi','error');return;}
     // Peringatan: kategori kelompok PROJECT tapi project belum dipilih
@@ -2492,11 +2489,11 @@ function fmtMoneyInput(el){const raw=String(el.value).replace(/[^\d]/g,'');el.va
 function unfmtNum(v){return parseFloat(String(v).replace(/[^\d]/g,''))||0;}
 function fmtInput(n){const x=Number(String(n).replace(/[^\d]/g,''));return!x||isNaN(x)?'':x.toLocaleString('id-ID');}
 function onKatChange(){
-  const sel=document.getElementById('f_kat'),wrap=document.getElementById('f_kat_new_wrap');
-  if(!sel||!wrap)return;
-  const isNew=sel.value==='__NEW__';
-  wrap.style.display=isNew?'block':'none';
-  if(isNew)setTimeout(()=>{const i=document.getElementById('f_kat_new');if(i)i.focus();},50);
+  const inp=document.getElementById('f_kat'),wrap=document.getElementById('f_kat_new_wrap');
+  if(!inp||!wrap)return;
+  const v=(inp.value||'').trim();
+  const exist=v&&state.kategori.some(k=>String(k.NAMA).toLowerCase()===v.toLowerCase());
+  wrap.style.display=(v&&!exist)?'block':'none'; // kategori baru → minta kelompok
 }
 function setApiUrl(){const url=prompt('API URL:',API_URL);if(url!==null){API_URL=url.trim();localStorage.setItem('fcc_api_url',API_URL);showToast('API URL disimpan','success');closeDrawer();syncAll();}}
 // Buang cache summary di server lalu tarik data segar — dipakai setelah edit manual di Sheets
