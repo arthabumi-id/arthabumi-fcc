@@ -1749,7 +1749,7 @@ function ccbApply(){ renderCCBill(document.getElementById('ccb_from').value, doc
 function ccbTick(){
   let sum=0, cnt=0;
   document.querySelectorAll('.ccb-chk:checked').forEach(el=>{ sum+=Number(el.dataset.amt||0); cnt++; });
-  const cs=document.getElementById('ccb_checkedSum'); if(cs) cs.textContent=fmt(sum);
+  const cs=document.getElementById('ccb_checkedSum'); if(cs) cs.textContent=(sum<0?'−':'')+fmt(sum);
   const cc=document.getElementById('ccb_cnt'); if(cc) cc.textContent=cnt;
   const stmtEl=document.getElementById('ccb_stmt'), diffEl=document.getElementById('ccb_diff');
   if(stmtEl && diffEl){
@@ -1786,7 +1786,7 @@ function renderCCBill(from,to){
   const sumCharge=charges.reduce((s,t)=>s+Number(t.NOMINAL||0),0);
   const sumPay=pays.reduce((s,t)=>s+Number(t.NOMINAL||0),0);
   const sumCic=cics.reduce((s,c)=>s+c.amt,0);
-  const row=(tgl,label,amt,color)=>`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid #ffffff10"><input type="checkbox" class="ccb-chk" data-amt="${amt}" onchange="ccbTick(this)" style="width:18px;height:18px;flex-shrink:0;accent-color:#7c5cff"><div style="flex:1;min-width:0"><div style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(label)}</div><div style="font-size:10px;color:var(--text3)">${tgl}</div></div><div style="font-size:13px;font-weight:600;color:${color};flex-shrink:0">${fmt(amt)}</div></div>`;
+  const row=(tgl,label,amt,color,chkAmt)=>{const ca=(chkAmt===undefined?amt:chkAmt);return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid #ffffff10"><input type="checkbox" class="ccb-chk" data-amt="${ca}" onchange="ccbTick(this)" style="width:18px;height:18px;flex-shrink:0;accent-color:#7c5cff"><div style="flex:1;min-width:0"><div style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(label)}</div><div style="font-size:10px;color:var(--text3)">${tgl}</div></div><div style="font-size:13px;font-weight:600;color:${color};flex-shrink:0">${ca<0?'−':''}${fmt(amt)}</div></div>`;};
   document.getElementById('drawerBody').innerHTML=`
     <div style="display:flex;gap:8px;margin-bottom:10px">
       <div class="form-group" style="flex:1;margin:0"><label class="form-label">Dari</label><input type="date" class="form-input" id="ccb_from" value="${from}" onchange="ccbApply()"></div>
@@ -1797,7 +1797,7 @@ function renderCCBill(from,to){
     ${charges.length?charges.map(t=>row(String(t.TANGGAL).slice(0,10),(t.KATEGORI||'')+(t.NOTES?' · '+t.NOTES:''),Number(t.NOMINAL),'var(--red)')).join(''):'<div class="settings-sub" style="margin:4px 0">Tidak ada belanja di periode ini.</div>'}
     <div style="font-size:11px;color:#b9a3ff;text-transform:uppercase;letter-spacing:.5px;margin:12px 0 2px">Angsuran cicilan periode ini · <b style="color:#b9a3ff">${fmt(sumCic)}</b></div>
     ${cics.length?cics.map(c=>row(c.date,'Cicilan '+c.ke+'/'+c.tenor+' · '+c.desk+(c.paid?' (sdh dibayar)':''),c.amt,'#b9a3ff')).join(''):'<div class="settings-sub" style="margin:4px 0">Tidak ada angsuran jatuh tempo di periode ini.</div>'}
-    ${pays.length?`<div style="font-size:11px;color:var(--green);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 2px">Pembayaran/kredit periode ini · <b style="color:var(--green)">${fmt(sumPay)}</b></div>${pays.map(t=>row(String(t.TANGGAL).slice(0,10),(t.KATEGORI||'')+(t.NOTES?' · '+t.NOTES:''),Number(t.NOMINAL),'var(--green)')).join('')}`:''}
+    ${pays.length?`<div style="font-size:11px;color:var(--green);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 2px">Pembayaran/kredit periode ini · <b style="color:var(--green)">${fmt(sumPay)}</b></div>${pays.map(t=>row(String(t.TANGGAL).slice(0,10),(t.KATEGORI||'')+(t.NOTES?' · '+t.NOTES:''),Number(t.NOMINAL),'var(--green)',-Number(t.NOMINAL))).join('')}`:''}
     <div class="card" style="padding:8px 10px;margin:12px 0 0;background:#140d24;border:1px solid #7c5cff40">
       <div style="display:flex;justify-content:space-between"><span style="font-size:12px">Belanja + Cicilan periode</span><span style="font-weight:700;color:var(--red)">${fmt(sumCharge+sumCic)}</span></div>
       ${sumPay>0?`<div style="display:flex;justify-content:space-between;margin-top:3px"><span style="font-size:12px">− Pembayaran</span><span style="font-weight:700;color:var(--green)">${fmt(sumPay)}</span></div>`:''}
