@@ -847,8 +847,20 @@ function renderDashboard() {
       ${state.ccs.map(c => {
         const out = getCCOut(c.NAMA);
         const res = state.reserveFunds[c.NAMA] || 0;
+        const bill = ccBillFor(c.NAMA);
+        if(!(out > 0 || res > 0 || bill)) return '';
         const pct = out > 0 ? Math.min(100, Math.round(res/out*100)) : 100;
-        return out > 0 || res > 0 ? `<div class="list-item">
+        let billStrip = '';
+        if(bill){
+          const due = String(bill.JATUH_TEMPO||'').slice(0,10);
+          const dd = due ? _daysBetween(today(),due) : null;
+          const lbl = dd===null?'':(dd<0?`<span style="color:var(--red)">lewat ${Math.abs(dd)} hr</span>`:dd===0?`<span style="color:var(--red)">hari ini</span>`:`<span style="color:var(--amber)">${dd} hr lagi</span>`);
+          billStrip = `<div style="width:100%;margin-top:8px;padding:7px 9px;border-radius:8px;background:#1a1206;border:1px solid #f59e0b40;display:flex;align-items:center;justify-content:space-between;gap:8px" onclick="event.stopPropagation()">
+            <div style="min-width:0"><div style="font-size:12px;font-weight:700;color:var(--amber)">Tagihan ${fmt(bill.NOMINAL)}</div><div style="font-size:10px;color:var(--text3)">jth tempo ${due||'—'} · ${lbl}</div></div>
+            <div style="display:flex;gap:5px;flex-shrink:0"><button class="btn-danger" style="background:#0a2a1e;color:var(--green);border-color:#2dd4a040" onclick="payCCFromReminder('${esc(c.NAMA)}')">Bayar</button><button class="btn-danger" onclick="clearCCBill('${bill.ID}')">Lunas</button></div>
+          </div>`;
+        }
+        return `<div class="list-item" style="flex-wrap:wrap">
           <div class="list-icon" style="background:#2a0a2a"><i class="ti ti-credit-card" style="color:var(--purple)"></i></div>
           <div class="list-body">
             <div class="list-title" style="font-size:12px">${esc(c.NAMA)}</div>
@@ -859,7 +871,8 @@ function renderDashboard() {
             <div style="font-size:13px;font-weight:700;color:var(--red)">${out > 0?fmt(out):'—'}</div>
             ${res > 0 ? `<div style="font-size:10px;color:var(--blue)">res: ${fmtS(res)} (${pct}%)</div>` : ''}
           </div>
-        </div>` : '';
+          ${billStrip}
+        </div>`;
       }).join('') || '<div class="empty">Semua kartu lunas ✓</div>'}
     </div>
   `;
@@ -1282,15 +1295,20 @@ function dueDateThisMonth(day){
   if(_daysBetween(today(),iso)<0){ m++; if(m>11){m=0;y++;} iso=_ymd(y,m+1,day); }
   return iso;
 }
-// Pengingat tagihan CC terkunci di dashboard.
+// Tagihan CC terkunci yg aktif utk satu kartu.
+function ccBillFor(ccName){ return (state.ccbills||[]).find(b=>b.CC===ccName && String(b.STATUS||'Aktif')!=='Lunas'); }
+// Banner atas: HANYA tagihan mendesak (lewat tempo / ≤7 hari). Sisanya tampil di section Kartu Kredit.
 function renderCCBillReminder(){
   const el=document.getElementById('dashCCReminder'); if(!el)return;
-  const items=(state.ccbills||[]).filter(b=>String(b.STATUS||'Aktif')!=='Lunas')
-    .sort((a,b)=>String(a.JATUH_TEMPO||'').localeCompare(String(b.JATUH_TEMPO||'')));
+  const items=(state.ccbills||[]).filter(b=>{
+    if(String(b.STATUS||'Aktif')==='Lunas')return false;
+    const due=String(b.JATUH_TEMPO||'').slice(0,10); if(!due)return false;
+    return _daysBetween(today(),due)<=7; // lewat tempo & ≤7 hari
+  }).sort((a,b)=>String(a.JATUH_TEMPO||'').localeCompare(String(b.JATUH_TEMPO||'')));
   if(!items.length){el.innerHTML='';return;}
   el.innerHTML=`<div class="card" style="margin-bottom:12px;background:#1a1206;border:1px solid #f59e0b">
     <div style="display:flex;align-items:center;justify-content:space-between">
-      <div style="font-weight:700;color:var(--amber)"><i class="ti ti-credit-card"></i> Tagihan CC jatuh tempo (${items.length})</div></div>
+      <div style="font-weight:700;color:var(--amber)"><i class="ti ti-bell-ringing"></i> Tagihan CC mendesak (${items.length})</div></div>
     <div style="margin-top:8px;display:flex;flex-direction:column;gap:8px">
     ${items.map(b=>{const due=String(b.JATUH_TEMPO||'').slice(0,10);const dd=due?_daysBetween(today(),due):null;
       const lbl=dd===null?'':(dd<0?`<span style="color:var(--red)">lewat ${Math.abs(dd)} hr</span>`:dd===0?`<span style="color:var(--red)">hari ini</span>`:`<span style="color:var(--amber)">${dd} hr lagi</span>`);
