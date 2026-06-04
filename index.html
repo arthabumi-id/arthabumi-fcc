@@ -759,10 +759,10 @@ function renderDashboard() {
         <div class="metric-value info">${fmt(totRes)}</div>
         <div class="metric-sub">untuk bayar CC${totCicilan>0?` · cicilan ${fmtS(totCicilan)}`:''}</div>
       </div>
-      ${totCicilan>0?`<div class="metric">
-        <div class="metric-label">Sisa Cicilan CC</div>
+      ${totCicilan>0?`<div class="metric" onclick="gotoCicilan()" style="cursor:pointer">
+        <div class="metric-label">Sisa Cicilan CC <i class="ti ti-chevron-right" style="font-size:11px;vertical-align:middle"></i></div>
         <div class="metric-value neg">${fmt(totCicilan)}</div>
-        <div class="metric-sub">belum jatuh tempo · dibayar dari reserve</div>
+        <div class="metric-sub">ketuk untuk lihat semua cicilan</div>
       </div>`:''}
       <div class="metric">
         <div class="metric-label">Project Aktif</div>
@@ -1392,9 +1392,15 @@ function cicilanListHTML(){
   const cic=(state.cicilan||[]); if(!cic.length) return '';
   const jalan=cic.filter(c=>c.STATUS!=='Lunas');
   const lunas=cic.filter(c=>c.STATUS==='Lunas');
-  return `<div style="margin-top:14px;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Cicilan Berjalan</div>
+  return `<div id="cicilanAnchor" style="margin-top:14px;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Cicilan Berjalan</div>
     ${jalan.length?jalan.map(cicilanRowHTML).join(''):'<div class="settings-sub" style="margin:6px 0">Belum ada cicilan berjalan.</div>'}
     ${lunas.length?`<div style="margin-top:10px;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Cicilan Lunas</div>${lunas.map(cicilanRowHTML).join('')}`:''}`;
+}
+// Loncat ke daftar semua cicilan (tab Master > Kartu Kredit, di-scroll ke section cicilan).
+function gotoCicilan(){
+  goPage('master');
+  switchMasterTab('cc');
+  setTimeout(()=>{const el=document.getElementById('cicilanAnchor'); if(el) el.scrollIntoView({behavior:'smooth',block:'start'});},150);
 }
 // Section daftar angsuran jatuh tempo utk 1 kartu (dipakai di drawer Bayar CC).
 function paycCicilanHTML(ccName){
