@@ -15,7 +15,7 @@ const SUMMARY_KEY = 'fcc_summary_v3';
 const S = {
   TXN: 'TRANSAKSI', BANK: 'MASTER_BANK', CC: 'MASTER_CC', PROJ: 'MASTER_PROJECT',
   KAT: 'MASTER_KATEGORI', TRANSFER: 'TRANSFER_LOG', RESERVE: 'RESERVE_LOG', KASBON: 'KASBON',
-  JADWAL: 'JADWAL', PIUTANG: 'PIUTANG', CICILAN: 'CICILAN',
+  JADWAL: 'JADWAL', PIUTANG: 'PIUTANG', CICILAN: 'CICILAN', CCBILL: 'CC_TAGIHAN',
 };
 
 const HEADERS = {
@@ -41,6 +41,9 @@ const HEADERS = {
   // Tagihan cicilan bersifat virtual (dihitung client dari TENOR_TERBAYAR). payCicilan
   // tiap bulan = release reserve + TENOR_TERBAYAR++. STATUS: 'Jalan'/'Lunas'.
   [S.CICILAN]:  ['ID','TANGGAL_BELI','CC','DESKRIPSI','NOMINAL_POKOK','BUNGA_TOTAL','TENOR','NOMINAL_PER_BULAN','TGL_MULAI','TENOR_TERBAYAR','STATUS','PROJECT','KATEGORI','REF_ID','NOTES','CREATED_BY','CREATED_AT'],
+  // CC_TAGIHAN = tagihan CC terkunci dari rekonsiliasi statement (pengingat jatuh tempo di dashboard).
+  // 1 baris aktif per kartu (lock baru menggantikan yg lama). STATUS='Aktif'/'Lunas'.
+  [S.CCBILL]:   ['ID','CC','NOMINAL','JATUH_TEMPO','PERIODE_DARI','PERIODE_SAMPAI','STATUS','CREATED_BY','CREATED_AT'],
 };
 
 // ── INIT ─────────────────────────────────────────────────────
@@ -138,6 +141,7 @@ function doGet(e) {
       case 'getJadwal':    return json(getSheet(ss, S.JADWAL));
       case 'getPiutang':   return json(getSheet(ss, S.PIUTANG));
       case 'getCicilan':   return json(getSheet(ss, S.CICILAN));
+      case 'getCCBills':   return json(getSheet(ss, S.CCBILL));
       default:             return json({ error: 'Unknown action' });
     }
   } catch (err) { return json({ error: err.message }); }
@@ -172,6 +176,7 @@ function doPost(e) {
       case 'deleteCicilan': res = deleteCicilan(ss, data); break;
       case 'convertTxnToCicilan': res = convertTxnToCicilan(ss, data); break;
       case 'changeReserveBank': res = changeReserveBank(ss, data); break;
+      case 'lockCCBill':  res = lockCCBill(ss, data); break;
       case 'updateRow':   res = updateRow(ss, data); break;
       case 'deleteRow':   res = deleteRow(ss, data); break;
       case 'init':        res = initSheets(); break;
@@ -196,6 +201,7 @@ function getBundle(ss, params) {
     jadwal:    getSheet(ss, S.JADWAL),
     piutang:   getSheet(ss, S.PIUTANG),
     cicilan:   getSheet(ss, S.CICILAN),
+    ccbills:   getSheet(ss, S.CCBILL),
     summary:   getSummary(ss),
     txns:      getTxns(ss, { since: since }),
     since:     since,
@@ -265,6 +271,7 @@ function getAllData(ss) {
     transfers: getSheet(ss, S.TRANSFER), reserves: getSheet(ss, S.RESERVE),
     kasbon: getSheet(ss, S.KASBON), jadwal: getSheet(ss, S.JADWAL),
     piutang: getSheet(ss, S.PIUTANG), cicilan: getSheet(ss, S.CICILAN),
+    ccbills: getSheet(ss, S.CCBILL),
   };
 }
 
@@ -632,6 +639,33 @@ function payCicilan(ss, data) {
   if (terbayar >= tenor) all[r][H.indexOf('STATUS')] = 'Lunas';
   sh.getRange(r+1, 1, 1, H.length).setValues([all[r]]);
   return { ok:true, terbayar:terbayar, tenor:tenor, amt:amt };
+}
+
+// Kunci tagihan CC hasil rekonsiliasi → pengingat jatuh tempo di dashboard.
+// 1 baris AKTIF per kartu (lock baru menghapus yg lama utk kartu itu). Clear = deleteRow generik.
+function lockCCBill(ss, data) {
+  let sh = ss.getSheetByName(S.CCBILL);
+  if (!sh) {
+    sh = ss.insertSheet(S.CCBILL);
+    sh.appendRow(HEADERS[S.CCBILL]);
+    sh.getRange(1,1,1,HEADERS[S.CCBILL].length).setFontWeight('bold').setBackground('#1a1a2e').setFontColor('#ffffff');
+    sh.setFrozenRows(1);
+  }
+  const cc = String(data.CC || '');
+  if (!cc) return { error: 'CC wajib' };
+  // hapus baris lama utk kartu yg sama (dari bawah)
+  if (sh.getLastRow() > 1) {
+    const all = sh.getRange(1,1,sh.getLastRow(),sh.getLastColumn()).getValues();
+    const iCC = all[0].indexOf('CC');
+    for (let i = all.length - 1; i >= 1; i--) if (String(all[i][iCC]) === cc) sh.deleteRow(i + 1);
+  }
+  const now = new Date().toISOString();
+  const id = 'CCB' + Date.now();
+  const o = { ID:id, CC:cc, NOMINAL:Math.abs(Number(data.NOMINAL)||0), JATUH_TEMPO:data.JATUH_TEMPO||'',
+              PERIODE_DARI:data.PERIODE_DARI||'', PERIODE_SAMPAI:data.PERIODE_SAMPAI||'',
+              STATUS:'Aktif', CREATED_BY:data.USER||'', CREATED_AT:now };
+  sh.appendRow(HEADERS[S.CCBILL].map(h => o[h] !== undefined ? o[h] : ''));
+  return { ok:true, id:id };
 }
 
 // Pindahkan bank sumber reserve sebuah cicilan (atau reserve apa pun ber-REF) ke bank lain.

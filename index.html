@@ -203,6 +203,7 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
   <div class="content" id="content">
     <!-- DASHBOARD -->
     <div class="page active" id="page-dashboard">
+      <div id="dashCCReminder"></div>
       <div id="dashPiutangReminder"></div>
       <div id="dashMetrics"></div>
       <div id="dashCharts"></div>
@@ -370,6 +371,7 @@ let state = {
   txnMonth: null, // null=belum diset (auto bulan terbaru), ''=Semua, 'YYYY-MM'=bulan tertentu
   piutang: [],    // termin klien (sheet PIUTANG)
   cicilan: [],    // cicilan kartu kredit (sheet CICILAN)
+  ccbills: [],    // tagihan CC terkunci (sheet CC_TAGIHAN) — pengingat jatuh tempo
   pending: [],    // antrian operasi optimistic save yg belum/ gagal terkirim ke server
 };
 
@@ -407,7 +409,7 @@ function saveLocal() {
   localStorage.setItem('fcc_data', JSON.stringify({
     banks: state.banks, ccs: state.ccs, projects: state.projects,
     kategori: state.kategori, txns: state.txns, transfers: state.transfers,
-    reserves: state.reserves, kasbon: state.kasbon, jadwal: state.jadwal, piutang: state.piutang, cicilan: state.cicilan, summary: state.summary, txnsSince: state.txnsSince
+    reserves: state.reserves, kasbon: state.kasbon, jadwal: state.jadwal, piutang: state.piutang, cicilan: state.cicilan, ccbills: state.ccbills, summary: state.summary, txnsSince: state.txnsSince
   }));
 }
 
@@ -745,6 +747,7 @@ async function syncAll() {
     state.jadwal = data.jadwal || state.jadwal;
     state.piutang = data.piutang || state.piutang || [];
     state.cicilan = data.cicilan || state.cicilan || [];
+    state.ccbills = data.ccbills || state.ccbills || [];
     state.summary = data.summary || null; // null bila pakai getAll lama → accessor fallback ke txns
     state.txnsSince = data.since || state.txnsSince;
     computeReserve();
@@ -1271,6 +1274,61 @@ function renderPiutangReminder(){
     ${items.length>4?`<div style="font-size:10px;color:var(--text3)">+${items.length-4} lagi…</div>`:''}
     </div></div>`;
 }
+// Tanggal jatuh tempo CC bulan berjalan (kalau sudah lewat → bulan depan).
+function dueDateThisMonth(day){
+  day=Math.min(28,Math.max(1,Number(day)||25));
+  const t=new Date(today()+'T00:00:00'); let y=t.getFullYear(), m=t.getMonth();
+  let iso=_ymd(y,m+1,day);
+  if(_daysBetween(today(),iso)<0){ m++; if(m>11){m=0;y++;} iso=_ymd(y,m+1,day); }
+  return iso;
+}
+// Pengingat tagihan CC terkunci di dashboard.
+function renderCCBillReminder(){
+  const el=document.getElementById('dashCCReminder'); if(!el)return;
+  const items=(state.ccbills||[]).filter(b=>String(b.STATUS||'Aktif')!=='Lunas')
+    .sort((a,b)=>String(a.JATUH_TEMPO||'').localeCompare(String(b.JATUH_TEMPO||'')));
+  if(!items.length){el.innerHTML='';return;}
+  el.innerHTML=`<div class="card" style="margin-bottom:12px;background:#1a1206;border:1px solid #f59e0b">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div style="font-weight:700;color:var(--amber)"><i class="ti ti-credit-card"></i> Tagihan CC jatuh tempo (${items.length})</div></div>
+    <div style="margin-top:8px;display:flex;flex-direction:column;gap:8px">
+    ${items.map(b=>{const due=String(b.JATUH_TEMPO||'').slice(0,10);const dd=due?_daysBetween(today(),due):null;
+      const lbl=dd===null?'':(dd<0?`<span style="color:var(--red)">lewat ${Math.abs(dd)} hr</span>`:dd===0?`<span style="color:var(--red)">hari ini</span>`:`<span style="color:var(--amber)">${dd} hr lagi</span>`);
+      return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <div style="min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(b.CC)}</div><div style="font-size:10px;color:var(--text3)">${due||'—'} · ${lbl}</div></div>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0"><span style="font-size:13px;font-weight:700;color:var(--red)">${fmt(b.NOMINAL)}</span>
+          <button class="btn-danger" style="background:#0a2a1e;color:var(--green);border-color:#2dd4a040" onclick="payCCFromReminder('${esc(b.CC)}')">Bayar</button>
+          <button class="btn-danger" onclick="clearCCBill('${b.ID}')">Lunas</button></div>
+      </div>`;}).join('')}
+    </div></div>`;
+}
+function payCCFromReminder(ccName){
+  const cc=state.ccs.find(c=>c.NAMA===ccName);
+  if(cc) openDrawer('paycc',cc.ID); else openDrawer('paycc');
+}
+function clearCCBill(id){
+  if(!confirm('Tandai tagihan ini lunas & hapus pengingat dari dashboard?'))return;
+  state.ccbills=(state.ccbills||[]).filter(x=>x.ID!==id);
+  if(API_URL)bgPost({action:'deleteRow',data:{sheet:'CC_TAGIHAN',id}},'Hapus pengingat tagihan');
+  saveLocal(); renderCCBillReminder();
+  showToast('Pengingat tagihan dihapus','success');
+}
+async function lockCCBillUI(){
+  const name=_ccBillName; if(!name)return;
+  const stmtEl=document.getElementById('ccb_stmt');
+  const stmt=stmtEl?unfmtNum(stmtEl.value):0;
+  let sum=0; document.querySelectorAll('.ccb-chk:checked').forEach(el=>sum+=Number(el.dataset.amt||0));
+  const amt = stmt>0?stmt:(sum>0?sum:0);
+  if(amt<=0){showToast('Isi total statement atau centang baris dulu','error');return;}
+  const due=document.getElementById('ccb_due').value;
+  const from=(document.getElementById('ccb_from')||{}).value||'', to=(document.getElementById('ccb_to')||{}).value||'';
+  if(!confirm('Kunci tagihan '+name+' '+fmt(amt)+' (jatuh tempo '+due+') sebagai pengingat di dashboard?'))return;
+  state.ccbills=(state.ccbills||[]).filter(b=>b.CC!==name);
+  state.ccbills.push({ID:uid(),CC:name,NOMINAL:amt,JATUH_TEMPO:due,PERIODE_DARI:from,PERIODE_SAMPAI:to,STATUS:'Aktif'});
+  saveLocal(); closeDrawer(); renderCCBillReminder(); renderDashboard();
+  showToast('Tagihan '+name+' dikunci ke dashboard ✓','success');
+  if(API_URL){ const res=await apiPost({action:'lockCCBill',data:{CC:name,NOMINAL:amt,JATUH_TEMPO:due,PERIODE_DARI:from,PERIODE_SAMPAI:to,USER:state.user}}); if(res&&!res.error) await syncAll(); }
+}
 function renderPiutang(){
   const ag=piutangAgg();
   const list=(state.piutang||[]).slice();
@@ -1719,6 +1777,7 @@ function cicilanInstallmentsInPeriod(name, from, to){
 }
 function renderCCBill(from,to){
   const name=_ccBillName;
+  const ccObj=state.ccs.find(c=>c.NAMA===name)||{};
   const src=_ccBillTxns || state.txns.filter(t=>t.REKENING===name);
   const inP=t=>{const d=String(t.TANGGAL).slice(0,10); return d>=from && d<=to;};
   const charges=src.filter(t=>t.REKENING===name && t.JENIS==='Pengeluaran' && inP(t)).sort((a,b)=>String(a.TANGGAL).localeCompare(String(b.TANGGAL)));
@@ -1749,7 +1808,11 @@ function renderCCBill(from,to){
       <div style="display:flex;justify-content:space-between"><span style="font-size:12px">Sudah dicentang (<span id="ccb_cnt">0</span> baris)</span><span id="ccb_checkedSum" style="font-weight:700;color:#b9a3ff">${fmt(0)}</span></div>
       <div style="display:flex;justify-content:space-between;margin-top:3px"><span style="font-size:12px">Selisih vs statement</span><span id="ccb_diff" style="font-weight:700;color:var(--text2)">—</span></div>
     </div>
-    <div class="settings-sub" style="margin-top:8px">Centang tiap baris yang cocok dengan statement; isi total cetakan di atas → app hitung selisihnya (cocok bila 0). Cicilan tampil meski tak ada di daftar transaksi CC. Mengubah rentang tanggal me-reset centang.</div>`;
+    <div style="display:flex;gap:8px;align-items:flex-end;margin-top:10px">
+      <div class="form-group" style="flex:1;margin:0"><label class="form-label">Jatuh tempo</label><input type="date" class="form-input" id="ccb_due" value="${dueDateThisMonth(ccObj.JATUH_TEMPO)}"></div>
+      <button class="btn-primary" style="flex:1.2" onclick="lockCCBillUI()"><i class="ti ti-lock"></i> Kunci ke Dashboard</button>
+    </div>
+    <div class="settings-sub" style="margin-top:8px">Centang baris yg cocok & isi total cetakan → app hitung selisih (cocok bila 0). Lalu "Kunci ke Dashboard" → tagihan ini jadi pengingat jatuh tempo (pakai total statement bila diisi, atau jumlah yg dicentang). Cicilan tampil meski tak ada di daftar transaksi CC. Ganti rentang tanggal me-reset centang.</div>`;
 }
 
 // ── RENDER TRANSAKSI ──────────────────────────────────
@@ -2964,7 +3027,7 @@ async function forceRefresh(){
   if(data&&!data.error){
     state.banks=data.banks||state.banks;state.ccs=data.ccs||state.ccs;state.projects=data.projects||state.projects;
     state.kategori=data.kategori||state.kategori;state.txns=data.txns||state.txns;state.transfers=data.transfers||state.transfers;
-    state.reserves=data.reserves||state.reserves;state.kasbon=data.kasbon||state.kasbon;state.jadwal=data.jadwal||state.jadwal;state.piutang=data.piutang||state.piutang||[];state.cicilan=data.cicilan||state.cicilan||[];state.summary=data.summary||null;state.txnsSince=data.since||state.txnsSince;
+    state.reserves=data.reserves||state.reserves;state.kasbon=data.kasbon||state.kasbon;state.jadwal=data.jadwal||state.jadwal;state.piutang=data.piutang||state.piutang||[];state.cicilan=data.cicilan||state.cicilan||[];state.ccbills=data.ccbills||state.ccbills||[];state.summary=data.summary||null;state.txnsSince=data.since||state.txnsSince;
     computeReserve();saveLocal();renderAll();closeDrawer();showToast('Total dihitung ulang ✓','success');
   } else { showToast('Gagal refresh','error'); }
 }
@@ -3071,7 +3134,7 @@ async function confirmImport(){
 }
 function showToast(msg,type){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(type||'success');setTimeout(()=>t.classList.add('show'),10);setTimeout(()=>t.classList.remove('show'),2800);}
 function goPage(page){state.currentPage=page;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+page).classList.add('active');document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));const idx=['dashboard','transaksi','transfer','project','kasbon','forecast','piutang','master'].indexOf(page);if(idx>=0)document.querySelectorAll('.nav-item')[idx].classList.add('active');document.getElementById('content').scrollTop=0;if(page==='master')renderMaster();if(page==='transfer')renderTransferPage();if(page==='kasbon')renderKasbon();if(page==='forecast')renderForecast();if(page==='piutang')renderPiutang();}
-function renderAll(){renderDashboard();renderTxnMonthTabs();filterTxn();renderProject();renderPiutangReminder();updatePiutangBadge();if(state.currentPage==='master')renderMaster();if(state.currentPage==='transfer')renderTransferPage();if(state.currentPage==='kasbon')renderKasbon();if(state.currentPage==='forecast')renderForecast();if(state.currentPage==='piutang')renderPiutang();}
+function renderAll(){renderDashboard();renderTxnMonthTabs();filterTxn();renderProject();renderCCBillReminder();renderPiutangReminder();updatePiutangBadge();if(state.currentPage==='master')renderMaster();if(state.currentPage==='transfer')renderTransferPage();if(state.currentPage==='kasbon')renderKasbon();if(state.currentPage==='forecast')renderForecast();if(state.currentPage==='piutang')renderPiutang();}
 if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{});}
 let logoTimer;
 document.querySelector('.topbar-title').addEventListener('touchstart',()=>{logoTimer=setTimeout(()=>openDrawer('settings'),800);});
