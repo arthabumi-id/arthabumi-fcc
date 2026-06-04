@@ -754,10 +754,10 @@ function renderDashboard() {
         <div class="metric-value ${totCC > 0?'neg':'pos'}">${fmt(totCC)}</div>
         <div class="metric-sub">${state.ccs.length} kartu</div>
       </div>
-      <div class="metric">
-        <div class="metric-label">Dana Disisihkan (Reserve)</div>
+      <div class="metric" onclick="openReserveDetail()" style="cursor:pointer">
+        <div class="metric-label">Dana Disisihkan (Reserve) <i class="ti ti-chevron-right" style="font-size:11px;vertical-align:middle"></i></div>
         <div class="metric-value info">${fmt(totRes)}</div>
-        <div class="metric-sub">untuk bayar CC${totCicilan>0?` · cicilan ${fmtS(totCicilan)}`:''}</div>
+        <div class="metric-sub">ketuk untuk rincian per kartu${totCicilan>0?` · cicilan ${fmtS(totCicilan)}`:''}</div>
       </div>
       ${totCicilan>0?`<div class="metric" onclick="gotoCicilan()" style="cursor:pointer">
         <div class="metric-label">Sisa Cicilan CC <i class="ti ti-chevron-right" style="font-size:11px;vertical-align:middle"></i></div>
@@ -1382,6 +1382,7 @@ function cicilanRowHTML(c){
         <span class="badge" style="background:${lunas?'#0a2a1e':'#241a05'};color:${lunas?'var(--green)':'var(--amber)'}">${lunas?'Lunas':'Jalan'}</span>
         <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">
           ${!lunas?`<button class="btn-danger" style="background:#0a2a1e;color:var(--green);border-color:#2dd4a040" onclick="doPayCicilan('${c.ID}')">Bayar angsuran</button>`:''}
+          ${!lunas?`<button class="btn-danger" style="background:#0a1a3a;color:var(--blue);border-color:#3b82f640" onclick="openChangeReserveBank('${c.ID}')">Ganti bank</button>`:''}
           ${terbayar===0?`<button class="btn-danger" onclick="delCicilan('${c.ID}')">Hapus</button>`:''}
         </div>
       </div>
@@ -1548,6 +1549,57 @@ async function saveConvertCicilan(txnId, pokok){
   if(res&&res.error){showToast('Gagal: '+res.error,'error');}
   else showToast('Jadi cicilan ✓ '+fmt((res&&res.perBulan)||0)+'/bln','success');
   await syncAll();
+}
+// Ganti bank sumber reserve sebuah cicilan.
+function openChangeReserveBank(cicId){
+  if(!API_URL){showToast('Set API URL dulu — butuh server','error');return;}
+  const c=(state.cicilan||[]).find(x=>x.ID===cicId); if(!c)return;
+  const ref=c.REF_ID||c.ID;
+  const dep=state.txns.find(t=>String(t.NOTES||'').indexOf(ref)>=0 && t.KATEGORI==='Reserve CC');
+  const curBank=dep?dep.REKENING:'(tidak termuat)';
+  const total=(+c.NOMINAL_POKOK||0)+(+c.BUNGA_TOTAL||0);
+  const bankOpts=state.banks.map(b=>`<option ${dep&&b.NAMA===dep.REKENING?'selected':''}>${esc(b.NAMA)}</option>`).join('');
+  document.getElementById('drawerTitle').textContent='Ganti Bank Reserve';
+  document.getElementById('drawerBody').innerHTML=`
+    <div class="card" style="padding:8px 10px;margin:0 0 12px"><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Cicilan</div><div style="font-size:13px;font-weight:600">${esc(c.DESKRIPSI||'')}</div><div style="font-size:12px;color:var(--text2)">${esc(c.CC)} · reserve ${fmt(total)}</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Sumber dana saat ini: <b>${esc(curBank)}</b></div></div>
+    <div class="form-group"><label class="form-label">Bank sumber baru</label><select class="form-input" id="cb_bank">${bankOpts}</select></div>
+    <button class="btn-primary" onclick="saveChangeReserveBank('${cicId}')"><i class="ti ti-arrows-exchange"></i> Pindahkan Sumber Dana</button>
+    <div class="settings-sub" style="margin-top:8px">Dana dikembalikan ke bank lama & dipotong dari bank baru. Hanya memindahkan sumber dana — jumlah, cicilan, dan angsuran tidak berubah.</div>`;
+  drawerMode='changeresbank'; drawerEditId=cicId;
+  document.getElementById('drawerBg').classList.add('open');
+}
+async function saveChangeReserveBank(cicId){
+  const c=(state.cicilan||[]).find(x=>x.ID===cicId); if(!c)return;
+  const ref=c.REF_ID||c.ID;
+  const bank=document.getElementById('cb_bank').value;
+  if(!bank){showToast('Pilih bank','error');return;}
+  if(!confirm('Pindahkan sumber reserve cicilan ini ke '+bank+'?\nSaldo bank lama dikembalikan, bank baru dipotong.'))return;
+  closeDrawer();
+  showToast('Memindahkan sumber dana…','success');
+  const res=await apiPost({action:'changeReserveBank',data:{ref:ref,BANK:bank,USER:state.user}});
+  if(res&&res.error){showToast('Gagal: '+res.error,'error');}
+  else showToast('Sumber reserve dipindah ke '+bank+' ✓','success');
+  await syncAll();
+}
+// Rincian reserve per kartu (drawer dari kartu Dashboard "Dana Disisihkan").
+function openReserveDetail(){
+  const entries=state.ccs.map(c=>({cc:c.NAMA, pot:state.reserveFunds[c.NAMA]||0, cic:cicilanRemaining(c.NAMA)})).filter(e=>e.pot>0||e.cic>0);
+  entries.sort((a,b)=>b.pot-a.pot);
+  const total=entries.reduce((s,e)=>s+e.pot,0);
+  document.getElementById('drawerTitle').textContent='Rincian Reserve per Kartu';
+  document.getElementById('drawerBody').innerHTML = entries.length ? `
+    <div class="card" style="padding:8px 10px;margin:0 0 12px"><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Total Dana Disisihkan</div><div style="font-size:18px;font-weight:700;color:var(--blue)">${fmt(total)}</div></div>
+    ${entries.map(e=>{
+      const free=Math.max(0,e.pot-e.cic);
+      return `<div class="card" style="padding:10px 12px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:13px;font-weight:600">${esc(e.cc)}</div><div style="font-size:14px;font-weight:700;color:var(--blue)">${fmt(e.pot)}</div></div>
+        ${(e.cic>0||free>0)?`<div style="font-size:11px;color:var(--text3);margin-top:3px">${e.cic>0?'Cicilan: '+fmt(e.cic):''}${e.cic>0&&free>0?' · ':''}${free>0?'Bebas: '+fmt(free):''}</div>`:''}
+      </div>`;
+    }).join('')}
+    <div class="settings-sub" style="margin-top:8px">"Cicilan" = bagian reserve yg menutup sisa angsuran. "Bebas" = reserve manual untuk bayar tagihan non-cicilan.</div>`
+    : '<div class="settings-sub">Belum ada dana reserve.</div>';
+  drawerMode='resdetail'; drawerEditId=null;
+  document.getElementById('drawerBg').classList.add('open');
 }
 
 // ── RENDER TRANSAKSI ──────────────────────────────────

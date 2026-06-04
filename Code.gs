@@ -170,6 +170,7 @@ function doPost(e) {
       case 'payCicilan':  res = payCicilan(ss, data); break;
       case 'deleteCicilan': res = deleteCicilan(ss, data); break;
       case 'convertTxnToCicilan': res = convertTxnToCicilan(ss, data); break;
+      case 'changeReserveBank': res = changeReserveBank(ss, data); break;
       case 'updateRow':   res = updateRow(ss, data); break;
       case 'deleteRow':   res = deleteRow(ss, data); break;
       case 'init':        res = initSheets(); break;
@@ -589,6 +590,48 @@ function payCicilan(ss, data) {
   if (terbayar >= tenor) all[r][H.indexOf('STATUS')] = 'Lunas';
   sh.getRange(r+1, 1, 1, H.length).setValues([all[r]]);
   return { ok:true, terbayar:terbayar, tenor:tenor, amt:amt };
+}
+
+// Pindahkan bank sumber reserve sebuah cicilan (atau reserve apa pun ber-REF) ke bank lain.
+// Hanya mengubah baris setoran reserve: TXN 'Reserve CC' (REKENING) + RESERVE_LOG (DARI_REKENING).
+// Efek: saldo bank lama balik (TXN-nya pindah ke bank baru), bank baru yg terpotong.
+// Tidak menyentuh jumlah/cicilan/angsuran. ref = REF_ID cicilan (mis. 'CIC...').
+function changeReserveBank(ss, data) {
+  const ref = String(data.ref || '');
+  const bankBaru = String(data.BANK || '');
+  if (!ref || !bankBaru) return { error: 'ref & BANK wajib' };
+  const bankNames = getSheet(ss, S.BANK).map(b => b.NAMA);
+  if (bankNames.indexOf(bankBaru) < 0) return { error: 'Bank tidak dikenal: ' + bankBaru };
+  let changed = false;
+  // 1) TXN setoran reserve (KATEGORI 'Reserve CC', TIPE_LOG 'Reserve', NOTES memuat ref)
+  const tx = ss.getSheetByName(S.TXN);
+  if (tx && tx.getLastRow() > 1) {
+    const all = tx.getRange(1,1,tx.getLastRow(),tx.getLastColumn()).getValues();
+    const H = all[0];
+    const iNotes=H.indexOf('NOTES'), iRek=H.indexOf('REKENING'), iKat=H.indexOf('KATEGORI'), iTipe=H.indexOf('TIPE_LOG');
+    for (let i=1;i<all.length;i++) {
+      if (String(all[i][iNotes]).indexOf(ref)>=0 && String(all[i][iKat])==='Reserve CC' && String(all[i][iTipe])==='Reserve') {
+        all[i][iRek] = bankBaru;
+        tx.getRange(i+1,1,1,H.length).setValues([all[i]]);
+        changed = true;
+      }
+    }
+  }
+  // 2) RESERVE_LOG setoran (NOMINAL>0, NOTES memuat ref) → DARI_REKENING
+  const rs = ss.getSheetByName(S.RESERVE);
+  if (rs && rs.getLastRow() > 1) {
+    const all = rs.getRange(1,1,rs.getLastRow(),rs.getLastColumn()).getValues();
+    const H = all[0];
+    const iNotes=H.indexOf('NOTES'), iDari=H.indexOf('DARI_REKENING'), iNom=H.indexOf('NOMINAL');
+    for (let i=1;i<all.length;i++) {
+      if (String(all[i][iNotes]).indexOf(ref)>=0 && Number(all[i][iNom])>0) {
+        all[i][iDari] = bankBaru;
+        rs.getRange(i+1,1,1,H.length).setValues([all[i]]);
+      }
+    }
+  }
+  if (!changed) return { error: 'Setoran reserve untuk cicilan ini tidak ditemukan' };
+  return { ok:true };
 }
 
 // Konversi 1 transaksi CC (Pengeluaran biasa) menjadi cicilan — TANPA hapus/buat manual.
