@@ -648,11 +648,18 @@ async function syncReserveHolding() {
   await syncAll();
 }
 // Cari rekening penyimpan sebuah cicilan dari TXN 'Reserve Masuk' (fallback default).
+// Rekening penyimpan reserve sebuah cicilan. Prioritas: TXN 'Reserve Masuk' (model v18 transfer);
+// fallback ke 'Reserve CC' (sumber, model lama / sumber=penyimpan). Kosong bila tak diketahui.
 function cicilanHolding(c) {
-  const ref = (c && (c.REF_ID || c.ID)) || '';
-  const dep = state.txns.find(t => String(t.NOTES||'').indexOf(ref)>=0 && t.KATEGORI==='Reserve Masuk');
-  return dep ? dep.REKENING : defaultHoldingBank();
+  const ref = (c && (c.REF_ID || c.ID)) || ''; if(!ref) return '';
+  let dep = state.txns.find(t => String(t.NOTES||'').indexOf(ref)>=0 && t.KATEGORI==='Reserve Masuk');
+  if (dep) return dep.REKENING;
+  dep = state.txns.find(t => String(t.NOTES||'').indexOf(ref)>=0 && t.KATEGORI==='Reserve CC' && t.REKENING);
+  if (dep) return dep.REKENING;
+  return '';
 }
+// Sama spt cicilanHolding tapi utk default dropdown bayar (fallback ke default bila kosong).
+function cicilanHoldingOrDefault(c){ return cicilanHolding(c) || defaultHoldingBank(); }
 
 // ── API CALLS ─────────────────────────────────────────
 async function apiGet(params) {
