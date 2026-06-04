@@ -161,6 +161,7 @@ function doPost(e) {
       case 'deleteTransfer': res = deleteTransfer(ss, data); break;
       case 'addReserve':  res = addReserve(ss, data); break;
       case 'payCCReserve': res = payCCReserve(ss, data); break;
+      case 'migrateReserveToHolding': res = migrateReserveToHolding(ss, data); break;
       case 'addKasbon':   res = addKasbon(ss, data); break;
       case 'deleteKasbon':res = deleteKasbon(ss, data); break;
       case 'addJadwal':   res = addJadwal(ss, data); break;
@@ -369,23 +370,54 @@ function addTransfer(ss, data) {
   return { ok: true, refId };
 }
 
-// Bayar tagihan CC memakai dana RESERVE yang sudah disisihkan.
-// Uang sudah keluar dari bank saat reserve dibuat → di sini bank TIDAK disentuh.
-// Efek: tagihan CC turun (Pemasukan ke CC) + pot reserve turun (RESERVE_LOG negatif).
+// ⭐ v18: Reserve = uang NYATA yang diparkir di rekening penyimpan (holding), bukan pot virtual.
+// Bayar tagihan CC pakai reserve → uang KELUAR dari rekening penyimpan terpilih (data.HOLDING):
+// holding ↓ (Pengeluaran) + tagihan CC ↓ (Pemasukan ke CC) + earmark ↓ (RESERVE_LOG negatif).
 function payCCReserve(ss, data) {
   const now = new Date().toISOString();
   const ref = 'PAYR' + Date.now();
   const amt = Math.abs(Number(data.NOMINAL) || 0);
-  ss.getSheetByName(S.TXN).appendRow(['ID'+Date.now(), data.TANGGAL, 'Pemasukan', '', data.CC, 'Bayar CC (Reserve)', amt, '[BAYAR CC dari Reserve '+ref+'] '+(data.NOTES||''), 'Reserve', data.USER, now]);
-  ss.getSheetByName(S.RESERVE).appendRow(['ID'+Date.now(), data.TANGGAL, '(release)', data.CC, -amt, 'Pakai reserve bayar CC '+(data.NOTES||''), data.USER, now]);
+  const hold = data.HOLDING || '';
+  const tx = ss.getSheetByName(S.TXN);
+  if (hold) tx.appendRow(['ID'+Date.now()+'H', data.TANGGAL, 'Pengeluaran', '', hold, 'Bayar CC', amt, '[BAYAR CC dari Reserve '+ref+'] '+data.CC+' (dari '+hold+') '+(data.NOTES||''), 'Reserve', data.USER, now]);
+  Utilities.sleep(3);
+  tx.appendRow(['ID'+Date.now(), data.TANGGAL, 'Pemasukan', '', data.CC, 'Bayar CC (Reserve)', amt, '[BAYAR CC dari Reserve '+ref+'] '+(data.NOTES||''), 'Reserve', data.USER, now]);
+  ss.getSheetByName(S.RESERVE).appendRow(['ID'+Date.now()+'R', data.TANGGAL, '(release)', data.CC, -amt, 'Pakai reserve bayar CC (dari '+hold+') '+(data.NOTES||''), data.USER, now]);
   return { ok: true, ref: ref };
 }
 
+// ⭐ v18: Sisihkan reserve = TRANSFER NYATA dari bank sumber ke rekening penyimpan (HOLDING).
+// source ↓ + holding ↑ (uang benar-benar pindah) + earmark per CC (RESERVE_LOG, holding di NOTES).
+// Bila source == holding → tanpa TXN (uang sudah di situ), cukup earmark.
 function addReserve(ss, data) {
   const now = new Date().toISOString();
-  ss.getSheetByName(S.TXN).appendRow(['ID'+Date.now(), data.TANGGAL, 'Pengeluaran', '', data.DARI_REKENING, 'Reserve CC', data.NOMINAL, '[RESERVE ke '+data.UNTUK_CC+'] '+data.NOTES, 'Reserve', data.USER, now]);
-  ss.getSheetByName(S.RESERVE).appendRow(['ID'+Date.now(), data.TANGGAL, data.DARI_REKENING, data.UNTUK_CC, data.NOMINAL, data.NOTES, data.USER, now]);
-  return { ok: true };
+  const ref = 'RSV' + Date.now();
+  const src = data.DARI_REKENING || '';
+  const hold = data.HOLDING || src;
+  const cc = data.UNTUK_CC || '';
+  const amt = Math.abs(Number(data.NOMINAL) || 0);
+  const tx = ss.getSheetByName(S.TXN);
+  if (src && hold && src !== hold) {
+    tx.appendRow(['ID'+Date.now()+'S', data.TANGGAL, 'Pengeluaran', '', src, 'Reserve CC', amt, '[RESERVE '+ref+'] ke '+cc+' (simpan di '+hold+') '+(data.NOTES||''), 'Reserve', data.USER, now]);
+    Utilities.sleep(3);
+    tx.appendRow(['ID'+Date.now()+'H', data.TANGGAL, 'Pemasukan', '', hold, 'Reserve Masuk', amt, '[RESERVE '+ref+'] simpanan '+cc+' (dari '+src+') '+(data.NOTES||''), 'Reserve', data.USER, now]);
+  }
+  ss.getSheetByName(S.RESERVE).appendRow(['ID'+Date.now(), data.TANGGAL, src, cc, amt, '[HOLD:'+hold+'] '+(data.NOTES||''), data.USER, now]);
+  return { ok: true, ref: ref };
+}
+
+// ⭐ v18 (opsional, sekali jalan): kreditkan saldo rekening penyimpan = total reserve berjalan.
+// Dipakai bila ada sisa reserve model lama (virtual) supaya Net Cash (bank − reserve) tidak dobel.
+function migrateReserveToHolding(ss, data) {
+  const hold = String(data.HOLDING || '');
+  if (!hold) return { error: 'HOLDING wajib' };
+  const bankNames = getSheet(ss, S.BANK).map(b => b.NAMA);
+  if (bankNames.indexOf(hold) < 0) return { error: 'Bank tidak dikenal: ' + hold };
+  const total = getSheet(ss, S.RESERVE).reduce((s, r) => s + (Number(r.NOMINAL) || 0), 0);
+  if (total <= 0) return { ok: true, credited: 0, note: 'Tidak ada reserve berjalan' };
+  const now = new Date().toISOString();
+  ss.getSheetByName(S.TXN).appendRow(['ID'+Date.now(), now.slice(0,10), 'Pemasukan', '', hold, 'Reserve Sync', total, '[SYNC RESERVE] kredit saldo penyimpan = total reserve berjalan', 'Reserve', data.USER||'', now]);
+  return { ok: true, credited: total };
 }
 
 // KASBON karyawan. Ledger di sheet KASBON + (bila Tunai) gerak uang di TRANSAKSI.
@@ -553,12 +585,18 @@ function addCicilan(ss, data) {
     tx.appendRow(['ID'+Date.now()+'B', tglBeli, 'Pengeluaran', proj, '', 'Bunga Cicilan', bunga,
       '[CICILAN '+ref+'] bunga '+desk, 'Cicilan-Beli', data.USER||'', now]);
   }
-  // reserve penuh dari bank ke CC (alokasi kas): bank turun + pot reserve naik
+  // reserve penuh dari bank sumber ke rekening penyimpan (HOLDING) — v18 transfer nyata
+  const hold = data.HOLDING || bank;
   if (bank && cc) {
-    tx.appendRow(['ID'+Date.now()+'R', tglBeli, 'Pengeluaran', '', bank, 'Reserve CC', total,
-      '[RESERVE ke '+cc+'] [CICILAN '+ref+'] '+desk, 'Reserve', data.USER||'', now]);
+    if (bank !== hold) {
+      tx.appendRow(['ID'+Date.now()+'R', tglBeli, 'Pengeluaran', '', bank, 'Reserve CC', total,
+        '[RESERVE ke '+cc+'] [CICILAN '+ref+'] (simpan di '+hold+')', 'Reserve', data.USER||'', now]);
+      Utilities.sleep(3);
+      tx.appendRow(['ID'+Date.now()+'H', tglBeli, 'Pemasukan', '', hold, 'Reserve Masuk', total,
+        '[RESERVE '+cc+'] [CICILAN '+ref+'] simpanan (dari '+bank+')', 'Reserve', data.USER||'', now]);
+    }
     ss.getSheetByName(S.RESERVE).appendRow(['ID'+Date.now()+'RL', tglBeli, bank, cc, total,
-      '[CICILAN '+ref+'] '+desk, data.USER||'', now]);
+      '[HOLD:'+hold+'] [CICILAN '+ref+'] '+desk, data.USER||'', now]);
   }
   return { ok:true, ref:ref, perBulan:perBulan };
 }
@@ -583,8 +621,12 @@ function payCicilan(ss, data) {
   const amt = (terbayar === tenor - 1) ? (total - per*(tenor-1)) : per; // last = remainder
   const now = new Date().toISOString();
   const tgl = data.TANGGAL || now.slice(0,10);
+  const hold = data.HOLDING || '';
+  // v18: uang angsuran KELUAR dari rekening penyimpan terpilih
+  if (hold) ss.getSheetByName(S.TXN).appendRow(['ID'+Date.now()+'H', tgl, 'Pengeluaran', '', hold, 'Bayar Cicilan', Math.abs(amt),
+    '[CICILAN '+id+'] angsuran ke-'+(terbayar+1)+'/'+tenor+' (dari '+hold+')', 'Reserve', data.USER||'', now]);
   ss.getSheetByName(S.RESERVE).appendRow(['ID'+Date.now(), tgl, '(release)', cc, -Math.abs(amt),
-    '[CICILAN '+id+'] bayar ke-'+(terbayar+1)+'/'+tenor, data.USER||'', now]);
+    '[CICILAN '+id+'] bayar ke-'+(terbayar+1)+'/'+tenor+' (dari '+hold+')', data.USER||'', now]);
   terbayar++;
   all[r][H.indexOf('TENOR_TERBAYAR')] = terbayar;
   if (terbayar >= tenor) all[r][H.indexOf('STATUS')] = 'Lunas';
@@ -697,12 +739,18 @@ function convertTxnToCicilan(ss, data) {
     tx.appendRow(['ID'+Date.now()+'B', tglBeli, 'Pengeluaran', proj, '', 'Bunga Cicilan', bunga,
       '[CICILAN '+ref+'] bunga (konversi)', 'Cicilan-Beli', data.USER||'', now]);
   }
-  // 4) reserve penuh dari bank ke CC
+  // 4) reserve penuh dari bank sumber ke rekening penyimpan (HOLDING) — v18
+  const hold = data.HOLDING || bank;
   if (bank) {
-    tx.appendRow(['ID'+Date.now()+'R', tglBeli, 'Pengeluaran', '', bank, 'Reserve CC', total,
-      '[RESERVE ke '+cc+'] [CICILAN '+ref+'] (konversi)', 'Reserve', data.USER||'', now]);
+    if (bank !== hold) {
+      tx.appendRow(['ID'+Date.now()+'R', tglBeli, 'Pengeluaran', '', bank, 'Reserve CC', total,
+        '[RESERVE ke '+cc+'] [CICILAN '+ref+'] (konversi, simpan di '+hold+')', 'Reserve', data.USER||'', now]);
+      Utilities.sleep(3);
+      tx.appendRow(['ID'+Date.now()+'H', tglBeli, 'Pemasukan', '', hold, 'Reserve Masuk', total,
+        '[RESERVE '+cc+'] [CICILAN '+ref+'] simpanan konversi (dari '+bank+')', 'Reserve', data.USER||'', now]);
+    }
     ss.getSheetByName(S.RESERVE).appendRow(['ID'+Date.now()+'RL', tglBeli, bank, cc, total,
-      '[CICILAN '+ref+'] (konversi)', data.USER||'', now]);
+      '[HOLD:'+hold+'] [CICILAN '+ref+'] (konversi)', data.USER||'', now]);
   }
   return { ok:true, ref:ref, perBulan:perBulan };
 }

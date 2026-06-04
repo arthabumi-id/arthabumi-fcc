@@ -1,4 +1,4 @@
-# FCC Arthabumi — Context & Status (v17)
+# FCC Arthabumi — Context & Status (v18)
 
 ## Apa itu FCC?
 Financial Control Center — web app pribadi Eddy untuk tracking keuangan bisnis Arthabumi (kontraktor/interior). Single-user, dihosting di GitHub Pages.
@@ -207,6 +207,35 @@ Beli barang via CC yg dicicil. **Biaya diakui PENUH di muka** (masuk pengeluaran
 
 ### Catatan verifikasi syntax v17
 Mount Linux (bash) **macet** di ukuran file LAMA (Code.gs lihat 545 baris, index.html 2622) → `node --check` atas file penuh tidak bisa. Syntax fungsi-fungsi BARU diverifikasi terisolasi via `node --check` (Code.gs functions + blok UI cicilan = OK) + audit manual brace/template via Read tool. **Saat buka di browser, kalau ada error JS cek console.** File asli (Read/Edit) lengkap & benar.
+
+## ⭐ Perubahan v18 (Reserve = rekening NYATA / holding account) — Juni 2026
+PRD: `PRD-v18-reserve-rekening-nyata.md`. **Wajib redeploy Code.gs.** sw.js cache **fcc-arthabumi-v8**.
+
+### Perubahan model (PENTING — membalik sebagian v17)
+Dulu reserve = **pot virtual** (uang hilang dari bank sumber, tidak parkir di mana pun; Net Cash v17 = total bank). Sekarang reserve = **uang NYATA yang diparkir di rekening penyimpan** (holding, mis. Seabank Ronah).
+- **Buat reserve** (manual/cicilan/konversi): **transfer nyata** bank sumber → rekening penyimpan (source Pengeluaran 'Reserve CC' + holding Pemasukan 'Reserve Masuk', TIPE_LOG Reserve) + earmark RESERVE_LOG (holding dicatat di NOTES `[HOLD:...]`). Bila sumber==penyimpan → tanpa TXN, cukup earmark.
+- **Bayar CC / angsuran dari reserve**: uang KELUAR dari rekening penyimpan terpilih (holding Pengeluaran) + tagihan/earmark turun. (Beda dari v17 yg tidak menyentuh bank.)
+- **Net Cash = `Total Saldo Bank − Total Reserve`** (kas bebas) — karena uang reserve sekarang MASIH di bank (di penyimpan). Ini **membalik fix v17** (`= total bank`), dan benar utk model ini.
+- Rekening penyimpan **dipilih per transaksi** (default `fcc_reserve_bank` localStorage, default SEABANK-RONAH). Saat bayar bisa pilih dari rekening penyimpan mana.
+
+### Code.gs (wajib redeploy)
+- `addReserve(data{DARI_REKENING,HOLDING,UNTUK_CC,NOMINAL})`: transfer sumber→holding + earmark.
+- `payCCReserve(data{CC,HOLDING,NOMINAL})`: holding Pengeluaran 'Bayar CC' + CC Pemasukan + earmark−.
+- `payCicilan(data{ID,HOLDING})`: holding Pengeluaran 'Bayar Cicilan' + earmark− + TENOR_TERBAYAR++.
+- `addCicilan`/`convertTxnToCicilan`: bagian reserve jadi transfer sumber→holding (terima `HOLDING`).
+- `migrateReserveToHolding(data{HOLDING})`: kredit saldo penyimpan = total reserve berjalan (sekali pakai, bila ada sisa reserve model lama supaya Net Cash tidak dobel).
+
+### Client (index.html)
+- Net Cash → `totBank − totRes`. Helper `defaultHoldingBank()`, `cicilanHolding(c)` (cari rekening penyimpan dari TXN 'Reserve Masuk').
+- Form reserve (Transfer), Beli Cicilan, Ubah jadi Cicilan: dropdown **"Simpan di rekening"**. `doReserve`/`saveCicilan`/`saveConvertCicilan` kirim `HOLDING`.
+- Drawer Bayar CC: src=reserve → dropdown **"Ambil dari rekening reserve"** (`pc_holding`). `doPayCicilan` jadi drawer pilih rekening + `doPayCicilanExec`.
+- Settings: **"Rekening Penyimpan Reserve"** (`setReserveBank`) + **"Sinkronkan Reserve Lama"** (`syncReserveHolding`→migrateReserveToHolding).
+- `buildForecast`: reserve ada di bank → tagihan/angsuran TETAP keluar dari bank (tidak dikurangi reserve); cicilan diproyeksikan per bulan dalam horizon.
+
+### Verifikasi numerik v18 (PASS 8/8, `outputs/sim18.js`)
+Beli cicilan 12jt/12x: total bank tetap (transfer), reserve 12jt, Net Cash turun TEPAT 12jt (bukan dobel). Lunas: uang benar-benar keluar dari penyimpan, total bank −12jt, reserve 0. Syntax fungsi v18 OK (`node --check` terisolasi; mount bash macet di file lama).
+
+### Catatan: changeReserveBank (v17.2) masih ada — mengubah bank SUMBER setoran reserve (TXN 'Reserve CC'). Di model v18 makna "ganti bank" bisa diperluas ke penyimpan bila perlu (belum).
 
 ## Boleh edit manual di Google Sheets? BOLEH, dengan aturan:
 1. Jangan ubah baris HEADER / nama kolom / nama tab.

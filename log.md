@@ -3,6 +3,15 @@
 
 ---
 
+## SESSION — 2026-06-04 (v18 Reserve = rekening nyata)
+**Topik:** Ubah reserve dari pot virtual → uang nyata diparkir di rekening penyimpan (mis. Seabank Ronah). PRD: `PRD-v18-reserve-rekening-nyata.md` (signed off).
+**Dikerjakan:** addReserve/payCCReserve/payCicilan/addCicilan/convertTxnToCicilan jadi transfer sumber→holding + earmark; action `migrateReserveToHolding`; Net Cash → bank−reserve; dropdown "Simpan di rekening" + "Ambil dari rekening reserve"; Settings default penyimpan + tombol sinkron; forecast disesuaikan (reserve di bank, angsuran cicilan diproyeksi bulanan). sw.js v8.
+**Keputusan:** rekening penyimpan dipilih per transaksi (bisa beda), bayar bisa pilih sumber penyimpan, mulai bersih tanpa migrasi (ada tombol sinkron pengaman). Net Cash sekarang = kas bebas (bank − reserve), membalik v17.
+**Hasil:** Simulasi v18 8/8 PASS (`outputs/sim18.js`); node --check fungsi v18 OK. Mount bash macet → audit manual.
+**Pending:** deploy 2 langkah. Cek console browser.
+
+---
+
 ## SESSION — 2026-06-04 (v17 Cicilan Kartu Kredit)
 **Topik:** Fitur belanja CC dicicil + fix Net Cash. PRD: `PRD-v17-cicilan-cc.md` (signed off "Proceed").
 **Dikerjakan:**
