@@ -1687,6 +1687,19 @@ function openCCBill(ccId){
   }); }
 }
 function ccbApply(){ renderCCBill(document.getElementById('ccb_from').value, document.getElementById('ccb_to').value); }
+// Centang baris → jumlahkan & bandingkan dgn total statement cetak.
+function ccbTick(){
+  let sum=0, cnt=0;
+  document.querySelectorAll('.ccb-chk:checked').forEach(el=>{ sum+=Number(el.dataset.amt||0); cnt++; });
+  const cs=document.getElementById('ccb_checkedSum'); if(cs) cs.textContent=fmt(sum);
+  const cc=document.getElementById('ccb_cnt'); if(cc) cc.textContent=cnt;
+  const stmtEl=document.getElementById('ccb_stmt'), diffEl=document.getElementById('ccb_diff');
+  if(stmtEl && diffEl){
+    const stmt=unfmtNum(stmtEl.value);
+    if(stmt>0){ const diff=stmt-sum; diffEl.textContent=(diff===0?'Rp 0 ✓ cocok':fmt(Math.abs(diff))+(diff>0?' (kurang)':' (lebih)')); diffEl.style.color=(diff===0?'var(--green)':'var(--amber)'); }
+    else { diffEl.textContent='—'; diffEl.style.color='var(--text2)'; }
+  }
+}
 // Angsuran cicilan yg jatuh tempo dalam [from,to] untuk satu CC (due = TGL_MULAI + k bulan).
 function cicilanInstallmentsInPeriod(name, from, to){
   const out=[];
@@ -1714,7 +1727,7 @@ function renderCCBill(from,to){
   const sumCharge=charges.reduce((s,t)=>s+Number(t.NOMINAL||0),0);
   const sumPay=pays.reduce((s,t)=>s+Number(t.NOMINAL||0),0);
   const sumCic=cics.reduce((s,c)=>s+c.amt,0);
-  const row=(tgl,label,amt,color)=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-top:1px solid #ffffff10"><div style="min-width:0"><div style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(label)}</div><div style="font-size:10px;color:var(--text3)">${tgl}</div></div><div style="font-size:13px;font-weight:600;color:${color};flex-shrink:0">${fmt(amt)}</div></div>`;
+  const row=(tgl,label,amt,color)=>`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid #ffffff10"><input type="checkbox" class="ccb-chk" data-amt="${amt}" onchange="ccbTick(this)" style="width:18px;height:18px;flex-shrink:0;accent-color:#7c5cff"><div style="flex:1;min-width:0"><div style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(label)}</div><div style="font-size:10px;color:var(--text3)">${tgl}</div></div><div style="font-size:13px;font-weight:600;color:${color};flex-shrink:0">${fmt(amt)}</div></div>`;
   document.getElementById('drawerBody').innerHTML=`
     <div style="display:flex;gap:8px;margin-bottom:10px">
       <div class="form-group" style="flex:1;margin:0"><label class="form-label">Dari</label><input type="date" class="form-input" id="ccb_from" value="${from}" onchange="ccbApply()"></div>
@@ -1730,7 +1743,13 @@ function renderCCBill(from,to){
       <div style="display:flex;justify-content:space-between"><span style="font-size:12px">Belanja + Cicilan periode</span><span style="font-weight:700;color:var(--red)">${fmt(sumCharge+sumCic)}</span></div>
       ${sumPay>0?`<div style="display:flex;justify-content:space-between;margin-top:3px"><span style="font-size:12px">− Pembayaran</span><span style="font-weight:700;color:var(--green)">${fmt(sumPay)}</span></div>`:''}
     </div>
-    <div class="settings-sub" style="margin-top:8px">Atur rentang tanggal sesuai periode statement cetak lalu cocokkan baris per baris. Cicilan tampil di sini meski tidak ada di daftar transaksi CC. Angka "tagihan berjalan" bersifat kumulatif lintas waktu (bisa beda dgn 1 siklus statement bila ada sisa bulan lalu).</div>`;
+    <div class="card" style="padding:10px 12px;margin:10px 0 0;background:#0a1f14;border:1px solid #2dd4a040">
+      <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Cocokkan dengan statement cetak</div>
+      <div class="form-group" style="margin:0 0 8px"><label class="form-label">Total tagihan di statement (Rp)</label><input class="form-input" id="ccb_stmt" type="text" inputmode="numeric" placeholder="ketik total dari cetakan" oninput="fmtMoneyInput(this);ccbTick()"></div>
+      <div style="display:flex;justify-content:space-between"><span style="font-size:12px">Sudah dicentang (<span id="ccb_cnt">0</span> baris)</span><span id="ccb_checkedSum" style="font-weight:700;color:#b9a3ff">${fmt(0)}</span></div>
+      <div style="display:flex;justify-content:space-between;margin-top:3px"><span style="font-size:12px">Selisih vs statement</span><span id="ccb_diff" style="font-weight:700;color:var(--text2)">—</span></div>
+    </div>
+    <div class="settings-sub" style="margin-top:8px">Centang tiap baris yang cocok dengan statement; isi total cetakan di atas → app hitung selisihnya (cocok bila 0). Cicilan tampil meski tak ada di daftar transaksi CC. Mengubah rentang tanggal me-reset centang.</div>`;
 }
 
 // ── RENDER TRANSAKSI ──────────────────────────────────
