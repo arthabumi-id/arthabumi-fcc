@@ -1495,6 +1495,7 @@ function cicilanRowHTML(c){
         <div style="font-size:13px;font-weight:600">${esc(c.DESKRIPSI||'Cicilan')}</div>
         <div style="font-size:11px;color:var(--text2)">${esc(c.CC)}${c.PROJECT?' · '+esc(c.PROJECT):''} · ${fmtS(per)}/bln</div>
         <div style="font-size:10px;color:var(--text3);margin-top:2px">${terbayar}/${tenor} angsuran${lunas?'':' · sisa '+fmt(sisa)}</div>
+        ${!lunas?`<div style="font-size:10px;color:var(--blue);margin-top:2px"><i class="ti ti-building-bank"></i> reserve di ${esc(cicilanHolding(c))}</div>`:''}
         <div style="height:5px;background:#222;border-radius:3px;margin-top:5px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${lunas?'var(--green)':'#7c5cff'}"></div></div>
       </div>
       <div style="text-align:right;flex-shrink:0">
