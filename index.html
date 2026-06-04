@@ -2808,15 +2808,15 @@ function openDrawer(mode, editId = null) {
     document.getElementById('drawerBody').innerHTML = `
       <div class="form-row">
         <div class="form-group"><label class="form-label">Tanggal</label><input class="form-input" type="date" id="f_tgl" value="${t?String(t.TANGGAL).slice(0,10):today()}"></div>
-        <div class="form-group"><label class="form-label">Jenis</label><select class="form-input" id="f_jenis"><option ${!t||t.JENIS==='Pemasukan'?'selected':''}>Pemasukan</option><option ${t&&t.JENIS==='Pengeluaran'?'selected':''}>Pengeluaran</option></select></div>
+        <div class="form-group"><label class="form-label">Jenis</label><select class="form-input" id="f_jenis" onchange="fillKatGroup()"><option ${!t||t.JENIS==='Pemasukan'?'selected':''}>Pemasukan</option><option ${t&&t.JENIS==='Pengeluaran'?'selected':''}>Pengeluaran</option></select></div>
       </div>
       <div class="form-group"><label class="form-label">Project</label><select class="form-input" id="f_proj"><option value="">— Tidak ada —</option>${state.projects.map(p=>`<option ${t&&t.PROJECT===p.NAMA?'selected':''}>${p.NAMA}</option>`).join('')}</select></div>
       <div class="form-group"><label class="form-label">Rekening</label><select class="form-input" id="f_rek">${allRek.map(n=>`<option ${t&&t.REKENING===n?'selected':''}>${n}</option>`).join('')}</select></div>
-      <div class="form-group"><label class="form-label">Kategori</label><input class="form-input" id="f_kat" list="f_kat_list" autocomplete="off" placeholder="Ketik / pilih kategori…" value="${t?esc(t.KATEGORI):''}" oninput="onKatChange()"><datalist id="f_kat_list">${[...state.kategori].sort((a,b)=>String(a.NAMA).localeCompare(String(b.NAMA),'id')).map(k=>`<option value="${esc(k.NAMA)}">${esc(k.KELOMPOK)}</option>`).join('')}</datalist></div>
-      <div class="form-group" id="f_kat_new_wrap" style="display:none">
-        <div class="settings-sub" style="margin-bottom:6px;color:var(--amber)"><i class="ti ti-plus"></i> Kategori baru — pilih kelompoknya:</div>
-        <select class="form-input" id="f_kat_new_grp"><option>OPERASIONAL</option><option>PEMASUKAN</option><option>PROJECT</option><option>PRIBADI</option><option>FINANCIAL</option></select>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Kelompok</label><select class="form-input" id="f_kat_grp" onchange="fillKatList()"></select></div>
+        <div class="form-group"><label class="form-label">Kategori</label><select class="form-input" id="f_kat_sel" onchange="onKatSelChange()"></select></div>
       </div>
+      <div class="form-group" id="f_kat_new_wrap" style="display:none"><label class="form-label" style="color:var(--amber)"><i class="ti ti-plus"></i> Nama kategori baru</label><input class="form-input" id="f_kat_new_name" placeholder="ketik nama kategori baru…"></div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Nominal (Rp)</label><input class="form-input" type="text" inputmode="numeric" id="f_nominal" value="${t?fmtInput(t.NOMINAL):''}" placeholder="0" oninput="fmtMoneyInput(this)"></div>
         <div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="f_notes" value="${t?esc(t.NOTES||''):''}" placeholder="Opsional"></div>
@@ -2825,6 +2825,8 @@ function openDrawer(mode, editId = null) {
       ${editId && t && t.JENIS==='Pengeluaran' && (t.TIPE_LOG==='Pengeluaran'||!t.TIPE_LOG) && state.ccs.some(c=>c.NAMA===t.REKENING) ? `<button class="btn-secondary" style="color:#b9a3ff" onclick="openConvertCicilan('${editId}')"><i class="ti ti-calendar-repeat"></i> Ubah jadi Cicilan</button>` : ''}
       ${editId ? `<button class="btn-secondary" style="color:var(--red)" onclick="deleteItem('txns','${editId}','TRANSAKSI')">Hapus Transaksi</button>` : ''}
     `;
+    const _pg = t ? ((state.kategori.find(k=>k.NAMA===t.KATEGORI)||{}).KELOMPOK||null) : null;
+    fillKatGroup(_pg, t?t.KATEGORI:null);
   } else if (mode === 'proj') {
     const t = editId ? state.projects.find(x=>x.ID===editId) : null;
     document.getElementById('drawerBody').innerHTML = `
@@ -2927,16 +2929,20 @@ async function saveDrawer() {
   if (mode === 'txn') {
     const tgl=document.getElementById('f_tgl').value,jenis=document.getElementById('f_jenis').value;
     const proj=document.getElementById('f_proj').value,rek=document.getElementById('f_rek').value;
-    let kat=(document.getElementById('f_kat').value||'').trim();const nominal=unfmtNum(document.getElementById('f_nominal').value);
+    const nominal=unfmtNum(document.getElementById('f_nominal').value);
     const notes=document.getElementById('f_notes').value;
-    // Kategori: ketik bebas. Bila cocok master (case-insensitive) → pakai nama master.
-    // Bila belum ada → otomatis dibuat (kelompok dari dropdown yg muncul).
-    let newKatObj=null;
-    if(kat){
-      const exist=state.kategori.find(k=>String(k.NAMA).toLowerCase()===kat.toLowerCase());
-      if(exist){kat=exist.NAMA;}
-      else{const grp=document.getElementById('f_kat_new_grp').value;newKatObj={ID:uid(),NAMA:kat,KELOMPOK:grp,TIPE:jenis,CREATED_AT:now};}
-    }
+    // Kategori: pilih Kelompok → Kategori. Opsi "__NEW__" = buat kategori baru di kelompok terpilih.
+    const grpSel=document.getElementById('f_kat_grp').value;
+    const katVal=document.getElementById('f_kat_sel').value;
+    let kat='', newKatObj=null;
+    if(katVal==='__NEW__'){
+      kat=(document.getElementById('f_kat_new_name').value||'').trim();
+      if(kat){
+        const exist=state.kategori.find(k=>String(k.NAMA).toLowerCase()===kat.toLowerCase());
+        if(exist){kat=exist.NAMA;}
+        else newKatObj={ID:uid(),NAMA:kat,KELOMPOK:grpSel,TIPE:jenis,CREATED_AT:now};
+      }
+    } else { kat=katVal; }
     if(!tgl||!rek||!kat||!nominal){showToast('Tanggal, rekening, kategori, nominal wajib diisi','error');return;}
     // Peringatan: kategori kelompok PROJECT tapi project belum dipilih
     const katObj0=(newKatObj||state.kategori.find(k=>k.NAMA===kat));
@@ -3029,12 +3035,35 @@ function onPayCCSrc(){
 function fmtMoneyInput(el){const raw=String(el.value).replace(/[^\d]/g,'');el.value=raw?Number(raw).toLocaleString('id-ID'):'';}
 function unfmtNum(v){return parseFloat(String(v).replace(/[^\d]/g,''))||0;}
 function fmtInput(n){const x=Number(String(n).replace(/[^\d]/g,''));return!x||isNaN(x)?'':x.toLocaleString('id-ID');}
-function onKatChange(){
-  const inp=document.getElementById('f_kat'),wrap=document.getElementById('f_kat_new_wrap');
-  if(!inp||!wrap)return;
-  const v=(inp.value||'').trim();
-  const exist=v&&state.kategori.some(k=>String(k.NAMA).toLowerCase()===v.toLowerCase());
-  wrap.style.display=(v&&!exist)?'block':'none'; // kategori baru → minta kelompok
+// Cascade Kelompok → Kategori di drawer Transaksi.
+// Kelompok difilter sesuai Jenis (TIPE kategori); kategori difilter sesuai kelompok.
+function jenisKelompoks(jenis){
+  let set=[...new Set(state.kategori.filter(k=>k.TIPE===jenis).map(k=>k.KELOMPOK))];
+  if(!set.length) set=[jenis==='Pemasukan'?'PEMASUKAN':'OPERASIONAL'];
+  return set.sort((a,b)=>String(a).localeCompare(String(b),'id'));
+}
+function fillKatGroup(presetGrp, presetKat){
+  const jenisEl=document.getElementById('f_jenis'); if(!jenisEl)return;
+  const jenis=jenisEl.value;
+  const grpSel=document.getElementById('f_kat_grp'); if(!grpSel)return;
+  const grps=jenisKelompoks(jenis);
+  const useGrp=(presetGrp&&grps.includes(presetGrp))?presetGrp:grps[0];
+  grpSel.innerHTML=grps.map(g=>`<option ${g===useGrp?'selected':''}>${esc(g)}</option>`).join('');
+  fillKatList(presetKat);
+}
+function fillKatList(presetKat){
+  const jenis=document.getElementById('f_jenis').value;
+  const grp=document.getElementById('f_kat_grp').value;
+  const sel=document.getElementById('f_kat_sel'); if(!sel)return;
+  const cats=state.kategori.filter(k=>k.TIPE===jenis && k.KELOMPOK===grp)
+    .sort((a,b)=>String(a.NAMA).localeCompare(String(b.NAMA),'id'));
+  sel.innerHTML=cats.map(k=>`<option ${k.NAMA===presetKat?'selected':''}>${esc(k.NAMA)}</option>`).join('')
+    +`<option value="__NEW__">➕ Tambah kategori baru…</option>`;
+  onKatSelChange();
+}
+function onKatSelChange(){
+  const sel=document.getElementById('f_kat_sel'), wrap=document.getElementById('f_kat_new_wrap');
+  if(sel&&wrap) wrap.style.display=(sel.value==='__NEW__')?'block':'none';
 }
 function setApiUrl(){const url=prompt('API URL:',API_URL);if(url!==null){API_URL=url.trim();localStorage.setItem('fcc_api_url',API_URL);showToast('API URL disimpan','success');closeDrawer();syncAll();}}
 // Buang cache summary di server lalu tarik data segar — dipakai setelah edit manual di Sheets
