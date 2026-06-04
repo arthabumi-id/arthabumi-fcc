@@ -237,6 +237,9 @@ Beli cicilan 12jt/12x: total bank tetap (transfer), reserve 12jt, Net Cash turun
 
 ### Catatan: changeReserveBank (v17.2) masih ada — mengubah bank SUMBER setoran reserve (TXN 'Reserve CC'). Di model v18 makna "ganti bank" bisa diperluas ke penyimpan bila perlu (belum).
 
+### Rincian Tagihan CC (v18.1, client-only) — rekonsiliasi vs statement
+Tombol **"Rincian"** di kartu CC → drawer `openCCBill`/`renderCCBill`/`ccbApply`. Atur rentang tanggal (default 31 hari) sesuai periode statement cetak; menampilkan: belanja CC periode itu + **angsuran cicilan** yg jatuh tempo (`cicilanInstallmentsInPeriod`, due = TGL_MULAI + k bulan, pakai helper baru `_addMonthsISO`) + pembayaran, dengan subtotal. Menjawab masalah cicilan tidak muncul di daftar transaksi CC (krn REKENING dikosongkan). Catatan: "tagihan berjalan" (getCCOut) kumulatif lintas waktu; rincian periode utk cocokkan 1 siklus.
+
 ## Boleh edit manual di Google Sheets? BOLEH, dengan aturan:
 1. Jangan ubah baris HEADER / nama kolom / nama tab.
 2. Tiap baris WAJIB punya `ID` unik (kalau nambah manual, isi sendiri mis. `MAN001`) — kalau kosong, edit/hapus dari app tak bisa nemu baris.
