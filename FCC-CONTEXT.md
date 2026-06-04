@@ -1,4 +1,4 @@
-# FCC Arthabumi — Context & Status (v16)
+# FCC Arthabumi — Context & Status (v17)
 
 ## Apa itu FCC?
 Financial Control Center — web app pribadi Eddy untuk tracking keuangan bisnis Arthabumi (kontraktor/interior). Single-user, dihosting di GitHub Pages.
@@ -174,6 +174,35 @@ Saat dibuat, mount Linux (bash) freeze di ukuran file LAMA (index.html 140085 by
 
 ## ⭐ Perubahan v16.1 (Kategori type-ahead) — Juni 2026
 Client-only (index.html), tanpa redeploy. Field Kategori di drawer Transaksi: dari `<select>` jadi `<input list=f_kat_list>` + `<datalist>` (autocomplete saat ketik). Opsi datalist diurut abjad (`localeCompare 'id'`). Ketik nama cocok master → dipakai (normalisasi casing); ketik nama baru → `f_kat_new_wrap` muncul minta KELOMPOK lalu auto-buat kategori (via bgPost addKat) saat simpan. Opsi `__NEW__` & input `f_kat_new` lama dihapus; `onKatChange` cek keberadaan di `state.kategori` (case-insensitive). saveDrawer txn disesuaikan (tidak lagi cek `__NEW__`).
+
+## ⭐ Perubahan v17 (Cicilan Kartu Kredit + fix Net Cash) — Juni 2026
+PRD lengkap: `PRD-v17-cicilan-cc.md`. **Wajib redeploy Code.gs** (sheet & action baru). sw.js cache **fcc-arthabumi-v7**.
+
+### Model (keputusan Eddy)
+Beli barang via CC yg dicicil. **Biaya diakui PENUH di muka** (masuk pengeluaran & cashflow project), yang dicicil hanya **aliran kas pembayaran** ke CC — dikelola lewat mekanisme RESERVE yg sudah ada.
+- Saat beli (mis. pokok 12jt, bunga 0, 12x): (1) beban penuh → TXN `Cicilan-Beli` pokok (+bunga bila ada), **REKENING kosong** → masuk laba/proj/komposisi, TIDAK menambah tagihan CC; (2) **reserve penuh** (pokok+bunga) dari bank ke CC → bank turun, pot reserve naik; (3) baris CICILAN (tenor, per_bulan, terbayar 0).
+- Tagihan cicilan = **virtual** (dihitung client `cicilanDueAmt` dari TENOR_TERBAYAR & bulan berjalan), bukan TXN nyata. Tiap bulan `payCicilan` melepas reserve sebesar 1 angsuran (terakhir = sisa supaya pot habis pas) + TENOR_TERBAYAR++. Bank & laba TIDAK disentuh lagi (sudah di muka). Angsuran terakhir = `total − per*(tenor−1)`.
+
+### Sheet baru `CICILAN`
+`ID,TANGGAL_BELI,CC,DESKRIPSI,NOMINAL_POKOK,BUNGA_TOTAL,TENOR,NOMINAL_PER_BULAN,TGL_MULAI,TENOR_TERBAYAR,STATUS,PROJECT,KATEGORI,REF_ID,NOTES,CREATED_BY,CREATED_AT`. STATUS=`Jalan`/`Lunas`.
+
+### Code.gs (wajib redeploy)
+- Action baru: `addCicilan` (POST, auto-create sheet), `payCicilan` (POST, rilis reserve + terbayar++), `deleteCicilan` (POST, hanya bila terbayar=0 → hapus baris + TXN/RESERVE via REF_ID), `getCicilan` (GET). Masuk `getBundle`/`getAllData` (`cicilan`).
+- `getSummary` katExp kini juga menghitung TIPE_LOG `Cicilan-Beli` (supaya masuk komposisi pengeluaran). proj/month sudah otomatis menghitung (cukup punya PROJECT/tanggal).
+
+### Client (index.html)
+- `state.cicilan` (di syncAll/forceRefresh/saveLocal/loadOffline).
+- `getCCOut` kini = base acct + `cicilanDueAmt(cc)` (porsi angsuran jatuh tempo belum dibayar). Helper baru: `monthsElapsed`, `cicilanDueAmt`, `cicilanRemaining`.
+- **Fix Net Cash (untuk semua reserve):** dulu `Net Cash = Bank − Reserve` padahal reserve juga sudah mengurangi bank → dobel (reserve 12jt menurunkan Net Cash ~24jt). Sekarang **`Net Cash = Total Saldo Bank`** (bank sudah net of reserve), pot reserve ditampilkan terpisah sebagai kartu **"Dana Disisihkan (Reserve)"** + kartu **"Sisa Cicilan CC"** (muncul bila ada cicilan). Tidak perlu migrasi data.
+- UI: tab Master > Kartu Kredit tombol **"Beli Cicilan"** (`openCicilan`/`ciPreview`/`saveCicilan`), badge "N cicilan jalan · sisa X" per kartu, list cicilan (`cicilanListHTML`/`cicilanRowHTML`) dengan tombol **Bayar angsuran** (`doPayCicilan`) & Hapus (`delCicilan`, hanya bila terbayar=0). Drawer **Bayar CC** dapat section angsuran (`paycCicilanHTML`) + nominal default = tagihan **non-cicilan** (angsuran dibayar terpisah dari reserve via tombol Bayar).
+- `saveCicilan`/`doPayCicilan` **BLOCKING** (perlu syncAll utk angka authoritative, seperti paycc/reserve). Ada fallback offline utk doPayCicilan/delCicilan.
+- `buildForecast`: tagihan CC dipisah cicilan vs non-cicilan; cicilan reserve-backed → 0 dampak bank; reserve sisa (setelah dialokasi cicilan) baru menutup tagihan non-cicilan.
+
+### Verifikasi numerik (PASS 13/13)
+2 skenario disimulasikan (`outputs/sim.js`): A=12jt/12x/0%, B=pokok 10jt+bunga 600rb/12x. Terbukti: per_bulan benar, reserve habis tepat 0 (angsuran terakhir = sisa), biaya project = pokok+bunga, Net Cash turun TEPAT 1× nominal (bukan 2×), tagihan saat beli = 1 angsuran, tagihan CC = 0 setelah lunas.
+
+### Catatan verifikasi syntax v17
+Mount Linux (bash) **macet** di ukuran file LAMA (Code.gs lihat 545 baris, index.html 2622) → `node --check` atas file penuh tidak bisa. Syntax fungsi-fungsi BARU diverifikasi terisolasi via `node --check` (Code.gs functions + blok UI cicilan = OK) + audit manual brace/template via Read tool. **Saat buka di browser, kalau ada error JS cek console.** File asli (Read/Edit) lengkap & benar.
 
 ## Boleh edit manual di Google Sheets? BOLEH, dengan aturan:
 1. Jangan ubah baris HEADER / nama kolom / nama tab.

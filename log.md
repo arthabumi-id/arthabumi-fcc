@@ -3,6 +3,23 @@
 
 ---
 
+## SESSION — 2026-06-04 (v17 Cicilan Kartu Kredit)
+**Topik:** Fitur belanja CC dicicil + fix Net Cash. PRD: `PRD-v17-cicilan-cc.md` (signed off "Proceed").
+**Dikerjakan:**
+- Code.gs: sheet `CICILAN` + action `addCicilan`/`payCicilan`/`deleteCicilan`/`getCicilan`, masuk bundle, `getSummary` katExp hitung `Cicilan-Beli`.
+- index.html: `state.cicilan`, `getCCOut` + porsi cicilan virtual (`cicilanDueAmt`), helper `monthsElapsed`/`cicilanRemaining`; **fix Net Cash = Total Saldo Bank** (sebelumnya dobel kurang reserve); kartu "Dana Disisihkan" + "Sisa Cicilan CC"; drawer Beli Cicilan + list + integrasi Bayar CC; forecast pisah cicilan vs non-cicilan.
+- sw.js → fcc-arthabumi-v7.
+
+**Keputusan penting:**
+- Biaya diakui PENUH di muka (masuk biaya project); yang dicicil hanya kas (lewat reserve). Tagihan cicilan virtual dari TENOR_TERBAYAR. Angsuran dibayar dari reserve via tombol Bayar CC / Bayar angsuran. Bunga = input total Rp. Bayar CC < porsi cicilan ditolak (cicilan dibayar terpisah dari reserve).
+- Net cash double-count diperbaiki untuk SEMUA reserve (bukan cuma cicilan).
+
+**Hasil:** Simulasi numerik 13/13 PASS (`outputs/sim.js`). Syntax fungsi baru OK (node --check terisolasi; mount bash macet di file lama, audit manual).
+
+**Pending:** Eddy deploy 2 langkah (push GitHub Desktop + redeploy Apps Script Code.gs). Cek console browser bila ada error JS.
+
+---
+
 ## SESSION 001 — 2026-05-31
 **Topik:** Analisis keuangan + Build dashboard
 **Dikerjakan:**

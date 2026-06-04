@@ -368,6 +368,7 @@ let state = {
   expFrom: '', expTo: '',
   txnMonth: null, // null=belum diset (auto bulan terbaru), ''=Semua, 'YYYY-MM'=bulan tertentu
   piutang: [],    // termin klien (sheet PIUTANG)
+  cicilan: [],    // cicilan kartu kredit (sheet CICILAN)
   pending: [],    // antrian operasi optimistic save yg belum/ gagal terkirim ke server
 };
 
@@ -405,7 +406,7 @@ function saveLocal() {
   localStorage.setItem('fcc_data', JSON.stringify({
     banks: state.banks, ccs: state.ccs, projects: state.projects,
     kategori: state.kategori, txns: state.txns, transfers: state.transfers,
-    reserves: state.reserves, kasbon: state.kasbon, jadwal: state.jadwal, piutang: state.piutang, summary: state.summary, txnsSince: state.txnsSince
+    reserves: state.reserves, kasbon: state.kasbon, jadwal: state.jadwal, piutang: state.piutang, cicilan: state.cicilan, summary: state.summary, txnsSince: state.txnsSince
   }));
 }
 
@@ -506,11 +507,43 @@ function getSaldo(namaRek) {
 }
 
 function getCCOut(namaCC) {
+  let base;
   const a = acctAgg(namaCC);
-  if (a) return (a.keluar||0) - (a.masuk||0);
-  const tag = state.txns.filter(t => t.REKENING === namaCC && t.JENIS === 'Pengeluaran').reduce((s,t) => s + Number(t.NOMINAL), 0);
-  const bay = state.txns.filter(t => t.REKENING === namaCC && t.JENIS === 'Pemasukan').reduce((s,t) => s + Number(t.NOMINAL), 0);
-  return tag - bay;
+  if (a) base = (a.keluar||0) - (a.masuk||0);
+  else {
+    const tag = state.txns.filter(t => t.REKENING === namaCC && t.JENIS === 'Pengeluaran').reduce((s,t) => s + Number(t.NOMINAL), 0);
+    const bay = state.txns.filter(t => t.REKENING === namaCC && t.JENIS === 'Pemasukan').reduce((s,t) => s + Number(t.NOMINAL), 0);
+    base = tag - bay;
+  }
+  // + porsi cicilan bulan berjalan yg belum dibayar (tagihan cicilan bersifat virtual,
+  //   pembelian Cicilan-Beli REKENING kosong jadi tdk masuk acct di atas)
+  return base + cicilanDueAmt(namaCC);
+}
+
+// Jumlah bulan penuh yg sudah lewat sejak tanggal mulai (utk hitung angsuran jatuh tempo).
+function monthsElapsed(startISO) {
+  const s = String(startISO || '').slice(0,10); if (!s) return 0;
+  const a = new Date(s + 'T00:00:00'), b = new Date(today() + 'T00:00:00');
+  if (isNaN(a)) return 0;
+  let m = (b.getFullYear()-a.getFullYear())*12 + (b.getMonth()-a.getMonth());
+  if (b.getDate() < a.getDate()) m--;       // belum genap 1 bulan di bulan berjalan
+  return Math.max(0, m);
+}
+// Total angsuran yg sudah jatuh tempo tapi belum dibayar utk satu CC (tagihan cicilan berjalan).
+function cicilanDueAmt(namaCC) {
+  return (state.cicilan||[]).filter(c => c.CC===namaCC && c.STATUS!=='Lunas').reduce((s,c) => {
+    const tenor=+c.TENOR||0, terbayar=+c.TENOR_TERBAYAR||0, per=+c.NOMINAL_PER_BULAN||0;
+    const start = String(c.TGL_MULAI||c.TANGGAL_BELI||'').slice(0,10);
+    const due = Math.min(tenor, monthsElapsed(start)+1);   // angsuran ke-1 jatuh tempo di bulan mulai
+    return s + per * Math.max(0, due - terbayar);
+  }, 0);
+}
+// Sisa total cicilan yg belum dibayar utk satu CC (semua angsuran tersisa, bukan cuma yg jatuh tempo).
+function cicilanRemaining(namaCC) {
+  return (state.cicilan||[]).filter(c => c.CC===namaCC && c.STATUS!=='Lunas').reduce((s,c) => {
+    const tenor=+c.TENOR||0, terbayar=+c.TENOR_TERBAYAR||0, per=+c.NOMINAL_PER_BULAN||0;
+    return s + per * Math.max(0, tenor - terbayar);
+  }, 0);
 }
 
 function getProjCF(nama) {
@@ -675,6 +708,7 @@ async function syncAll() {
     state.kasbon = data.kasbon || state.kasbon;
     state.jadwal = data.jadwal || state.jadwal;
     state.piutang = data.piutang || state.piutang || [];
+    state.cicilan = data.cicilan || state.cicilan || [];
     state.summary = data.summary || null; // null bila pakai getAll lama → accessor fallback ke txns
     state.txnsSince = data.since || state.txnsSince;
     computeReserve();
@@ -699,6 +733,7 @@ function renderDashboard() {
   const totBank = state.banks.reduce((s,b) => s + getSaldo(b.NAMA).saldo, 0);
   const totCC = state.ccs.reduce((s,c) => s + getCCOut(c.NAMA), 0);
   const totRes = Object.values(state.reserveFunds).reduce((s,v) => s + v, 0);
+  const totCicilan = state.ccs.reduce((s,c) => s + cicilanRemaining(c.NAMA), 0);
   const projAktif = state.projects.filter(p => p.STATUS === 'Jalan').length;
   const dp = doneProjectsProfit();
 
@@ -706,8 +741,8 @@ function renderDashboard() {
     <div class="metric-grid">
       <div class="metric wide" style="background:linear-gradient(135deg,#0a2a1e,#0d1f2d);border:1px solid #2dd4a030">
         <div class="metric-label">Net Cash Position</div>
-        <div class="metric-value" style="font-size:28px;color:${totBank-totRes >= 0?'var(--green)':'var(--red)'}">${fmt(totBank-totRes)}</div>
-        <div class="metric-sub">Bank (${fmt(totBank)}) − Reserve (${fmt(totRes)})</div>
+        <div class="metric-value" style="font-size:28px;color:${totBank >= 0?'var(--green)':'var(--red)'}">${fmt(totBank)}</div>
+        <div class="metric-sub">Saldo bank bebas · reserve ${fmt(totRes)} sudah disisihkan terpisah</div>
       </div>
       <div class="metric">
         <div class="metric-label">Total Saldo Bank</div>
@@ -720,10 +755,15 @@ function renderDashboard() {
         <div class="metric-sub">${state.ccs.length} kartu</div>
       </div>
       <div class="metric">
-        <div class="metric-label">Reserve CC</div>
+        <div class="metric-label">Dana Disisihkan (Reserve)</div>
         <div class="metric-value info">${fmt(totRes)}</div>
-        <div class="metric-sub">Dana tersisihkan</div>
+        <div class="metric-sub">untuk bayar CC${totCicilan>0?` · cicilan ${fmtS(totCicilan)}`:''}</div>
       </div>
+      ${totCicilan>0?`<div class="metric">
+        <div class="metric-label">Sisa Cicilan CC</div>
+        <div class="metric-value neg">${fmt(totCicilan)}</div>
+        <div class="metric-sub">belum jatuh tempo · dibayar dari reserve</div>
+      </div>`:''}
       <div class="metric">
         <div class="metric-label">Project Aktif</div>
         <div class="metric-value warn">${projAktif}</div>
@@ -977,10 +1017,14 @@ function buildForecast(horizon){
   const start=state.banks.reduce((s,b)=>s+getSaldo(b.NAMA).saldo,0);
   const events=[];
   // Tagihan CC saat ini → bayar pada jatuh tempo terdekat; porsi dari bank = tagihan − reserve.
+  // Cicilan reserve-backed (uang sudah keluar bank saat reserve) → dampak bank 0; reserve sisa
+  // (setelah dialokasi cicilan) baru dipakai utk tagihan non-cicilan.
   state.ccs.forEach(c=>{
     const out=getCCOut(c.NAMA); if(out<=0) return;
-    const resv=state.reserveFunds[c.NAMA]||0;
-    const fromBank=Math.max(0,out-resv); if(fromBank<=0) return;
+    const cicDue=cicilanDueAmt(c.NAMA);
+    const nonCic=Math.max(0,out-cicDue);
+    const resvForNonCic=Math.max(0,(state.reserveFunds[c.NAMA]||0)-cicilanRemaining(c.NAMA));
+    const fromBank=Math.max(0,nonCic-resvForNonCic); if(fromBank<=0) return;
     const ds=_monthlyDates(c.JATUH_TEMPO,horizon);
     if(ds.length) events.push({date:ds[0],amount:-fromBank,label:'Tagihan '+c.NAMA,type:'cc'});
   });
@@ -1319,6 +1363,143 @@ function delPiutang(id){
   showToast('Termin dihapus','success');
 }
 
+// ── CICILAN KARTU KREDIT (UI) ─────────────────────────
+// List cicilan di tab Master > Kartu Kredit (berjalan + lunas).
+function cicilanRowHTML(c){
+  const tenor=+c.TENOR||0, terbayar=+c.TENOR_TERBAYAR||0, per=+c.NOMINAL_PER_BULAN||0;
+  const sisa=per*Math.max(0,tenor-terbayar);
+  const pct=tenor?Math.round(terbayar/tenor*100):0;
+  const lunas=c.STATUS==='Lunas';
+  return `<div class="card" style="padding:10px 12px;margin-bottom:8px">
+    <div style="display:flex;justify-content:space-between;gap:8px">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600">${esc(c.DESKRIPSI||'Cicilan')}</div>
+        <div style="font-size:11px;color:var(--text2)">${esc(c.CC)}${c.PROJECT?' · '+esc(c.PROJECT):''} · ${fmtS(per)}/bln</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">${terbayar}/${tenor} angsuran${lunas?'':' · sisa '+fmt(sisa)}</div>
+        <div style="height:5px;background:#222;border-radius:3px;margin-top:5px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${lunas?'var(--green)':'#7c5cff'}"></div></div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <span class="badge" style="background:${lunas?'#0a2a1e':'#241a05'};color:${lunas?'var(--green)':'var(--amber)'}">${lunas?'Lunas':'Jalan'}</span>
+        <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">
+          ${!lunas?`<button class="btn-danger" style="background:#0a2a1e;color:var(--green);border-color:#2dd4a040" onclick="doPayCicilan('${c.ID}')">Bayar angsuran</button>`:''}
+          ${terbayar===0?`<button class="btn-danger" onclick="delCicilan('${c.ID}')">Hapus</button>`:''}
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+function cicilanListHTML(){
+  const cic=(state.cicilan||[]); if(!cic.length) return '';
+  const jalan=cic.filter(c=>c.STATUS!=='Lunas');
+  const lunas=cic.filter(c=>c.STATUS==='Lunas');
+  return `<div style="margin-top:14px;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Cicilan Berjalan</div>
+    ${jalan.length?jalan.map(cicilanRowHTML).join(''):'<div class="settings-sub" style="margin:6px 0">Belum ada cicilan berjalan.</div>'}
+    ${lunas.length?`<div style="margin-top:10px;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Cicilan Lunas</div>${lunas.map(cicilanRowHTML).join('')}`:''}`;
+}
+// Section daftar angsuran jatuh tempo utk 1 kartu (dipakai di drawer Bayar CC).
+function paycCicilanHTML(ccName){
+  const list=(state.cicilan||[]).filter(c=>c.CC===ccName && c.STATUS!=='Lunas');
+  if(!list.length) return '';
+  return `<div class="card" style="padding:8px 10px;margin:0 0 12px;background:#140d24;border:1px solid #7c5cff40">
+    <div style="font-size:10px;color:#b9a3ff;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px"><i class="ti ti-calendar-repeat"></i> Angsuran cicilan kartu ini (dibayar dari reserve)</div>
+    ${list.map(c=>{
+      const tenor=+c.TENOR||0, terbayar=+c.TENOR_TERBAYAR||0, per=+c.NOMINAL_PER_BULAN||0;
+      return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0;border-top:1px solid #ffffff10">
+        <div style="min-width:0"><div style="font-size:12px;font-weight:600">${esc(c.DESKRIPSI||'Cicilan')}</div>
+        <div style="font-size:10px;color:var(--text3)">angsuran ke-${Math.min(tenor,terbayar+1)}/${tenor} · ${fmt(per)}</div></div>
+        <button class="btn-danger" style="background:#0a2a1e;color:var(--green);border-color:#2dd4a040;flex-shrink:0" onclick="doPayCicilan('${c.ID}')">Bayar</button>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+function openCicilan(){
+  if(!API_URL){ showToast('Set API URL dulu — cicilan butuh server','error'); return; }
+  const ccOpts=state.ccs.map(c=>`<option>${esc(c.NAMA)}</option>`).join('');
+  const bankOpts=state.banks.map(b=>`<option>${esc(b.NAMA)}</option>`).join('');
+  const projOpts=`<option value="">— Tidak ada —</option>`+state.projects.map(p=>`<option>${esc(p.NAMA)}</option>`).join('');
+  const katOpts=[...state.kategori].filter(k=>k.TIPE==='Pengeluaran').sort((a,b)=>String(a.NAMA).localeCompare(String(b.NAMA),'id')).map(k=>`<option value="${esc(k.NAMA)}">${esc(k.KELOMPOK)}</option>`).join('');
+  document.getElementById('drawerTitle').textContent='Beli Cicilan CC';
+  document.getElementById('drawerBody').innerHTML=`
+    <div class="form-group"><label class="form-label">Kartu Kredit (yg dipakai)</label><select class="form-input" id="ci_cc">${ccOpts}</select></div>
+    <div class="form-group"><label class="form-label">Deskripsi barang</label><input class="form-input" id="ci_desk" placeholder="mis. Mesin las, lemari display"></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Harga Pokok (Rp)</label><input class="form-input" id="ci_pokok" type="text" inputmode="numeric" oninput="fmtMoneyInput(this);ciPreview()" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Total Bunga (Rp)</label><input class="form-input" id="ci_bunga" type="text" inputmode="numeric" value="0" oninput="fmtMoneyInput(this);ciPreview()" placeholder="0"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Tenor (x)</label><input class="form-input" id="ci_tenor" type="number" inputmode="numeric" value="12" min="1" oninput="ciPreview()"></div>
+      <div class="form-group"><label class="form-label">Tanggal Beli</label><input class="form-input" id="ci_tgl" type="date" value="${today()}"></div>
+    </div>
+    <div class="card" style="padding:8px 10px;margin:0 0 12px;background:#140d24;border:1px solid #7c5cff40"><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Angsuran per bulan</div><div id="ci_per" style="font-size:16px;font-weight:700;color:#b9a3ff">Rp 0</div><div id="ci_perSub" style="font-size:10px;color:var(--text3)"></div></div>
+    <div class="form-group"><label class="form-label">Project (biaya masuk ke sini)</label><select class="form-input" id="ci_proj">${projOpts}</select></div>
+    <div class="form-group"><label class="form-label">Kategori biaya</label><input class="form-input" id="ci_kat" list="ci_kat_list" placeholder="Material / Alat…" value="Material"><datalist id="ci_kat_list">${katOpts}</datalist></div>
+    <div class="form-group"><label class="form-label">Reserve dana dari bank</label><select class="form-input" id="ci_bank">${bankOpts}</select></div>
+    <div class="form-group"><label class="form-label">Catatan</label><input class="form-input" id="ci_notes" placeholder="opsional"></div>
+    <button class="btn-primary" onclick="saveCicilan()"><i class="ti ti-calendar-repeat"></i> Simpan Cicilan</button>
+    <div class="settings-sub" style="margin-top:8px">Saat simpan: biaya penuh (pokok+bunga) langsung masuk pengeluaran project terpilih, dan dana sejumlah itu otomatis di-<b>reserve</b> dari bank ke kartu. Tiap bulan tekan <b>Bayar angsuran</b> (di sini atau di Bayar CC) untuk melepas reserve.</div>`;
+  drawerMode='cicilan'; drawerEditId=null;
+  ciPreview();
+  document.getElementById('drawerBg').classList.add('open');
+}
+function ciPreview(){
+  const pokok=unfmtNum(document.getElementById('ci_pokok').value)||0;
+  const bunga=unfmtNum(document.getElementById('ci_bunga').value)||0;
+  const tenor=Math.max(1,Math.floor(Number(document.getElementById('ci_tenor').value)||1));
+  const per=Math.round((pokok+bunga)/tenor);
+  document.getElementById('ci_per').textContent=fmt(per);
+  document.getElementById('ci_perSub').textContent='Total '+fmt(pokok+bunga)+' ÷ '+tenor+'x · di-reserve penuh';
+}
+async function saveCicilan(){
+  const cc=document.getElementById('ci_cc').value;
+  const desk=(document.getElementById('ci_desk').value||'').trim();
+  const pokok=unfmtNum(document.getElementById('ci_pokok').value)||0;
+  const bunga=unfmtNum(document.getElementById('ci_bunga').value)||0;
+  const tenor=Math.max(1,Math.floor(Number(document.getElementById('ci_tenor').value)||1));
+  const tgl=document.getElementById('ci_tgl').value||today();
+  const proj=document.getElementById('ci_proj').value;
+  const kat=(document.getElementById('ci_kat').value||'Material').trim();
+  const bank=document.getElementById('ci_bank').value;
+  const notes=document.getElementById('ci_notes').value||'';
+  if(!cc||!desk||!pokok||!bank){showToast('Kartu, deskripsi, harga pokok, bank reserve wajib diisi','error');return;}
+  if(!proj && !confirm('Tanpa project — biaya tidak masuk cashflow project mana pun. Lanjut?'))return;
+  const per=Math.round((pokok+bunga)/tenor);
+  closeDrawer();
+  showToast('Menyimpan cicilan…','success');
+  const res=await apiPost({action:'addCicilan',data:{CC:cc,BANK:bank,DESKRIPSI:desk,NOMINAL_POKOK:pokok,BUNGA_TOTAL:bunga,TENOR:tenor,TGL_BELI:tgl,TGL_MULAI:tgl,PROJECT:proj,KATEGORI:kat,NOTES:notes,USER:state.user}});
+  if(res&&res.error){showToast('Gagal: '+res.error,'error');}
+  else showToast('Cicilan disimpan ✓ '+fmt(per)+'/bln','success');
+  await syncAll();
+}
+async function doPayCicilan(id){
+  const c=(state.cicilan||[]).find(x=>x.ID===id); if(!c)return;
+  const tenor=+c.TENOR||0, terbayar=+c.TENOR_TERBAYAR||0, per=+c.NOMINAL_PER_BULAN||0;
+  if(terbayar>=tenor){showToast('Cicilan sudah lunas','error');return;}
+  const total=(+c.NOMINAL_POKOK||0)+(+c.BUNGA_TOTAL||0);
+  const amt=(terbayar===tenor-1)?(total-per*(tenor-1)):per;
+  if(!confirm('Bayar angsuran ke-'+(terbayar+1)+'/'+tenor+' ('+fmt(amt)+') untuk "'+(c.DESKRIPSI||'')+'"?\nDana diambil dari reserve '+c.CC+'.'))return;
+  if(API_URL){
+    showToast('Memproses angsuran…','success');
+    const res=await apiPost({action:'payCicilan',data:{ID:id,TANGGAL:today(),USER:state.user}});
+    if(res&&res.error){showToast('Gagal: '+res.error,'error');return;}
+    closeDrawer();
+    await syncAll();
+    showToast('Angsuran ke-'+(terbayar+1)+' dibayar ✓','success');
+  } else {
+    c.TENOR_TERBAYAR=terbayar+1; if(c.TENOR_TERBAYAR>=tenor)c.STATUS='Lunas';
+    state.reserveFunds[c.CC]=Math.max(0,(state.reserveFunds[c.CC]||0)-amt);
+    saveLocal(); closeDrawer(); renderMaster(); renderDashboard();
+  }
+}
+function delCicilan(id){
+  const c=(state.cicilan||[]).find(x=>x.ID===id); if(!c)return;
+  if((+c.TENOR_TERBAYAR||0)>0){showToast('Cicilan sudah berjalan, tidak bisa dihapus','error');return;}
+  if(!confirm('Hapus cicilan "'+(c.DESKRIPSI||'')+'"? Biaya & reserve terkait dibatalkan.'))return;
+  state.cicilan=(state.cicilan||[]).filter(x=>x.ID!==id);
+  if(API_URL){ apiPost({action:'deleteCicilan',data:{id:id,USER:state.user}}).then(()=>syncAll()); }
+  saveLocal(); renderMaster(); renderDashboard();
+  showToast('Cicilan dihapus','success');
+}
+
 // ── RENDER TRANSAKSI ──────────────────────────────────
 function renderTxn(filtered) {
   const data = (filtered || [...state.txns]).sort((a,b) => String(b.TANGGAL).localeCompare(String(a.TANGGAL)));
@@ -1646,16 +1827,22 @@ function renderMaster() {
     `;
   } else if (tab === 'cc') {
     document.getElementById('masterContent').innerHTML = `
-      <button class="btn-primary" style="margin-bottom:12px" onclick="openDrawer('cc')"><i class="ti ti-plus"></i> Tambah Kartu Kredit</button>
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        <button class="btn-primary" style="flex:1" onclick="openDrawer('cc')"><i class="ti ti-plus"></i> Tambah Kartu Kredit</button>
+        <button class="btn-primary" style="flex:1;background:#1a1030;border-color:#7c5cff60;color:#b9a3ff" onclick="openCicilan()"><i class="ti ti-calendar-repeat"></i> Beli Cicilan</button>
+      </div>
       ${state.ccs.map(c => {
         const out = getCCOut(c.NAMA), res = state.reserveFunds[c.NAMA] || 0;
         const txnCount = acctCount(c.NAMA);
+        const cicN = (state.cicilan||[]).filter(x=>x.CC===c.NAMA && x.STATUS!=='Lunas').length;
+        const cicSisa = cicilanRemaining(c.NAMA);
         return `<div class="card acct-card" style="margin-bottom:8px;padding:10px 12px" data-acctype="cc" data-accnama="${esc(c.NAMA)}">
           <div style="display:flex;align-items:center;justify-content:space-between">
             <div style="flex:1;min-width:0">
               <div style="font-size:13px;font-weight:600">${esc(c.NAMA)}</div>
               <div style="font-size:11px;color:var(--text2)">${c.BANK} · Limit ${c.LIMIT?fmtS(c.LIMIT):'—'} · Jth tgl ${c.JATUH_TEMPO}</div>
               <div style="font-size:10px;color:var(--text3);margin-top:2px">${txnCount} transaksi · ketuk untuk detail</div>
+              ${cicN>0?`<div style="font-size:10px;color:#b9a3ff;margin-top:2px"><i class="ti ti-calendar-repeat"></i> ${cicN} cicilan jalan · sisa ${fmtS(cicSisa)}</div>`:''}
             </div>
             <div style="text-align:right;flex-shrink:0">
               <span class="badge ${out>0?'badge-red':'badge-green'}">${out>0?'Tagihan':'Lunas'}</span>
@@ -1670,6 +1857,7 @@ function renderMaster() {
           </div>
         </div>`;
       }).join('')}
+      ${cicilanListHTML()}
     `;
   } else if (tab === 'kat') {
     const groups = [...new Set(state.kategori.map(k => k.KELOMPOK))].sort((a,b)=>String(a).localeCompare(String(b)));
@@ -2348,6 +2536,8 @@ function openDrawer(mode, editId = null) {
     const cc = editId ? state.ccs.find(x=>x.ID===editId) : state.ccs[0];
     const out = cc ? getCCOut(cc.NAMA) : 0;
     const resv = cc ? (state.reserveFunds[cc.NAMA]||0) : 0;
+    const cicDue = cc ? cicilanDueAmt(cc.NAMA) : 0;
+    const nonCic = Math.max(0, out - cicDue);
     const banks = state.banks.map(b=>b.NAMA);
     document.getElementById('drawerBody').innerHTML = `
       <div class="form-group"><label class="form-label">Kartu Kredit</label>
@@ -2356,6 +2546,7 @@ function openDrawer(mode, editId = null) {
         <div class="card" style="flex:1;padding:8px 10px;margin:0"><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Tagihan</div><div id="pc_out" style="font-size:14px;font-weight:700;color:var(--red)">${fmt(out)}</div></div>
         <div class="card" style="flex:1;padding:8px 10px;margin:0"><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Reserve tersedia</div><div id="pc_resv" style="font-size:14px;font-weight:700;color:var(--blue)">${fmt(resv)}</div></div>
       </div>
+      <div id="pc_cicilan">${cc?paycCicilanHTML(cc.NAMA):''}</div>
       <div class="form-group"><label class="form-label">Sumber Dana</label>
         <select class="form-input" id="pc_src" onchange="onPayCCSrc()">
           <option value="bank">Rekening Bank</option>
@@ -2364,12 +2555,12 @@ function openDrawer(mode, editId = null) {
       <div class="form-group" id="pc_bankWrap"><label class="form-label">Dari Rekening</label>
         <select class="form-input" id="pc_bank">${banks.map(n=>`<option>${esc(n)}</option>`).join('')}</select></div>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">Nominal</label><input class="form-input" id="pc_nominal" type="text" inputmode="numeric" value="${out>0?fmtInput(out):''}" oninput="fmtMoneyInput(this)" placeholder="0"></div>
+        <div class="form-group"><label class="form-label">Nominal (non-cicilan)</label><input class="form-input" id="pc_nominal" type="text" inputmode="numeric" value="${nonCic>0?fmtInput(nonCic):''}" oninput="fmtMoneyInput(this)" placeholder="0"></div>
         <div class="form-group"><label class="form-label">Tanggal</label><input class="form-input" id="pc_tgl" type="date" value="${today()}"></div>
       </div>
       <div class="form-group"><label class="form-label">Catatan</label><input class="form-input" id="pc_notes" placeholder="opsional"></div>
       <button class="btn-primary" onclick="saveDrawer()"><i class="ti ti-credit-card"></i> Bayar</button>
-      <div class="settings-sub" style="margin-top:8px">Bank: saldo bank turun & tagihan turun. Reserve: tagihan turun & pot reserve turun (bank tidak berubah, karena dana sudah disisihkan sebelumnya).</div>
+      <div class="settings-sub" style="margin-top:8px">Angsuran cicilan dibayar lewat tombol "Bayar" di atas (dari reserve). Nominal di bawah = tagihan non-cicilan: Bank → saldo bank turun & tagihan turun. Reserve → tagihan & pot reserve turun.</div>
     `;
   } else if (mode === 'settings') {
     document.getElementById('drawerBody').innerHTML = `
@@ -2474,9 +2665,11 @@ function editKat(id){openDrawer('kat',id);}
 function onPayCCChange(){
   const ccName=document.getElementById('pc_cc').value;
   const out=getCCOut(ccName), resv=state.reserveFunds[ccName]||0;
+  const nonCic=Math.max(0,out-cicilanDueAmt(ccName));
   document.getElementById('pc_out').textContent=fmt(out);
   document.getElementById('pc_resv').textContent=fmt(resv);
-  const nm=document.getElementById('pc_nominal'); if(nm) nm.value=out>0?fmtInput(out):'';
+  const cicBox=document.getElementById('pc_cicilan'); if(cicBox) cicBox.innerHTML=paycCicilanHTML(ccName);
+  const nm=document.getElementById('pc_nominal'); if(nm) nm.value=nonCic>0?fmtInput(nonCic):'';
   onPayCCSrc();
 }
 function onPayCCSrc(){
@@ -2504,7 +2697,7 @@ async function forceRefresh(){
   if(data&&!data.error){
     state.banks=data.banks||state.banks;state.ccs=data.ccs||state.ccs;state.projects=data.projects||state.projects;
     state.kategori=data.kategori||state.kategori;state.txns=data.txns||state.txns;state.transfers=data.transfers||state.transfers;
-    state.reserves=data.reserves||state.reserves;state.kasbon=data.kasbon||state.kasbon;state.jadwal=data.jadwal||state.jadwal;state.piutang=data.piutang||state.piutang||[];state.summary=data.summary||null;state.txnsSince=data.since||state.txnsSince;
+    state.reserves=data.reserves||state.reserves;state.kasbon=data.kasbon||state.kasbon;state.jadwal=data.jadwal||state.jadwal;state.piutang=data.piutang||state.piutang||[];state.cicilan=data.cicilan||state.cicilan||[];state.summary=data.summary||null;state.txnsSince=data.since||state.txnsSince;
     computeReserve();saveLocal();renderAll();closeDrawer();showToast('Total dihitung ulang ✓','success');
   } else { showToast('Gagal refresh','error'); }
 }

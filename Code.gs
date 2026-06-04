@@ -15,7 +15,7 @@ const SUMMARY_KEY = 'fcc_summary_v3';
 const S = {
   TXN: 'TRANSAKSI', BANK: 'MASTER_BANK', CC: 'MASTER_CC', PROJ: 'MASTER_PROJECT',
   KAT: 'MASTER_KATEGORI', TRANSFER: 'TRANSFER_LOG', RESERVE: 'RESERVE_LOG', KASBON: 'KASBON',
-  JADWAL: 'JADWAL', PIUTANG: 'PIUTANG',
+  JADWAL: 'JADWAL', PIUTANG: 'PIUTANG', CICILAN: 'CICILAN',
 };
 
 const HEADERS = {
@@ -35,6 +35,12 @@ const HEADERS = {
   // STATUS: 'Belum' / 'Lunas'. Saat Lunas → tulis 1 TXN Pemasukan (lihat payPiutang).
   // Termin STATUS='Belum' dengan JATUH_TEMPO ≤ horizon dipakai client utk proyeksi Forecast.
   [S.PIUTANG]:  ['ID','PROJECT','KLIEN','TERMIN','NOMINAL','JATUH_TEMPO','STATUS','TGL_BAYAR','REKENING','REF_ID','NOTES','CREATED_BY','CREATED_AT'],
+  // CICILAN = pembelian kartu kredit yg dicicil. Beban diakui PENUH di muka (2 TXN
+  // 'Cicilan-Beli' pokok+bunga, REKENING kosong → masuk laba/proj/komposisi, TIDAK
+  // menambah tagihan CC). Kas dialokasikan via RESERVE penuh (pokok+bunga) ke CC.
+  // Tagihan cicilan bersifat virtual (dihitung client dari TENOR_TERBAYAR). payCicilan
+  // tiap bulan = release reserve + TENOR_TERBAYAR++. STATUS: 'Jalan'/'Lunas'.
+  [S.CICILAN]:  ['ID','TANGGAL_BELI','CC','DESKRIPSI','NOMINAL_POKOK','BUNGA_TOTAL','TENOR','NOMINAL_PER_BULAN','TGL_MULAI','TENOR_TERBAYAR','STATUS','PROJECT','KATEGORI','REF_ID','NOTES','CREATED_BY','CREATED_AT'],
 };
 
 // ── INIT ─────────────────────────────────────────────────────
@@ -131,6 +137,7 @@ function doGet(e) {
       case 'getReserves':  return json(getSheet(ss, S.RESERVE));
       case 'getJadwal':    return json(getSheet(ss, S.JADWAL));
       case 'getPiutang':   return json(getSheet(ss, S.PIUTANG));
+      case 'getCicilan':   return json(getSheet(ss, S.CICILAN));
       default:             return json({ error: 'Unknown action' });
     }
   } catch (err) { return json({ error: err.message }); }
@@ -159,6 +166,9 @@ function doPost(e) {
       case 'addJadwal':   res = addJadwal(ss, data); break;
       case 'addPiutang':  res = addPiutang(ss, data); break;
       case 'payPiutang':  res = payPiutang(ss, data); break;
+      case 'addCicilan':  res = addCicilan(ss, data); break;
+      case 'payCicilan':  res = payCicilan(ss, data); break;
+      case 'deleteCicilan': res = deleteCicilan(ss, data); break;
       case 'updateRow':   res = updateRow(ss, data); break;
       case 'deleteRow':   res = deleteRow(ss, data); break;
       case 'init':        res = initSheets(); break;
@@ -182,6 +192,7 @@ function getBundle(ss, params) {
     kasbon:    getSheet(ss, S.KASBON),
     jadwal:    getSheet(ss, S.JADWAL),
     piutang:   getSheet(ss, S.PIUTANG),
+    cicilan:   getSheet(ss, S.CICILAN),
     summary:   getSummary(ss),
     txns:      getTxns(ss, { since: since }),
     since:     since,
@@ -221,7 +232,7 @@ function getSummary(ss) {
         const m = out.month[ym] || (out.month[ym] = { masuk: 0, keluar: 0 });
         m[masuk ? 'masuk' : 'keluar'] += nom;
       }
-      if (!masuk && r[iTipe] === 'Pengeluaran' && kat) out.katExp[kat] = (out.katExp[kat] || 0) + nom;
+      if (!masuk && (r[iTipe] === 'Pengeluaran' || r[iTipe] === 'Cicilan-Beli') && kat) out.katExp[kat] = (out.katExp[kat] || 0) + nom;
       out.count++;
     });
   }
@@ -250,7 +261,7 @@ function getAllData(ss) {
     kategori: getSheet(ss, S.KAT), txns: getSheet(ss, S.TXN),
     transfers: getSheet(ss, S.TRANSFER), reserves: getSheet(ss, S.RESERVE),
     kasbon: getSheet(ss, S.KASBON), jadwal: getSheet(ss, S.JADWAL),
-    piutang: getSheet(ss, S.PIUTANG),
+    piutang: getSheet(ss, S.PIUTANG), cicilan: getSheet(ss, S.CICILAN),
   };
 }
 
@@ -494,6 +505,116 @@ function ensureKat(ss, nama, kelompok, tipe) {
     }
   }
   sh.appendRow(['K'+Date.now(), kelompok, nama, tipe, new Date().toISOString()]);
+}
+
+// ── CICILAN KARTU KREDIT ─────────────────────────────────────
+// Beli barang via CC yg dicicil. Model (PRD v17):
+//  - Beban PENUH di muka: 2 TXN 'Cicilan-Beli' (pokok + bunga), REKENING KOSONG →
+//    masuk laba/proj/komposisi, TIDAK menambah tagihan CC (acct di-skip krn rek kosong).
+//  - Kas dialokasikan: RESERVE penuh (pokok+bunga) dari bank ke CC → bank turun, pot reserve naik.
+//  - Tagihan cicilan = VIRTUAL (dihitung client dari TENOR_TERBAYAR). Tiap bulan payCicilan
+//    melepas reserve (pot turun) + TENOR_TERBAYAR++. Bank & laba TIDAK disentuh lagi (sudah di muka).
+function addCicilan(ss, data) {
+  let sh = ss.getSheetByName(S.CICILAN);
+  if (!sh) {
+    sh = ss.insertSheet(S.CICILAN);
+    sh.appendRow(HEADERS[S.CICILAN]);
+    sh.getRange(1,1,1,HEADERS[S.CICILAN].length).setFontWeight('bold').setBackground('#1a1a2e').setFontColor('#ffffff');
+    sh.setFrozenRows(1);
+  }
+  const now = new Date().toISOString();
+  const ref = 'CIC' + Date.now();
+  const pokok = Math.abs(Number(data.NOMINAL_POKOK) || 0);
+  const bunga = Math.abs(Number(data.BUNGA_TOTAL) || 0);
+  const tenor = Math.max(1, Math.floor(Number(data.TENOR) || 1));
+  const total = pokok + bunga;
+  const perBulan = Math.round(total / tenor);
+  const tglBeli = data.TGL_BELI || now.slice(0,10);
+  const tglMulai = data.TGL_MULAI || tglBeli;
+  const proj = data.PROJECT || '';
+  const kat  = data.KATEGORI || 'Material';
+  const cc   = data.CC || '';
+  const bank = data.BANK || '';
+  const desk = data.DESKRIPSI || '';
+  const o = { ID:ref, TANGGAL_BELI:tglBeli, CC:cc, DESKRIPSI:desk, NOMINAL_POKOK:pokok,
+              BUNGA_TOTAL:bunga, TENOR:tenor, NOMINAL_PER_BULAN:perBulan, TGL_MULAI:tglMulai,
+              TENOR_TERBAYAR:0, STATUS:'Jalan', PROJECT:proj, KATEGORI:kat, REF_ID:ref,
+              NOTES:data.NOTES||'', CREATED_BY:data.USER||'', CREATED_AT:now };
+  sh.appendRow(HEADERS[S.CICILAN].map(h => o[h] !== undefined ? o[h] : ''));
+
+  const tx = ss.getSheetByName(S.TXN);
+  // beban pokok (REKENING kosong → tdk pengaruhi tagihan CC, tapi masuk proj/laba/komposisi)
+  tx.appendRow(['ID'+Date.now()+'P', tglBeli, 'Pengeluaran', proj, '', kat, pokok,
+    '[CICILAN '+ref+'] '+desk+' (pokok '+tenor+'x @ '+cc+')', 'Cicilan-Beli', data.USER||'', now]);
+  if (bunga > 0) {
+    ensureKat(ss, 'Bunga Cicilan', 'FINANCIAL', 'Pengeluaran');
+    tx.appendRow(['ID'+Date.now()+'B', tglBeli, 'Pengeluaran', proj, '', 'Bunga Cicilan', bunga,
+      '[CICILAN '+ref+'] bunga '+desk, 'Cicilan-Beli', data.USER||'', now]);
+  }
+  // reserve penuh dari bank ke CC (alokasi kas): bank turun + pot reserve naik
+  if (bank && cc) {
+    tx.appendRow(['ID'+Date.now()+'R', tglBeli, 'Pengeluaran', '', bank, 'Reserve CC', total,
+      '[RESERVE ke '+cc+'] [CICILAN '+ref+'] '+desk, 'Reserve', data.USER||'', now]);
+    ss.getSheetByName(S.RESERVE).appendRow(['ID'+Date.now()+'RL', tglBeli, bank, cc, total,
+      '[CICILAN '+ref+'] '+desk, data.USER||'', now]);
+  }
+  return { ok:true, ref:ref, perBulan:perBulan };
+}
+
+// Bayar 1 angsuran (dipanggil dari alur Bayar CC). Melepas reserve sebesar angsuran
+// (angsuran terakhir = sisa supaya pot habis pas) + TENOR_TERBAYAR++. Tanpa TXN/laba/bank.
+function payCicilan(ss, data) {
+  const id = String(data.ID || '');
+  if (!id) return { error: 'ID cicilan required' };
+  const sh = ss.getSheetByName(S.CICILAN);
+  if (!sh || sh.getLastRow() <= 1) return { error: 'CICILAN kosong' };
+  const all = sh.getRange(1,1,sh.getLastRow(),sh.getLastColumn()).getValues();
+  const H = all[0]; const iId = H.indexOf('ID');
+  let r = -1; for (let i=1;i<all.length;i++) if (String(all[i][iId])===id) { r=i; break; }
+  if (r < 0) return { error: 'Cicilan tidak ditemukan' };
+  const tenor = Number(all[r][H.indexOf('TENOR')]) || 1;
+  let terbayar = Number(all[r][H.indexOf('TENOR_TERBAYAR')]) || 0;
+  if (terbayar >= tenor) return { error: 'Cicilan sudah lunas' };
+  const per   = Number(all[r][H.indexOf('NOMINAL_PER_BULAN')]) || 0;
+  const total = (Number(all[r][H.indexOf('NOMINAL_POKOK')])||0) + (Number(all[r][H.indexOf('BUNGA_TOTAL')])||0);
+  const cc = all[r][H.indexOf('CC')] || '';
+  const amt = (terbayar === tenor - 1) ? (total - per*(tenor-1)) : per; // last = remainder
+  const now = new Date().toISOString();
+  const tgl = data.TANGGAL || now.slice(0,10);
+  ss.getSheetByName(S.RESERVE).appendRow(['ID'+Date.now(), tgl, '(release)', cc, -Math.abs(amt),
+    '[CICILAN '+id+'] bayar ke-'+(terbayar+1)+'/'+tenor, data.USER||'', now]);
+  terbayar++;
+  all[r][H.indexOf('TENOR_TERBAYAR')] = terbayar;
+  if (terbayar >= tenor) all[r][H.indexOf('STATUS')] = 'Lunas';
+  sh.getRange(r+1, 1, 1, H.length).setValues([all[r]]);
+  return { ok:true, terbayar:terbayar, tenor:tenor, amt:amt };
+}
+
+// Hapus cicilan (hanya bila belum ada angsuran terbayar) + TXN & RESERVE_LOG terkait (via REF_ID).
+function deleteCicilan(ss, data) {
+  const id = String(data.id || data.ID || '');
+  const sh = ss.getSheetByName(S.CICILAN);
+  if (!sh || sh.getLastRow() <= 1) return { error: 'CICILAN kosong' };
+  const all = sh.getRange(1,1,sh.getLastRow(),sh.getLastColumn()).getValues();
+  const H = all[0]; const iId = H.indexOf('ID');
+  let r = -1; for (let i=1;i<all.length;i++) if (String(all[i][iId])===id) { r=i; break; }
+  if (r < 0) return { error: 'Cicilan tidak ditemukan' };
+  if ((Number(all[r][H.indexOf('TENOR_TERBAYAR')])||0) > 0) return { error: 'Cicilan sudah berjalan, tidak bisa dihapus' };
+  const ref = String(all[r][H.indexOf('REF_ID')] || id);
+  sh.deleteRow(r + 1);
+  const tx = ss.getSheetByName(S.TXN);
+  if (tx && tx.getLastRow() > 1) {
+    const a = tx.getRange(1,1,tx.getLastRow(),tx.getLastColumn()).getValues();
+    const c = a[0].indexOf('NOTES');
+    for (let i=a.length-1;i>=1;i--) if (String(a[i][c]).indexOf(ref)>=0) tx.deleteRow(i+1);
+  }
+  const rs = ss.getSheetByName(S.RESERVE);
+  if (rs && rs.getLastRow() > 1) {
+    const a = rs.getRange(1,1,rs.getLastRow(),rs.getLastColumn()).getValues();
+    const c = a[0].indexOf('NOTES');
+    for (let i=a.length-1;i>=1;i--) if (String(a[i][c]).indexOf(ref)>=0) rs.deleteRow(i+1);
+  }
+  return { ok:true };
 }
 
 // Hapus 1 entri kasbon (by REF_ID) + baris TXN terkait (NOTES memuat refId).
