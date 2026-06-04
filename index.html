@@ -1505,6 +1505,50 @@ function delCicilan(id){
   saveLocal(); renderMaster(); renderDashboard();
   showToast('Cicilan dihapus','success');
 }
+// Konversi transaksi CC (Pengeluaran biasa) yg sedang diedit → jadi cicilan, tanpa hapus manual.
+let _cvPokok=0;
+function openConvertCicilan(txnId){
+  if(!API_URL){showToast('Set API URL dulu — cicilan butuh server','error');return;}
+  const t=state.txns.find(x=>x.ID===txnId); if(!t){showToast('Transaksi tak ditemukan di data termuat','error');return;}
+  const pokok=Math.abs(Number(t.NOMINAL)||0); _cvPokok=pokok;
+  const bankOpts=state.banks.map(b=>`<option>${esc(b.NAMA)}</option>`).join('');
+  document.getElementById('drawerTitle').textContent='Ubah jadi Cicilan';
+  document.getElementById('drawerBody').innerHTML=`
+    <div class="card" style="padding:8px 10px;margin:0 0 12px"><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Transaksi</div><div style="font-size:13px;font-weight:600">${esc(t.KATEGORI||'')}${t.PROJECT?' · '+esc(t.PROJECT):''}</div><div style="font-size:12px;color:var(--text2)">${esc(t.REKENING)} · ${fmt(pokok)}</div></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Tenor (x)</label><input class="form-input" id="cv_tenor" type="number" inputmode="numeric" value="12" min="1" oninput="cvPreview()"></div>
+      <div class="form-group"><label class="form-label">Total Bunga (Rp)</label><input class="form-input" id="cv_bunga" type="text" inputmode="numeric" value="0" oninput="fmtMoneyInput(this);cvPreview()"></div>
+    </div>
+    <div class="card" style="padding:8px 10px;margin:0 0 12px;background:#140d24;border:1px solid #7c5cff40"><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Angsuran per bulan</div><div id="cv_per" style="font-size:16px;font-weight:700;color:#b9a3ff">Rp 0</div><div id="cv_perSub" style="font-size:10px;color:var(--text3)"></div></div>
+    <div class="form-group"><label class="form-label">Reserve dana dari bank</label><select class="form-input" id="cv_bank">${bankOpts}</select></div>
+    <div class="form-group"><label class="form-label">Tgl mulai cicilan</label><input class="form-input" id="cv_mulai" type="date" value="${String(t.TANGGAL).slice(0,10)}"></div>
+    <button class="btn-primary" onclick="saveConvertCicilan('${txnId}',${pokok})"><i class="ti ti-calendar-repeat"></i> Konversi jadi Cicilan</button>
+    <div class="settings-sub" style="margin-top:8px">Transaksi ini jadi beban pokok cicilan (rekening dikosongkan → berhenti membebani tagihan CC sekaligus, biaya project tetap). Dana ${fmt(pokok)} + bunga di-reserve dari bank terpilih. Tagihan CC jadi per bulan.</div>`;
+  drawerMode='convertcic'; drawerEditId=txnId;
+  cvPreview();
+  document.getElementById('drawerBg').classList.add('open');
+}
+function cvPreview(){
+  const bunga=unfmtNum(document.getElementById('cv_bunga').value)||0;
+  const tenor=Math.max(1,Math.floor(Number(document.getElementById('cv_tenor').value)||1));
+  const per=Math.round((_cvPokok+bunga)/tenor);
+  document.getElementById('cv_per').textContent=fmt(per);
+  document.getElementById('cv_perSub').textContent='Total '+fmt(_cvPokok+bunga)+' ÷ '+tenor+'x · di-reserve penuh';
+}
+async function saveConvertCicilan(txnId, pokok){
+  const tenor=Math.max(1,Math.floor(Number(document.getElementById('cv_tenor').value)||1));
+  const bunga=unfmtNum(document.getElementById('cv_bunga').value)||0;
+  const bank=document.getElementById('cv_bank').value;
+  const mulai=document.getElementById('cv_mulai').value||today();
+  if(!bank){showToast('Pilih bank sumber reserve','error');return;}
+  if(!confirm('Ubah transaksi ini jadi cicilan '+tenor+'x?\nRekening dikosongkan & '+fmt(pokok+bunga)+' di-reserve dari '+bank+'.'))return;
+  closeDrawer();
+  showToast('Mengkonversi…','success');
+  const res=await apiPost({action:'convertTxnToCicilan',data:{txnId:txnId,BANK:bank,BUNGA_TOTAL:bunga,TENOR:tenor,TGL_MULAI:mulai,USER:state.user}});
+  if(res&&res.error){showToast('Gagal: '+res.error,'error');}
+  else showToast('Jadi cicilan ✓ '+fmt((res&&res.perBulan)||0)+'/bln','success');
+  await syncAll();
+}
 
 // ── RENDER TRANSAKSI ──────────────────────────────────
 function renderTxn(filtered) {
@@ -2488,6 +2532,7 @@ function openDrawer(mode, editId = null) {
         <div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="f_notes" value="${t?esc(t.NOTES||''):''}" placeholder="Opsional"></div>
       </div>
       <button class="btn-primary" onclick="saveDrawer()">Simpan ke Sheets</button>
+      ${editId && t && t.JENIS==='Pengeluaran' && (t.TIPE_LOG==='Pengeluaran'||!t.TIPE_LOG) && state.ccs.some(c=>c.NAMA===t.REKENING) ? `<button class="btn-secondary" style="color:#b9a3ff" onclick="openConvertCicilan('${editId}')"><i class="ti ti-calendar-repeat"></i> Ubah jadi Cicilan</button>` : ''}
       ${editId ? `<button class="btn-secondary" style="color:var(--red)" onclick="deleteItem('txns','${editId}','TRANSAKSI')">Hapus Transaksi</button>` : ''}
     `;
   } else if (mode === 'proj') {

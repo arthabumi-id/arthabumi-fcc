@@ -169,6 +169,7 @@ function doPost(e) {
       case 'addCicilan':  res = addCicilan(ss, data); break;
       case 'payCicilan':  res = payCicilan(ss, data); break;
       case 'deleteCicilan': res = deleteCicilan(ss, data); break;
+      case 'convertTxnToCicilan': res = convertTxnToCicilan(ss, data); break;
       case 'updateRow':   res = updateRow(ss, data); break;
       case 'deleteRow':   res = deleteRow(ss, data); break;
       case 'init':        res = initSheets(); break;
@@ -588,6 +589,79 @@ function payCicilan(ss, data) {
   if (terbayar >= tenor) all[r][H.indexOf('STATUS')] = 'Lunas';
   sh.getRange(r+1, 1, 1, H.length).setValues([all[r]]);
   return { ok:true, terbayar:terbayar, tenor:tenor, amt:amt };
+}
+
+// Konversi 1 transaksi CC (Pengeluaran biasa) menjadi cicilan — TANPA hapus/buat manual.
+// TXN lama dipakai sbg beban pokok: REKENING dikosongkan + TIPE_LOG → 'Cicilan-Beli'
+// (berhenti membebani tagihan CC, tetap jadi biaya project). Lalu buat reserve penuh +
+// baris CICILAN (+ TXN bunga bila ada). Hasil = identik addCicilan, tapi reuse txn lama.
+function convertTxnToCicilan(ss, data) {
+  const id = String(data.txnId || data.ID || '');
+  if (!id) return { error: 'txnId required' };
+  const tx = ss.getSheetByName(S.TXN);
+  if (!tx || tx.getLastRow() <= 1) return { error: 'TRANSAKSI kosong' };
+  const all = tx.getRange(1,1,tx.getLastRow(),tx.getLastColumn()).getValues();
+  const H = all[0];
+  const iId=H.indexOf('ID'), iJns=H.indexOf('JENIS'), iProj=H.indexOf('PROJECT'),
+        iRek=H.indexOf('REKENING'), iKat=H.indexOf('KATEGORI'), iNom=H.indexOf('NOMINAL'),
+        iNotes=H.indexOf('NOTES'), iTipe=H.indexOf('TIPE_LOG'), iTgl=H.indexOf('TANGGAL');
+  let r=-1; for (let i=1;i<all.length;i++) if (String(all[i][iId])===id) { r=i; break; }
+  if (r<0) return { error: 'Transaksi tidak ditemukan' };
+  const cc = String(all[r][iRek]||'');
+  // validasi: harus Pengeluaran biasa di kartu kredit
+  if (String(all[r][iJns])!=='Pengeluaran') return { error: 'Hanya transaksi Pengeluaran bisa dijadikan cicilan' };
+  if (String(all[r][iTipe])!=='Pengeluaran') return { error: 'Transaksi ini bukan pengeluaran biasa (transfer/reserve/cicilan)' };
+  const ccNames = getSheet(ss, S.CC).map(c => c.NAMA);
+  if (ccNames.indexOf(cc) < 0) return { error: 'Rekening transaksi bukan kartu kredit' };
+
+  const pokok = Math.abs(Number(all[r][iNom]) || 0);
+  const bunga = Math.abs(Number(data.BUNGA_TOTAL) || 0);
+  const tenor = Math.max(1, Math.floor(Number(data.TENOR) || 1));
+  const total = pokok + bunga;
+  const perBulan = Math.round(total / tenor);
+  const proj = String(all[r][iProj]||'');
+  const kat  = String(all[r][iKat]||'Material');
+  const now = new Date().toISOString();
+  const ref = 'CIC' + Date.now();
+  const tglBeli = normalizeCell(all[r][iTgl], ss.getSpreadsheetTimeZone()||'Asia/Jakarta');
+  const tglMulai = data.TGL_MULAI || tglBeli;
+  const bank = data.BANK || '';
+  const desk = String(all[r][iNotes]||'') || ('Konversi ' + kat);
+
+  // 1) ubah TXN lama jadi beban Cicilan-Beli (REKENING kosong)
+  all[r][iRek] = '';
+  all[r][iTipe] = 'Cicilan-Beli';
+  all[r][iNotes] = String(all[r][iNotes]||'') + ' [CICILAN '+ref+'] (konversi dari txn CC '+cc+')';
+  tx.getRange(r+1, 1, 1, H.length).setValues([all[r]]);
+
+  // 2) baris CICILAN
+  let sh = ss.getSheetByName(S.CICILAN);
+  if (!sh) {
+    sh = ss.insertSheet(S.CICILAN);
+    sh.appendRow(HEADERS[S.CICILAN]);
+    sh.getRange(1,1,1,HEADERS[S.CICILAN].length).setFontWeight('bold').setBackground('#1a1a2e').setFontColor('#ffffff');
+    sh.setFrozenRows(1);
+  }
+  const o = { ID:ref, TANGGAL_BELI:tglBeli, CC:cc, DESKRIPSI:(data.DESKRIPSI||kat),
+              NOMINAL_POKOK:pokok, BUNGA_TOTAL:bunga, TENOR:tenor, NOMINAL_PER_BULAN:perBulan,
+              TGL_MULAI:tglMulai, TENOR_TERBAYAR:0, STATUS:'Jalan', PROJECT:proj, KATEGORI:kat,
+              REF_ID:ref, NOTES:'(konversi) '+(data.NOTES||''), CREATED_BY:data.USER||'', CREATED_AT:now };
+  sh.appendRow(HEADERS[S.CICILAN].map(h => o[h] !== undefined ? o[h] : ''));
+
+  // 3) TXN bunga (bila ada)
+  if (bunga > 0) {
+    ensureKat(ss, 'Bunga Cicilan', 'FINANCIAL', 'Pengeluaran');
+    tx.appendRow(['ID'+Date.now()+'B', tglBeli, 'Pengeluaran', proj, '', 'Bunga Cicilan', bunga,
+      '[CICILAN '+ref+'] bunga (konversi)', 'Cicilan-Beli', data.USER||'', now]);
+  }
+  // 4) reserve penuh dari bank ke CC
+  if (bank) {
+    tx.appendRow(['ID'+Date.now()+'R', tglBeli, 'Pengeluaran', '', bank, 'Reserve CC', total,
+      '[RESERVE ke '+cc+'] [CICILAN '+ref+'] (konversi)', 'Reserve', data.USER||'', now]);
+    ss.getSheetByName(S.RESERVE).appendRow(['ID'+Date.now()+'RL', tglBeli, bank, cc, total,
+      '[CICILAN '+ref+'] (konversi)', data.USER||'', now]);
+  }
+  return { ok:true, ref:ref, perBulan:perBulan };
 }
 
 // Hapus cicilan (hanya bila belum ada angsuran terbayar) + TXN & RESERVE_LOG terkait (via REF_ID).
