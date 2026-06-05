@@ -3,6 +3,18 @@
 
 ---
 
+## SESSION — 2026-06-04 (v18.1–18.6 lanjutan + rekonsiliasi BCA)
+**Dikerjakan (client-only kecuali disebut):**
+- v18.1 Rincian Tagihan CC (`openCCBill`) + v18.2 checkbox rekonsiliasi (`ccbTick`) + fix refund (Pemasukan) jadi NEGATIF saat dicentang.
+- v18.3 Kunci tagihan ke Dashboard — **sheet `CC_TAGIHAN` + action `lockCCBill` (WAJIB REDEPLOY)**, `renderCCBillReminder`. v18.4 banner hanya urgent (≤7hr/overdue) + info jatuh tempo inline di section KARTU KREDIT (`#dashCC`, `ccBillFor`).
+- v18.5 Kategori cascade Kelompok→Kategori di Tambah Transaksi.
+- v18.6 keterangan "reserve di [bank]" di baris cicilan (`cicilanHolding` + fallback).
+**Temuan penting:** user pakai index.html baru TAPI **Code.gs v18 belum tentu di-redeploy** → tanda: cicilan baru tampil "reserve di Seabank Ronah" (default) krn tak ada TXN 'Reserve Masuk'. ACTION user: redeploy Code.gs.
+**Rekonsiliasi BCA 082 Mei (dibatalkan):** dibaca via Google Drive connector (sheet "FCC Arthabumi - Database v2"). Total versi app: masuk Rp 186.637.647, keluar Rp 78.962.552. Selisih 554.800 vs statement BELUM ketemu (tak ada item tunggal/pasangan = 554.800). Untuk lanjut: minta total masuk/keluar statement BCA.
+**Pending besar:** Code.gs v18 (+CC_TAGIHAN, lockCCBill, semua action reserve/cicilan/convert) WAJIB di-redeploy; push index.html/sw.js(v9). sw.js cache fcc-arthabumi-v9.
+
+---
+
 ## SESSION — 2026-06-04 (v18 Reserve = rekening nyata)
 **Topik:** Ubah reserve dari pot virtual → uang nyata diparkir di rekening penyimpan (mis. Seabank Ronah). PRD: `PRD-v18-reserve-rekening-nyata.md` (signed off).
 **Dikerjakan:** addReserve/payCCReserve/payCicilan/addCicilan/convertTxnToCicilan jadi transfer sumber→holding + earmark; action `migrateReserveToHolding`; Net Cash → bank−reserve; dropdown "Simpan di rekening" + "Ambil dari rekening reserve"; Settings default penyimpan + tombol sinkron; forecast disesuaikan (reserve di bank, angsuran cicilan diproyeksi bulanan). sw.js v8.
