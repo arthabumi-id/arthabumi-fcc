@@ -289,6 +289,7 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
         <button class="ttab" onclick="switchProjTab('jalan')" id="pTab-jalan" style="flex:none;padding:8px 14px;border-radius:20px;border:1px solid var(--border2);font-size:12px">Berjalan</button>
         <button class="ttab" onclick="switchProjTab('hold')" id="pTab-hold" style="flex:none;padding:8px 14px;border-radius:20px;border:1px solid var(--border2);font-size:12px">Hold</button>
         <button class="ttab" onclick="switchProjTab('selesai')" id="pTab-selesai" style="flex:none;padding:8px 14px;border-radius:20px;border:1px solid var(--border2);font-size:12px">Selesai</button>
+        <button class="ttab" onclick="switchProjTab('abaikan')" id="pTab-abaikan" style="flex:none;padding:8px 14px;border-radius:20px;border:1px solid var(--border2);font-size:12px">Abaikan</button>
       </div>
       <div id="projList"></div>
     </div>
@@ -1978,7 +1979,7 @@ function projCard(p){
           <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.NAMA)}</div>
           <div style="font-size:11px;color:var(--text2);margin-top:2px">${esc(p.KLIEN)} · ${String(p.TGL_MULAI||'').slice(0,10)||'—'}</div>
         </div>
-        <span class="badge ${p.STATUS==='Jalan'?'badge-amber':p.STATUS==='Selesai'?'badge-green':''}" style="margin-left:10px;flex-shrink:0;${p.STATUS==='Hold'?'background:#3a3a1a;color:#e0c000;border:1px solid #e0c00040':''}">${p.STATUS}</span>
+        <span class="badge ${p.STATUS==='Jalan'?'badge-amber':p.STATUS==='Selesai'?'badge-green':''}" style="margin-left:10px;flex-shrink:0;${p.STATUS==='Hold'?'background:#3a3a1a;color:#e0c000;border:1px solid #e0c00040':''}${p.STATUS==='Abaikan'?'background:#2a2a2a;color:var(--text3);border:1px solid #ffffff20':''}">${p.STATUS}</span>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
         <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Nilai</div><div style="font-size:12px;font-weight:600">${p.NILAI_CONTRACT?fmt(p.NILAI_CONTRACT):'—'}</div></div>
@@ -2036,15 +2037,18 @@ function renderProject() {
   const jalan  = state.projects.filter(p=>p.STATUS==='Jalan');
   const hold   = state.projects.filter(p=>p.STATUS==='Hold');
   const selesai= byDate(state.projects.filter(p=>p.STATUS==='Selesai'));
+  const abaikan= byDate(state.projects.filter(p=>p.STATUS==='Abaikan'));
   let html='';
 
   if (tab==='jalan')      html = jalan.length ? jalan.map(projCard).join('') : '<div class="empty">Tidak ada project berjalan</div>';
   else if (tab==='hold')  html = hold.length  ? hold.map(projCard).join('')  : '<div class="empty">Tidak ada project hold</div>';
   else if (tab==='selesai') html = selesai.length ? doneSummaryLine(selesai)+projDoneGrid(selesai) : '<div class="empty">Belum ada project selesai</div>';
+  else if (tab==='abaikan') html = abaikan.length ? '<div class="settings-sub" style="margin-bottom:8px">Project ini diabaikan dari perhitungan Laba Bersih (data belum lengkap). Ubah status di Edit kalau mau dihitung lagi.</div>'+abaikan.map(projCard).join('') : '<div class="empty">Tidak ada project diabaikan</div>';
   else { // semua: kartu aktif (Jalan+Hold) lalu rekap grid Selesai
     const active=[...jalan,...hold];
     if(active.length) html += `<div class="card-title" style="margin-bottom:8px">Project Berjalan & Hold (${active.length})</div>` + active.map(projCard).join('');
     if(selesai.length) html += `<div class="card-title" style="margin:18px 0 8px">Project Selesai · Rekap (${selesai.length})</div>` + doneSummaryLine(selesai) + projDoneGrid(selesai);
+    if(abaikan.length) html += `<div class="settings-sub" style="margin-top:16px;cursor:pointer" onclick="switchProjTab('abaikan')">⊘ ${abaikan.length} project diabaikan (tidak masuk laba) — ketuk untuk lihat</div>`;
     if(!html) html='<div class="empty">Belum ada project</div>';
   }
   document.getElementById('projList').innerHTML = html;
@@ -2888,9 +2892,10 @@ function openDrawer(mode, editId = null, preset = null) {
       <div class="form-group"><label class="form-label">Klien</label><input class="form-input" id="fp_klien" value="${t?esc(t.KLIEN):''}" placeholder="Nama klien..."></div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Tgl Mulai</label><input class="form-input" type="date" id="fp_tgl" value="${t?String(t.TGL_MULAI).slice(0,10):today()}"></div>
-        <div class="form-group"><label class="form-label">Status</label><select class="form-input" id="fp_status"><option ${!t||t.STATUS==='Jalan'?'selected':''}>Jalan</option><option ${t&&t.STATUS==='Selesai'?'selected':''}>Selesai</option><option ${t&&t.STATUS==='Hold'?'selected':''}>Hold</option></select></div>
+        <div class="form-group"><label class="form-label">Status</label><select class="form-input" id="fp_status"><option ${!t||t.STATUS==='Jalan'?'selected':''}>Jalan</option><option ${t&&t.STATUS==='Selesai'?'selected':''}>Selesai</option><option ${t&&t.STATUS==='Hold'?'selected':''}>Hold</option><option ${t&&t.STATUS==='Abaikan'?'selected':''}>Abaikan</option></select></div>
       </div>
       <div class="form-group"><label class="form-label">Nilai Kontrak (Rp)</label><input class="form-input" type="text" inputmode="numeric" id="fp_nilai" value="${t?fmtInput(t.NILAI_CONTRACT):''}" placeholder="0" oninput="fmtMoneyInput(this)"></div>
+      <div class="settings-sub" style="margin-bottom:8px"><b>Status "Abaikan"</b> = project dikeluarkan dari perhitungan Laba Bersih (pakai utk project yang datanya belum lengkap).</div>
       <button class="btn-primary" onclick="saveDrawer()"><i class="ti ti-device-floppy"></i> Simpan</button>
       ${editId?`<button class="btn-secondary" onclick="deleteItem('projects','${editId}','MASTER_PROJECT');closeDrawer()">Hapus Project</button>`:''}
     `;
