@@ -223,7 +223,15 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
           <option value="">Semua rekening</option>
         </select>
       </div>
-      <div id="txnMonthTabs" style="display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:2px;-webkit-overflow-scrolling:touch"></div>
+      <div id="txnMonthTabs" style="display:flex;gap:6px;overflow-x:auto;margin-bottom:10px;padding-bottom:2px;-webkit-overflow-scrolling:touch"></div>
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+        <span style="font-size:11px;color:var(--text3)">Rentang:</span>
+        <input type="date" id="txnFrom" class="form-input" style="width:auto;padding:6px 8px;font-size:12px" onchange="onTxnRange()">
+        <span style="font-size:11px;color:var(--text3)">s/d</span>
+        <input type="date" id="txnTo" class="form-input" style="width:auto;padding:6px 8px;font-size:12px" onchange="onTxnRange()">
+        <button onclick="clearTxnRange()" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text3);font-size:11px;cursor:pointer">Reset</button>
+      </div>
+      <div id="txnSummary" style="margin-bottom:8px"></div>
       <div id="txnList"></div>
     </div>
 
@@ -329,6 +337,10 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
   </nav>
 
   <!-- FAB -->
+  <div id="fabMenu" style="display:none;position:fixed;right:20px;bottom:152px;z-index:51;flex-direction:column;gap:10px;align-items:flex-end">
+    <button onclick="addTxnType('Pengeluaran')" style="padding:10px 16px;border-radius:24px;border:none;background:var(--red);color:#fff;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.45)"><i class="ti ti-arrow-up-right"></i> Pengeluaran</button>
+    <button onclick="addTxnType('Pemasukan')" style="padding:10px 16px;border-radius:24px;border:none;background:var(--green);color:#06140d;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.45)"><i class="ti ti-arrow-down-left"></i> Pemasukan</button>
+  </div>
   <button class="fab" id="fab" onclick="openFAB()"><i class="ti ti-plus"></i></button>
 </div>
 
@@ -1906,7 +1918,7 @@ function renderTxnMonthTabs(){
   if (API_URL) html += `<button onclick="loadMoreTxns(this)" style="flex:none;padding:6px 13px;border-radius:16px;border:1px dashed var(--border2);font-size:12px;cursor:pointer;white-space:nowrap;background:transparent;color:var(--text3)"><i class="ti ti-history"></i> lebih lama</button>`;
   el.innerHTML = html;
 }
-function setTxnMonth(m){ state.txnMonth = m; renderTxnMonthTabs(); filterTxn(); }
+function setTxnMonth(m){ const f=document.getElementById('txnFrom'),t=document.getElementById('txnTo'); if(f)f.value=''; if(t)t.value=''; state.txnMonth = m; renderTxnMonthTabs(); filterTxn(); }
 // Isi opsi dropdown filter rekening (bank + CC), pertahankan pilihan saat ini.
 function fillRekFilter(){
   const sel = document.getElementById('txnRekFilter'); if(!sel) return;
@@ -1914,15 +1926,43 @@ function fillRekFilter(){
   const names = [...state.banks.map(b=>b.NAMA), ...state.ccs.map(c=>c.NAMA)];
   sel.innerHTML = '<option value="">Semua rekening</option>' + names.map(n=>`<option value="${esc(n)}" ${cur===n?'selected':''}>${esc(n)}</option>`).join('');
 }
+function onTxnRange(){
+  const from=(document.getElementById('txnFrom')||{}).value||'', to=(document.getElementById('txnTo')||{}).value||'';
+  if(from||to){ state.txnMonth=''; renderTxnMonthTabs(); }  // rentang aktif → matikan tab bulan
+  filterTxn();
+}
+function clearTxnRange(){
+  const f=document.getElementById('txnFrom'), t=document.getElementById('txnTo');
+  if(f)f.value=''; if(t)t.value=''; filterTxn();
+}
 function filterTxn() {
   const q = document.getElementById('txnSearch').value.toLowerCase();
   const tipe = document.getElementById('txnTipeFilter').value;
   const rek = document.getElementById('txnRekFilter').value;
+  const from = (document.getElementById('txnFrom')||{}).value || '';
+  const to = (document.getElementById('txnTo')||{}).value || '';
+  const rangeActive = !!(from || to);
   let data = [...state.txns];
-  if (state.txnMonth) data = data.filter(t => String(t.TANGGAL).slice(0,7) === state.txnMonth);
+  if (!rangeActive && state.txnMonth) data = data.filter(t => String(t.TANGGAL).slice(0,7) === state.txnMonth);
+  if (from) data = data.filter(t => String(t.TANGGAL).slice(0,10) >= from);
+  if (to)   data = data.filter(t => String(t.TANGGAL).slice(0,10) <= to);
   if (q) data = data.filter(t => (String(t.PROJECT)+String(t.NOTES)+String(t.KATEGORI)).toLowerCase().includes(q));
   if (tipe) data = data.filter(t => t.TIPE_LOG === tipe || t.JENIS === tipe);
   if (rek) data = data.filter(t => t.REKENING === rek);
+  // Ringkasan (jumlah + masuk/keluar) — berguna utk cek/rekonsiliasi
+  const sm = document.getElementById('txnSummary');
+  if (sm) {
+    const msk = data.filter(t=>t.JENIS==='Pemasukan').reduce((s,t)=>s+Number(t.NOMINAL||0),0);
+    const klr = data.filter(t=>t.JENIS==='Pengeluaran').reduce((s,t)=>s+Number(t.NOMINAL||0),0);
+    const oldRange = rangeActive && state.txnsSince && from && from < String(state.txnsSince).slice(0,10);
+    sm.innerHTML = `<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:8px 10px;background:#12121a;border:1px solid var(--border2);border-radius:8px;font-size:11px">
+      <span style="color:var(--text2)"><b>${data.length}</b> transaksi</span>
+      <span style="color:var(--green)">masuk <b>${fmt(msk)}</b></span>
+      <span style="color:var(--red)">keluar <b>${fmt(klr)}</b></span>
+      <span style="color:${(msk-klr)>=0?'var(--green)':'var(--red)'}">net <b>${(msk-klr)>=0?'+':'-'}${fmt(Math.abs(msk-klr))}</b></span>
+      ${oldRange?`<span style="color:var(--amber)">⚠ sebagian tgl mungkin belum dimuat — tekan "lebih lama"</span>`:''}
+    </div>`;
+  }
   renderTxn(data);
 }
 
@@ -2796,7 +2836,7 @@ let editTransferRef = null;
 
 function openFAB() {
   const page = state.currentPage;
-  if (page === 'transaksi' || page === 'dashboard') openDrawer('txn');
+  if (page === 'transaksi' || page === 'dashboard') { toggleFabMenu(); return; }
   else if (page === 'project') openDrawer('proj');
   else if (page === 'master') {
     if (state.currentMasterTab === 'bank') openDrawer('bank');
@@ -2804,19 +2844,24 @@ function openFAB() {
     else openDrawer('kat');
   } else openDrawer('txn');
 }
+function toggleFabMenu(){ const m=document.getElementById('fabMenu'); if(m) m.style.display=(m.style.display==='flex')?'none':'flex'; }
+function closeFabMenu(){ const m=document.getElementById('fabMenu'); if(m) m.style.display='none'; }
+function addTxnType(j){ closeFabMenu(); openDrawer('txn', null, j); }
 
-function openDrawer(mode, editId = null) {
+function openDrawer(mode, editId = null, preset = null) {
   drawerMode = mode; drawerEditId = editId;
+  closeFabMenu();
   const titleMap = { txn: editId?'Edit Transaksi':'Tambah Transaksi', proj: editId?'Edit Project':'Tambah Project', bank: editId?'Edit Rekening':'Tambah Rekening', cc: editId?'Edit Kartu Kredit':'Tambah Kartu Kredit', kat: editId?'Edit Kategori':'Tambah Kategori', paycc:'Bayar Kartu Kredit', settings: 'Settings' };
   document.getElementById('drawerTitle').textContent = titleMap[mode] || 'Form';
   const allRek = [...state.banks.map(b=>b.NAMA), ...state.ccs.map(c=>c.NAMA)];
 
   if (mode === 'txn') {
     const t = editId ? state.txns.find(x=>x.ID===editId) : null;
+    const jpre = t ? t.JENIS : (preset || 'Pemasukan');
     document.getElementById('drawerBody').innerHTML = `
       <div class="form-row">
         <div class="form-group"><label class="form-label">Tanggal</label><input class="form-input" type="date" id="f_tgl" value="${t?String(t.TANGGAL).slice(0,10):today()}"></div>
-        <div class="form-group"><label class="form-label">Jenis</label><select class="form-input" id="f_jenis" onchange="fillKatGroup()"><option ${!t||t.JENIS==='Pemasukan'?'selected':''}>Pemasukan</option><option ${t&&t.JENIS==='Pengeluaran'?'selected':''}>Pengeluaran</option></select></div>
+        <div class="form-group"><label class="form-label">Jenis</label><select class="form-input" id="f_jenis" onchange="fillKatGroup()"><option ${jpre==='Pemasukan'?'selected':''}>Pemasukan</option><option ${jpre==='Pengeluaran'?'selected':''}>Pengeluaran</option></select></div>
       </div>
       <div class="form-group"><label class="form-label">Project</label><select class="form-input" id="f_proj"><option value="">— Tidak ada —</option>${state.projects.map(p=>`<option ${t&&t.PROJECT===p.NAMA?'selected':''}>${p.NAMA}</option>`).join('')}</select></div>
       <div class="form-group"><label class="form-label">Rekening</label><select class="form-input" id="f_rek">${allRek.map(n=>`<option ${t&&t.REKENING===n?'selected':''}>${n}</option>`).join('')}</select></div>
@@ -3188,7 +3233,7 @@ async function confirmImport(){
   }
 }
 function showToast(msg,type){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(type||'success');setTimeout(()=>t.classList.add('show'),10);setTimeout(()=>t.classList.remove('show'),2800);}
-function goPage(page){state.currentPage=page;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+page).classList.add('active');document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));const idx=['dashboard','transaksi','transfer','project','kasbon','forecast','piutang','master'].indexOf(page);if(idx>=0)document.querySelectorAll('.nav-item')[idx].classList.add('active');document.getElementById('content').scrollTop=0;if(page==='master')renderMaster();if(page==='transfer')renderTransferPage();if(page==='kasbon')renderKasbon();if(page==='forecast')renderForecast();if(page==='piutang')renderPiutang();}
+function goPage(page){closeFabMenu();state.currentPage=page;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+page).classList.add('active');document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));const idx=['dashboard','transaksi','transfer','project','kasbon','forecast','piutang','master'].indexOf(page);if(idx>=0)document.querySelectorAll('.nav-item')[idx].classList.add('active');document.getElementById('content').scrollTop=0;if(page==='master')renderMaster();if(page==='transfer')renderTransferPage();if(page==='kasbon')renderKasbon();if(page==='forecast')renderForecast();if(page==='piutang')renderPiutang();}
 function renderAll(){renderDashboard();renderTxnMonthTabs();filterTxn();renderProject();renderCCBillReminder();renderPiutangReminder();updatePiutangBadge();if(state.currentPage==='master')renderMaster();if(state.currentPage==='transfer')renderTransferPage();if(state.currentPage==='kasbon')renderKasbon();if(state.currentPage==='forecast')renderForecast();if(state.currentPage==='piutang')renderPiutang();}
 if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{});}
 let logoTimer;
