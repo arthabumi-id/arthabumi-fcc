@@ -243,6 +243,9 @@ Tombol **"Rincian"** di kartu CC → drawer `openCCBill`/`renderCCBill`/`ccbAppl
 - **Kunci tagihan ke Dashboard (v18.3, SERVER):** sheet baru **`CC_TAGIHAN`** (`ID,CC,NOMINAL,JATUH_TEMPO,PERIODE_DARI,PERIODE_SAMPAI,STATUS,CREATED_BY,CREATED_AT`, 1 baris aktif/kartu). Action **`lockCCBill`** (POST, wajib redeploy; replace baris lama kartu sama) + `getCCBills` + masuk getBundle/getAllData (`ccbills`). Tombol **"Kunci ke Dashboard"** di Rincian (`lockCCBillUI`, pakai total statement bila diisi/ else jumlah dicentang, + tanggal jatuh tempo default `dueDateThisMonth`). Tombol **Bayar** (`payCCFromReminder`→paycc) & **Lunas** (`clearCCBill`→deleteRow CC_TAGIHAN). `state.ccbills` di sync/save/offline. Helper `ccBillFor(cc)`.
 - **Tata letak (v18.4):** info tagihan terkunci (nominal + hitung mundur + Bayar/Lunas) ditampilkan **inline di section KARTU KREDIT** (`#dashCC`, billStrip per kartu; kartu dgn locked bill tetap muncul walau out=0/res=0). Banner atas `#dashCCReminder` kini **hanya tampil utk yg mendesak** (lewat tempo / ≤7 hari) sbg alarm, judul "Tagihan CC mendesak".
 
+## ⭐ Perubahan v18.9 (Bottom-nav bisa di-slide) — Juni 2026
+Client-only (CSS+JS). `.bottom-nav` jadi `overflow-x:auto` (scrollbar disembunyikan), `.nav-item` `flex:0 0 auto;min-width:62px` (tidak lagi `flex:1` yg bikin tab/ikon mengecil di layar sempit/iPhone saat tab banyak). `goPage` auto-scroll tab aktif ke tengah (`scrollTo`).
+
 ## ⭐ Perubahan v18.8 (Status project "Abaikan") — Juni 2026
 Client-only (index.html), tanpa redeploy (STATUS free-text). Status project baru **"Abaikan"** untuk project yang datanya belum lengkap → **dikeluarkan dari Laba Bersih** (`doneProjectsProfit` cuma hitung STATUS='Selesai', jadi otomatis terkecuali) & dari hitungan project aktif. Opsi ditambah di drawer Project (`fp_status`) + hint. Halaman Project: tab pill **"Abaikan"** (`pTab-abaikan`, `renderProject` cabang `abaikan`), badge abu-abu di `projCard`, dan di tab "Semua" muncul baris "⊘ N project diabaikan" yg bisa diklik. Cara pakai: Edit project → Status → Abaikan.
 
@@ -256,6 +259,29 @@ Client-only (index.html). Tiap baris **cicilan berjalan** (tab Kartu Kredit) men
 
 ## ⭐ Perubahan v18.5 (Kategori cascade di Tambah Transaksi) — Juni 2026
 Client-only (index.html). Drawer Transaksi: field kategori dari input type-ahead jadi **2 dropdown bertingkat**: **Kelompok → Kategori**. Kelompok difilter sesuai Jenis (TIPE kategori); kategori difilter sesuai kelompok terpilih + opsi `__NEW__` "➕ Tambah kategori baru…" (nama diketik di `f_kat_new_name`, kelompok = yg terpilih). Helper baru: `jenisKelompoks(jenis)`, `fillKatGroup(presetGrp,presetKat)`, `fillKatList(presetKat)`, `onKatSelChange()` (ganti `onKatChange` lama). `f_jenis` onchange→`fillKatGroup()`; dipanggil sekali saat drawer txn dibuka (preset dari kategori saat edit). `saveDrawer` txn baca `f_kat_grp`+`f_kat_sel` (bukan `f_kat`). Elemen lama `f_kat`/`f_kat_list`/`f_kat_new_grp` dihapus.
+
+## ⭐ Perubahan v19 (Status pendanaan reserve per kartu — "belum di-reserve") — Juni 2026
+PRD: `PRD-v19-status-reserve-belanja-cc.md` (signed off "Proceed"). **Client-only (index.html), TANPA redeploy Code.gs.** sw.js cache **fcc-arthabumi-v10**.
+
+### Problem
+Eddy belanja pakai CC = utang. Sebelum jatuh tempo ia transfer dana BCA → bank penyimpan reserve untuk menutupnya. Ia bingung mana belanja yang sudah didanai (reserve) vs belum. Keputusan: **Model B** (per kartu SATU angka agregat, bukan centang per item).
+
+### Model (agregat per kartu)
+- `unreservedCC(cc)` → `{perlu, sudah, belum}`:
+  - `perlu` = `getCCOut(cc) − cicilanDueAmt(cc)` (tagihan reguler non-cicilan; basis = tagihan berjalan, opsi A).
+  - `sudah` = `reserveFunds[cc] − cicilanRemaining(cc)` (reserve bebas, di luar jatah cicilan).
+  - `belum` = `max(0, perlu − sudah)`.
+- Cicilan SENGAJA dikecualikan dua sisi (sudah auto-reserve penuh saat beli) → tidak dobel.
+- Konsisten dgn siklus: buat reserve → `sudah`↑ → `belum`↓; belanja CC → `perlu`↑; bayar CC dari reserve → `getCCOut`↓ & `reserveFunds`↓ bersamaan.
+
+### Client (index.html)
+- Helper baru: `unreservedCC(cc)`, `ccReserveStrip(cc)` (strip status di kartu CC), `reserveNow(cc)` (buka tab Transfer→Reserve dgn `res_kartu` & `res_nominal`=selisih ke-prefill), `gotoCCReserve()` (ke Master tab CC).
+- **Tab Master > Kartu Kredit:** tiap kartu ada strip: merah "Belum di-reserve Rp X" + tombol **"Reserve sekarang"**, atau hijau "Reserve lengkap" (via `ccReserveStrip`, disisipkan sebelum penutup kartu).
+- **Dashboard:** kartu metrik baru **"Belum di-reserve (semua kartu)"** (merah, `totBelumRes`= jumlah `unreservedCC(c).belum`), klik → `gotoCCReserve()`. Hanya tampil bila >0.
+- **KONTRAK PERILAKU (penting):** angka akurat HANYA bila tiap transfer reserve dicatat lewat form Reserve di FCC (tombol "Reserve sekarang" mempermudah). Transfer di m-banking yang tak dicatat tidak menurunkan angka.
+
+### Catatan verifikasi v19
+Fungsi baru + tambahan template di-`node --check` terisolasi = OK (mount bash macet di file lama, audit manual brace/template OK). Edit surgical (anchor unik). Cek console browser bila ada error JS.
 
 ## Boleh edit manual di Google Sheets? BOLEH, dengan aturan:
 1. Jangan ubah baris HEADER / nama kolom / nama tab.

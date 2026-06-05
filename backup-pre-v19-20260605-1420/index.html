@@ -563,37 +563,6 @@ function cicilanRemaining(namaCC) {
   }, 0);
 }
 
-// ── v19: Status pendanaan reserve per kartu (Model B — agregat) ──────────
-// "belum di-reserve" = tagihan reguler (non-cicilan) − reserve bebas (di luar jatah cicilan).
-// Cicilan TIDAK dihitung di sini (sudah auto-reserve penuh saat beli).
-function unreservedCC(namaCC) {
-  const perlu = Math.max(0, getCCOut(namaCC) - cicilanDueAmt(namaCC));
-  const sudah = Math.max(0, (state.reserveFunds[namaCC]||0) - cicilanRemaining(namaCC));
-  return { perlu, sudah, belum: Math.max(0, perlu - sudah) };
-}
-// Strip status reserve utk kartu CC (dipakai di kartu Master & bisa di tempat lain).
-function ccReserveStrip(namaCC) {
-  const u = unreservedCC(namaCC);
-  if (u.perlu <= 0) return '';
-  if (u.belum <= 0) return `<div style="width:100%;margin-top:8px;padding:6px 9px;border-radius:8px;background:#0a2a1e;border:1px solid #2dd4a040;font-size:11px;color:var(--green)" onclick="event.stopPropagation()"><i class="ti ti-shield-check"></i> Reserve lengkap — ${fmtS(u.perlu)} sudah disisihkan</div>`;
-  return `<div style="width:100%;margin-top:8px;padding:7px 9px;border-radius:8px;background:#2a0a0a;border:1px solid #ef444440;display:flex;align-items:center;justify-content:space-between;gap:8px" onclick="event.stopPropagation()">
-    <div style="min-width:0"><div style="font-size:12px;font-weight:700;color:var(--red)">Belum di-reserve ${fmt(u.belum)}</div><div style="font-size:10px;color:var(--text3)">disisihkan ${fmtS(u.sudah)} dari ${fmtS(u.perlu)}</div></div>
-    <button class="btn-danger" style="background:#0a2040;color:var(--blue);border-color:#3b82f640;flex-shrink:0" onclick="reserveNow('${esc(namaCC)}')">Reserve sekarang</button>
-  </div>`;
-}
-// Buka form Reserve dgn kartu & nominal (selisih belum di-reserve) sudah ke-prefill.
-function reserveNow(namaCC) {
-  const u = unreservedCC(namaCC);
-  goPage('transfer');
-  switchTTab('reserve');
-  const ks = document.getElementById('res_kartu'); if (ks) ks.value = namaCC;
-  const nm = document.getElementById('res_nominal'); if (nm) nm.value = u.belum > 0 ? fmtInput(u.belum) : '';
-  previewReserve();
-  const ct = document.getElementById('content'); if (ct) ct.scrollTop = 0;
-  showToast('Pilih bank sumber (mis. BCA) & penyimpan, lalu Sisihkan ke Reserve', 'success');
-}
-function gotoCCReserve() { goPage('master'); switchMasterTab('cc'); }
-
 function getProjCF(nama) {
   const p = state.summary && state.summary.proj && state.summary.proj[nama];
   if (p) return { masuk: p.masuk || 0, keluar: p.keluar || 0, sisa: (p.masuk||0) - (p.keluar||0) };
@@ -825,7 +794,6 @@ function renderDashboard() {
   const totCC = state.ccs.reduce((s,c) => s + getCCOut(c.NAMA), 0);
   const totRes = Object.values(state.reserveFunds).reduce((s,v) => s + v, 0);
   const totCicilan = state.ccs.reduce((s,c) => s + cicilanRemaining(c.NAMA), 0);
-  const totBelumRes = state.ccs.reduce((s,c) => s + unreservedCC(c.NAMA).belum, 0);
   const projAktif = state.projects.filter(p => p.STATUS === 'Jalan').length;
   const dp = doneProjectsProfit();
 
@@ -851,11 +819,6 @@ function renderDashboard() {
         <div class="metric-value info">${fmt(totRes)}</div>
         <div class="metric-sub">ketuk untuk rincian per kartu${totCicilan>0?` · cicilan ${fmtS(totCicilan)}`:''}</div>
       </div>
-      ${totBelumRes>0?`<div class="metric" onclick="gotoCCReserve()" style="cursor:pointer;background:linear-gradient(135deg,#2a0a0a,#1f0d12);border:1px solid #ef444440">
-        <div class="metric-label">Belum di-reserve (semua kartu) <i class="ti ti-chevron-right" style="font-size:11px;vertical-align:middle"></i></div>
-        <div class="metric-value neg">${fmt(totBelumRes)}</div>
-        <div class="metric-sub">perlu kamu transfer ke bank reserve · ketuk untuk rincian</div>
-      </div>`:''}
       ${totCicilan>0?`<div class="metric" onclick="gotoCicilan()" style="cursor:pointer">
         <div class="metric-label">Sisa Cicilan CC <i class="ti ti-chevron-right" style="font-size:11px;vertical-align:middle"></i></div>
         <div class="metric-value neg">${fmt(totCicilan)}</div>
@@ -2279,7 +2242,6 @@ function renderMaster() {
               </div>
             </div>
           </div>
-          ${ccReserveStrip(c.NAMA)}
         </div>`;
       }).join('')}
       ${cicilanListHTML()}

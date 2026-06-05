@@ -3,6 +3,25 @@
 
 ---
 
+## SESSION — 2026-06-05 (v19 Status pendanaan reserve per kartu — client-only)
+**Topik:** Eddy bingung mana belanja CC yg sudah ia danai (transfer reserve dari BCA ke bank penyimpan) vs belum, sebelum jatuh tempo. PRD: `PRD-v19-status-reserve-belanja-cc.md` (signed off "Proceed").
+**Keputusan:** Model **B** (per kartu 1 angka agregat, BUKAN centang per item — ditolak krn bikin sumber kebenaran kedua). Basis "perlu didanai" = **tagihan berjalan** `getCCOut` (opsi A, 0 redeploy). Tampil di **tab Kartu Kredit + ringkasan Dashboard**. Client-only.
+**Dikerjakan (index.html):** helper `unreservedCC` / `ccReserveStrip` / `reserveNow` / `gotoCCReserve`; strip status reserve di kartu CC (merah "Belum di-reserve Rp X" + tombol "Reserve sekarang" prefill selisih ke form Reserve; hijau "Reserve lengkap"); kartu Dashboard "Belum di-reserve (semua kartu)". sw.js → fcc-arthabumi-v10.
+**Kontrak perilaku (diingatkan ke Eddy):** angka akurat hanya bila tiap transfer reserve dicatat lewat form Reserve FCC.
+**Hasil:** node --check fungsi+template baru OK (mount bash macet di file lama → audit manual). Backup: `backup-pre-v19-20260605-1420`.
+**Pending:** push index.html + sw.js via GitHub Desktop (TANPA redeploy Code.gs). Cek console browser.
+
+---
+
+## SESSION — 2026-06-04 (v18.7–18.9 UX tweaks, client-only)
+Semua client-only (index.html), TIDAK perlu redeploy Code.gs:
+- v18.7 Halaman Transaksi: filter **rentang tanggal** (`txnFrom/txnTo`, `onTxnRange/clearTxnRange`) + **ringkasan** (#txnSummary: jumlah, masuk, keluar, net) utk cek/rekonsiliasi. Tombol **+** jadi menu cepat **Pengeluaran/Pemasukan** (`#fabMenu`, `addTxnType`, `openDrawer(...,preset)`).
+- v18.8 Status project **"Abaikan"** → dikecualikan dari Laba Bersih (cuma hitung Selesai). Tab "Abaikan" di halaman Project + opsi di drawer.
+- v18.9 Bottom-nav bisa **di-slide** (overflow-x), tab tidak mengecil di iPhone; tab aktif auto ke tengah.
+Catatan: status project Selesai BISA diubah lagi (Edit project). Rekonsiliasi BCA 082 dibatalkan user.
+
+---
+
 ## SESSION — 2026-06-04 (v18.1–18.6 lanjutan + rekonsiliasi BCA)
 **Dikerjakan (client-only kecuali disebut):**
 - v18.1 Rincian Tagihan CC (`openCCBill`) + v18.2 checkbox rekonsiliasi (`ccbTick`) + fix refund (Pemasukan) jadi NEGATIF saat dicentang.
