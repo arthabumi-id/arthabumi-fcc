@@ -54,8 +54,9 @@ body{display:flex;flex-direction:column}
 .page.active{display:block}
 
 /* BOTTOM NAV */
-.bottom-nav{display:flex;background:var(--bg2);border-top:1px solid var(--border);flex-shrink:0;padding-bottom:env(safe-area-inset-bottom)}
-.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;padding:8px 4px;cursor:pointer;gap:3px;border:none;background:transparent;color:var(--text3);font-family:var(--font)}
+.bottom-nav{display:flex;background:var(--bg2);border-top:1px solid var(--border);flex-shrink:0;padding-bottom:env(safe-area-inset-bottom);overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.bottom-nav::-webkit-scrollbar{display:none}
+.nav-item{flex:0 0 auto;min-width:62px;display:flex;flex-direction:column;align-items:center;padding:8px 6px;cursor:pointer;gap:3px;border:none;background:transparent;color:var(--text3);font-family:var(--font);white-space:nowrap}
 .nav-item.active{color:var(--green)}
 .nav-item i{font-size:20px}
 .nav-item span{font-size:10px;font-weight:500}
@@ -3233,7 +3234,7 @@ async function confirmImport(){
   }
 }
 function showToast(msg,type){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(type||'success');setTimeout(()=>t.classList.add('show'),10);setTimeout(()=>t.classList.remove('show'),2800);}
-function goPage(page){closeFabMenu();state.currentPage=page;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+page).classList.add('active');document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));const idx=['dashboard','transaksi','transfer','project','kasbon','forecast','piutang','master'].indexOf(page);if(idx>=0)document.querySelectorAll('.nav-item')[idx].classList.add('active');document.getElementById('content').scrollTop=0;if(page==='master')renderMaster();if(page==='transfer')renderTransferPage();if(page==='kasbon')renderKasbon();if(page==='forecast')renderForecast();if(page==='piutang')renderPiutang();}
+function goPage(page){closeFabMenu();state.currentPage=page;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+page).classList.add('active');document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));const idx=['dashboard','transaksi','transfer','project','kasbon','forecast','piutang','master'].indexOf(page);if(idx>=0){const ab=document.querySelectorAll('.nav-item')[idx];ab.classList.add('active');if(ab&&ab.parentElement)ab.parentElement.scrollTo({left:ab.offsetLeft-ab.parentElement.clientWidth/2+ab.clientWidth/2,behavior:'smooth'});}document.getElementById('content').scrollTop=0;if(page==='master')renderMaster();if(page==='transfer')renderTransferPage();if(page==='kasbon')renderKasbon();if(page==='forecast')renderForecast();if(page==='piutang')renderPiutang();}
 function renderAll(){renderDashboard();renderTxnMonthTabs();filterTxn();renderProject();renderCCBillReminder();renderPiutangReminder();updatePiutangBadge();if(state.currentPage==='master')renderMaster();if(state.currentPage==='transfer')renderTransferPage();if(state.currentPage==='kasbon')renderKasbon();if(state.currentPage==='forecast')renderForecast();if(state.currentPage==='piutang')renderPiutang();}
 if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{});}
 let logoTimer;
