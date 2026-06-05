@@ -266,13 +266,14 @@ PRD: `PRD-v19-status-reserve-belanja-cc.md` (signed off "Proceed"). **Client-onl
 ### Problem
 Eddy belanja pakai CC = utang. Sebelum jatuh tempo ia transfer dana BCA → bank penyimpan reserve untuk menutupnya. Ia bingung mana belanja yang sudah didanai (reserve) vs belum. Keputusan: **Model B** (per kartu SATU angka agregat, bukan centang per item).
 
-### Model (agregat per kartu)
+### Model (agregat per kartu) — TERMASUK cicilan (revisi 5 Jun, keputusan Eddy)
 - `unreservedCC(cc)` → `{perlu, sudah, belum}`:
-  - `perlu` = `getCCOut(cc) − cicilanDueAmt(cc)` (tagihan reguler non-cicilan; basis = tagihan berjalan, opsi A).
-  - `sudah` = `reserveFunds[cc] − cicilanRemaining(cc)` (reserve bebas, di luar jatah cicilan).
+  - `perlu` = `getCCOut(cc) − cicilanDueAmt(cc) + cicilanRemaining(cc)` (tagihan reguler non-cicilan + SELURUH sisa cicilan; basis = tagihan berjalan, opsi A).
+  - `sudah` = `reserveFunds[cc]` (total reserve kartu, sudah termasuk earmark cicilan).
   - `belum` = `max(0, perlu − sudah)`.
-- Cicilan SENGAJA dikecualikan dua sisi (sudah auto-reserve penuh saat beli) → tidak dobel.
-- Konsisten dgn siklus: buat reserve → `sudah`↑ → `belum`↓; belanja CC → `perlu`↑; bayar CC dari reserve → `getCCOut`↓ & `reserveFunds`↓ bersamaan.
+- **Cicilan IKUT dihitung** (Eddy menyisihkan dana cicilan dari awal juga). Tanpa dobel: porsi cicilan jatuh tempo dikurangi dari `getCCOut` lalu seluruh sisa cicilan ditambahkan sekali. Cicilan yg sudah auto-reserve penuh saat beli → `belum`=0 utk porsi itu; yg belum ter-reserve muncul sbg `belum`.
+- Konsisten dgn siklus: buat reserve → `sudah`↑ → `belum`↓; belanja CC / beli cicilan → `perlu`↑; bayar CC/angsuran dari reserve → `getCCOut`/`cicilanRemaining`↓ & `reserveFunds`↓ bersamaan.
+- Verifikasi numerik 5 skenario (`outputs`/manual) cocok: cicilan auto-reserve→belum 0; cicilan belum reserve→belum=sisa cicilan; campuran reguler+cicilan benar.
 
 ### Client (index.html)
 - Helper baru: `unreservedCC(cc)`, `ccReserveStrip(cc)` (strip status di kartu CC), `reserveNow(cc)` (buka tab Transfer→Reserve dgn `res_kartu` & `res_nominal`=selisih ke-prefill), `gotoCCReserve()` (ke Master tab CC).

@@ -567,8 +567,12 @@ function cicilanRemaining(namaCC) {
 // "belum di-reserve" = tagihan reguler (non-cicilan) − reserve bebas (di luar jatah cicilan).
 // Cicilan TIDAK dihitung di sini (sudah auto-reserve penuh saat beli).
 function unreservedCC(namaCC) {
-  const perlu = Math.max(0, getCCOut(namaCC) - cicilanDueAmt(namaCC));
-  const sudah = Math.max(0, (state.reserveFunds[namaCC]||0) - cicilanRemaining(namaCC));
+  // Termasuk cicilan (keputusan Eddy: dana cicilan disisihkan dari awal juga).
+  // perlu = tagihan reguler non-cicilan (getCCOut − porsi cicilan jatuh tempo) + SELURUH sisa cicilan.
+  // sudah = total reserve kartu (sudah termasuk earmark cicilan). Tanpa dobel: porsi cicilan
+  //         jatuh tempo dikurangi dari getCCOut lalu seluruh sisa cicilan ditambahkan sekali.
+  const perlu = Math.max(0, getCCOut(namaCC) - cicilanDueAmt(namaCC) + cicilanRemaining(namaCC));
+  const sudah = state.reserveFunds[namaCC] || 0;
   return { perlu, sudah, belum: Math.max(0, perlu - sudah) };
 }
 // Strip status reserve utk kartu CC (dipakai di kartu Master & bisa di tempat lain).

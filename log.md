@@ -7,6 +7,7 @@
 **Topik:** Eddy bingung mana belanja CC yg sudah ia danai (transfer reserve dari BCA ke bank penyimpan) vs belum, sebelum jatuh tempo. PRD: `PRD-v19-status-reserve-belanja-cc.md` (signed off "Proceed").
 **Keputusan:** Model **B** (per kartu 1 angka agregat, BUKAN centang per item — ditolak krn bikin sumber kebenaran kedua). Basis "perlu didanai" = **tagihan berjalan** `getCCOut` (opsi A, 0 redeploy). Tampil di **tab Kartu Kredit + ringkasan Dashboard**. Client-only.
 **Dikerjakan (index.html):** helper `unreservedCC` / `ccReserveStrip` / `reserveNow` / `gotoCCReserve`; strip status reserve di kartu CC (merah "Belum di-reserve Rp X" + tombol "Reserve sekarang" prefill selisih ke form Reserve; hijau "Reserve lengkap"); kartu Dashboard "Belum di-reserve (semua kartu)". sw.js → fcc-arthabumi-v10.
+**Revisi (sesi sama):** Eddy minta **cicilan IKUT dihitung** (ia sisihkan dana cicilan dari awal juga). `unreservedCC` jadi: perlu = getCCOut − cicilanDueAmt + cicilanRemaining; sudah = reserveFunds penuh. Verifikasi 5 skenario PASS (cicilan auto-reserve→belum 0, belum reserve→belum=sisa cicilan, campuran benar).
 **Kontrak perilaku (diingatkan ke Eddy):** angka akurat hanya bila tiap transfer reserve dicatat lewat form Reserve FCC.
 **Hasil:** node --check fungsi+template baru OK (mount bash macet di file lama → audit manual). Backup: `backup-pre-v19-20260605-1420`.
 **Pending:** push index.html + sw.js via GitHub Desktop (TANPA redeploy Code.gs). Cek console browser.
