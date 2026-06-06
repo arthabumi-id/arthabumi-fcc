@@ -297,6 +297,13 @@ Masalah: saldo bank penyimpan (mis. BCA 552) membingungkan — sebagian saldo se
 - Dashboard "Saldo Rekening": tiap bank yg menyimpan reserve dapat sub-line biru **"🛡️ reserve CC Rp X · bebas Rp Y"** (Y = saldo − X). sw.js cache **fcc-arthabumi-v12**.
 - **Terkait koreksi data 1×** (lihat log 2026-06-05): app BCA 552 dulu understated 20.303.853 karena 4 cicilan dikonversi pra-redeploy v18 (membukukan Pengeluaran reserve dari 552 tanpa leg Pemasukan). Fix manual = tambah 1 TXN Pemasukan ke BCA 552 NOMINAL 20.303.853 KATEGORI 'Reserve Masuk' TIPE_LOG 'Reserve' (excluded dari laba). Setelah itu saldo 552 = fisik 51.719.674; reserveHeldIn=22.503.003; bebas=29.216.671. reserveFunds (earmark) TIDAK berubah (dihitung dari RESERVE_LOG).
 
+### v19.3 — Strip reserve DIPISAH (Cicilan vs Belanja lain) + tahan distorsi getCCOut — client-only
+Masalah: strip v19 lama menampilkan SATU angka "perlu didanai" yg menyesatkan untuk kartu yg `getCCOut`-nya terdistorsi. Contoh nyata KRIS: pembayaran Mei 44,25jt tercatat tapi belanjanya sudah dikonversi cicilan (REKENING dikosongkan) → `getCCOut` jadi −30,4jt → strip lama hijau "Reserve lengkap — 2,42jt" (membingungkan di samping cicilan 22,5jt).
+- **`unreservedCC(cc)`** kini kembalikan **bagian terpisah**: `cicNeed`=cicilanRemaining; `regNeed`=`max(0, getCCOut − cicilanDueAmt)` (DI-FLOOR ke 0 → distorsi minus tidak memunculkan angka palsu); reserve dialokasi cicilan dulu (`cicRes=min(res,cicNeed)`), sisanya ke belanja (`regRes`). `belum=cicBelum+regBelum` (dipakai Dashboard total & `reserveNow` prefill).
+- **`ccReserveStrip`** kini sampai **2 baris**: "🗓 Cicilan {X} — ter-reserve ✓ / belum {Y}" dan "🛒 Belanja lain {X} — …". Baris hanya muncul bila Need>0; tombol "Reserve" hanya di baris yg merah.
+- **Verifikasi (harness `harness-reserve-v19.js` di folder project, data KRIS asli + 8 skenario):** KRIS → "Cicilan 22.503.003 ter-reserve ✓" (regNeed floored 0, belanja Juni ter-mask oleh distorsi); funded/unfunded/partial/over/empty semua benar. Koreksi 552 +20.303.853 → 51.719.674. sw.js cache **fcc-arthabumi-v13**.
+- **CATATAN data (bukan bug kode):** belanja KRIS Jun 1-5 (4.754.271) ter-mask karena pembayaran Mei 44,25jt jadi "kredit yatim" (belanjanya sudah pindah ke cicilan). Perlu dibereskan terpisah bila ingin akurat.
+
 ## Boleh edit manual di Google Sheets? BOLEH, dengan aturan:
 1. Jangan ubah baris HEADER / nama kolom / nama tab.
 2. Tiap baris WAJIB punya `ID` unik (kalau nambah manual, isi sendiri mis. `MAN001`) — kalau kosong, edit/hapus dari app tak bisa nemu baris.

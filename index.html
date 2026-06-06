@@ -568,27 +568,36 @@ function cicilanRemaining(namaCC) {
   }, 0);
 }
 
-// ── v19: Status pendanaan reserve per kartu (Model B — agregat) ──────────
-// "belum di-reserve" = tagihan reguler (non-cicilan) − reserve bebas (di luar jatah cicilan).
-// Cicilan TIDAK dihitung di sini (sudah auto-reserve penuh saat beli).
+// ── v19.3: Status pendanaan reserve per kartu — DIPISAH cicilan vs belanja lain ──
+// Dua bagian terpisah supaya tidak rancu (cicilan ditampilkan beda dari belanja biasa):
+//  - cicNeed  = SELURUH sisa cicilan kartu (cicilanRemaining).
+//  - regNeed  = tagihan NON-cicilan = max(0, getCCOut − porsi cicilan jatuh tempo).
+//               Di-floor ke 0: kalau getCCOut minus (mis. pembayaran tercatat utk belanja yg
+//               sudah dikonversi cicilan), bagian ini 0 → tidak memunculkan angka menyesatkan.
+//  - reserve dialokasikan: cicilan dulu, sisanya ke belanja lain.
 function unreservedCC(namaCC) {
-  // Termasuk cicilan (keputusan Eddy: dana cicilan disisihkan dari awal juga).
-  // perlu = tagihan reguler non-cicilan (getCCOut − porsi cicilan jatuh tempo) + SELURUH sisa cicilan.
-  // sudah = total reserve kartu (sudah termasuk earmark cicilan). Tanpa dobel: porsi cicilan
-  //         jatuh tempo dikurangi dari getCCOut lalu seluruh sisa cicilan ditambahkan sekali.
-  const perlu = Math.max(0, getCCOut(namaCC) - cicilanDueAmt(namaCC) + cicilanRemaining(namaCC));
-  const sudah = state.reserveFunds[namaCC] || 0;
-  return { perlu, sudah, belum: Math.max(0, perlu - sudah) };
+  const cicNeed = Math.max(0, cicilanRemaining(namaCC));
+  const regNeed = Math.max(0, getCCOut(namaCC) - cicilanDueAmt(namaCC));
+  const res = state.reserveFunds[namaCC] || 0;
+  const cicRes = Math.min(res, cicNeed);
+  const regRes = Math.max(0, res - cicNeed);
+  const cicBelum = Math.max(0, cicNeed - cicRes);
+  const regBelum = Math.max(0, regNeed - regRes);
+  return { cicNeed, regNeed, cicBelum, regBelum, belum: cicBelum + regBelum };
 }
-// Strip status reserve utk kartu CC (dipakai di kartu Master & bisa di tempat lain).
+// Strip status reserve utk kartu CC — sampai 2 baris (Cicilan, Belanja lain).
 function ccReserveStrip(namaCC) {
   const u = unreservedCC(namaCC);
-  if (u.perlu <= 0) return '';
-  if (u.belum <= 0) return `<div style="width:100%;margin-top:8px;padding:6px 9px;border-radius:8px;background:#0a2a1e;border:1px solid #2dd4a040;font-size:11px;color:var(--green)" onclick="event.stopPropagation()"><i class="ti ti-shield-check"></i> Reserve lengkap — ${fmtS(u.perlu)} sudah disisihkan</div>`;
-  return `<div style="width:100%;margin-top:8px;padding:7px 9px;border-radius:8px;background:#2a0a0a;border:1px solid #ef444440;display:flex;align-items:center;justify-content:space-between;gap:8px" onclick="event.stopPropagation()">
-    <div style="min-width:0"><div style="font-size:12px;font-weight:700;color:var(--red)">Belum di-reserve ${fmt(u.belum)}</div><div style="font-size:10px;color:var(--text3)">disisihkan ${fmtS(u.sudah)} dari ${fmtS(u.perlu)}</div></div>
-    <button class="btn-danger" style="background:#0a2040;color:var(--blue);border-color:#3b82f640;flex-shrink:0" onclick="reserveNow('${esc(namaCC)}')">Reserve sekarang</button>
-  </div>`;
+  if (u.cicNeed <= 0 && u.regNeed <= 0) return '';
+  const line = (label, need, belum, icon) => {
+    if (need <= 0) return '';
+    const ok = belum <= 0;
+    return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 9px;border-radius:7px;margin-top:6px;background:${ok?'#0a2a1e':'#2a0a0a'};border:1px solid ${ok?'#2dd4a040':'#ef444440'}">
+      <div style="font-size:11px;min-width:0;color:${ok?'var(--green)':'var(--red)'}"><i class="ti ${icon}" style="font-size:12px;vertical-align:middle"></i> ${label} ${fmtS(need)} — ${ok?'ter-reserve ✓':'belum '+fmtS(belum)}</div>
+      ${ok?'':`<button class="btn-danger" style="background:#0a2040;color:var(--blue);border-color:#3b82f640;flex-shrink:0" onclick="reserveNow('${esc(namaCC)}')">Reserve</button>`}
+    </div>`;
+  };
+  return `<div onclick="event.stopPropagation()">${line('Cicilan', u.cicNeed, u.cicBelum, 'ti-calendar-repeat')}${line('Belanja lain', u.regNeed, u.regBelum, 'ti-shopping-cart')}</div>`;
 }
 // Buka form Reserve dgn kartu & nominal (selisih belum di-reserve) sudah ke-prefill.
 function reserveNow(namaCC) {
