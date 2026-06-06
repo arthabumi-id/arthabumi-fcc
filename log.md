@@ -10,6 +10,7 @@
 **Revisi (sesi sama):** Eddy minta **cicilan IKUT dihitung** (ia sisihkan dana cicilan dari awal juga). `unreservedCC` jadi: perlu = getCCOut − cicilanDueAmt + cicilanRemaining; sudah = reserveFunds penuh. Verifikasi 5 skenario PASS (cicilan auto-reserve→belum 0, belum reserve→belum=sisa cicilan, campuran benar).
 **Kontrak perilaku (diingatkan ke Eddy):** angka akurat hanya bila tiap transfer reserve dicatat lewat form Reserve FCC.
 **Hasil:** node --check fungsi+template baru OK (mount bash macet di file lama → audit manual). Backup: `backup-pre-v19-20260605-1420`.
+**v19.1 (sesi sama):** Bottom-nav diubah jadi **5 utama + "Lainnya"** (Kasbon/Forecast/Piutang masuk popup) utk fix gesture iPhone (geser nav → ganti app). Nav `flex:1` tanpa overflow-x (membalik v18.9), ikon/label diperbesar. `goPage` highlight via `data-nav` + `navKey` map ke 'lainnya'. Badge piutang pindah ke tombol Lainnya. sw.js → **v11**. node --check fungsi nav OK.
 **Pending:** push index.html + sw.js via GitHub Desktop (TANPA redeploy Code.gs). Cek console browser.
 
 ---

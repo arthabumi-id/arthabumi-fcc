@@ -284,6 +284,13 @@ Eddy belanja pakai CC = utang. Sebelum jatuh tempo ia transfer dana BCA → bank
 ### Catatan verifikasi v19
 Fungsi baru + tambahan template di-`node --check` terisolasi = OK (mount bash macet di file lama, audit manual brace/template OK). Edit surgical (anchor unik). Cek console browser bila ada error JS.
 
+### v19.1 — Bottom-nav 5 utama + "Lainnya" (fix swipe iPhone) — client-only
+Masalah: bottom-nav v18.9 (1 baris bisa di-geser, overflow-x) bentrok dgn gesture iOS (geser tepi bawah → ganti app). Keputusan Eddy: **5 tab utama + tombol "Lainnya"**.
+- **Nav (6 tombol, `flex:1 1 0`, TANPA overflow-x scroll):** Dashboard · Transaksi · Transfer · Project · Master · **Lainnya**. CSS `.nav-item` diperbesar (ikon 23px, label 11px/600, padding 10px). Membalik v18.9 (overflow-x dihapus).
+- **Tombol "Lainnya"** (`toggleLainnyaMenu`/`closeLainnyaMenu`) → popup `#lainnyaMenu` + backdrop `#lainnyaBg` berisi **Kasbon · Forecast · Piutang**. Badge overdue Piutang (`#piutangBadge`) dipindah ke tombol Lainnya (id sama → `updatePiutangBadge` tetap jalan).
+- **`goPage`**: highlight aktif kini via `data-nav` (bukan urutan posisi); `navKey` memetakan kasbon/forecast/piutang → 'lainnya' (tombol Lainnya menyala). Hapus auto-scroll nav (tak perlu lagi). `goPage` juga `closeLainnyaMenu()`.
+- sw.js cache **fcc-arthabumi-v11**.
+
 ## Boleh edit manual di Google Sheets? BOLEH, dengan aturan:
 1. Jangan ubah baris HEADER / nama kolom / nama tab.
 2. Tiap baris WAJIB punya `ID` unik (kalau nambah manual, isi sendiri mis. `MAN001`) — kalau kosong, edit/hapus dari app tak bisa nemu baris.

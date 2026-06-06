@@ -54,12 +54,11 @@ body{display:flex;flex-direction:column}
 .page.active{display:block}
 
 /* BOTTOM NAV */
-.bottom-nav{display:flex;background:var(--bg2);border-top:1px solid var(--border);flex-shrink:0;padding-bottom:env(safe-area-inset-bottom);overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
-.bottom-nav::-webkit-scrollbar{display:none}
-.nav-item{flex:0 0 auto;min-width:62px;display:flex;flex-direction:column;align-items:center;padding:8px 6px;cursor:pointer;gap:3px;border:none;background:transparent;color:var(--text3);font-family:var(--font);white-space:nowrap}
+.bottom-nav{display:flex;background:var(--bg2);border-top:1px solid var(--border);flex-shrink:0;padding-bottom:env(safe-area-inset-bottom)}
+.nav-item{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 4px;cursor:pointer;gap:4px;border:none;background:transparent;color:var(--text3);font-family:var(--font);white-space:nowrap}
 .nav-item.active{color:var(--green)}
-.nav-item i{font-size:20px}
-.nav-item span{font-size:10px;font-weight:500}
+.nav-item i{font-size:23px}
+.nav-item span{font-size:11px;font-weight:600}
 
 /* CARDS */
 .card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;margin-bottom:12px}
@@ -328,15 +327,21 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
 
   <!-- BOTTOM NAV -->
   <nav class="bottom-nav">
-    <button class="nav-item active" onclick="goPage('dashboard')"><i class="ti ti-layout-dashboard"></i><span>Dashboard</span></button>
-    <button class="nav-item" onclick="goPage('transaksi')"><i class="ti ti-list"></i><span>Transaksi</span></button>
-    <button class="nav-item" onclick="goPage('transfer')"><i class="ti ti-transfer"></i><span>Transfer</span></button>
-    <button class="nav-item" onclick="goPage('project')"><i class="ti ti-hammer"></i><span>Project</span></button>
-    <button class="nav-item" onclick="goPage('kasbon')"><i class="ti ti-wallet"></i><span>Kasbon</span></button>
-    <button class="nav-item" onclick="goPage('forecast')"><i class="ti ti-chart-line"></i><span>Forecast</span></button>
-    <button class="nav-item" onclick="goPage('piutang')" style="position:relative"><i class="ti ti-cash"></i><span>Piutang</span><span id="piutangBadge" style="display:none;position:absolute;top:3px;right:50%;transform:translateX(14px);background:var(--red);color:#fff;font-size:9px;font-weight:700;min-width:15px;height:15px;line-height:15px;border-radius:8px;padding:0 3px"></span></button>
-    <button class="nav-item" onclick="goPage('master')"><i class="ti ti-settings"></i><span>Master</span></button>
+    <button class="nav-item active" data-nav="dashboard" onclick="goPage('dashboard')"><i class="ti ti-layout-dashboard"></i><span>Dashboard</span></button>
+    <button class="nav-item" data-nav="transaksi" onclick="goPage('transaksi')"><i class="ti ti-list"></i><span>Transaksi</span></button>
+    <button class="nav-item" data-nav="transfer" onclick="goPage('transfer')"><i class="ti ti-transfer"></i><span>Transfer</span></button>
+    <button class="nav-item" data-nav="project" onclick="goPage('project')"><i class="ti ti-hammer"></i><span>Project</span></button>
+    <button class="nav-item" data-nav="master" onclick="goPage('master')"><i class="ti ti-settings"></i><span>Master</span></button>
+    <button class="nav-item" data-nav="lainnya" onclick="toggleLainnyaMenu()" style="position:relative"><i class="ti ti-dots"></i><span>Lainnya</span><span id="piutangBadge" style="display:none;position:absolute;top:5px;right:50%;transform:translateX(14px);background:var(--red);color:#fff;font-size:9px;font-weight:700;min-width:15px;height:15px;line-height:15px;border-radius:8px;padding:0 3px"></span></button>
   </nav>
+
+  <!-- LAINNYA MENU -->
+  <div id="lainnyaBg" style="display:none;position:fixed;inset:0;z-index:59" onclick="closeLainnyaMenu()"></div>
+  <div id="lainnyaMenu" style="display:none;position:fixed;right:8px;bottom:74px;z-index:60;flex-direction:column;gap:2px;background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:8px;box-shadow:0 6px 22px rgba(0,0,0,.5);min-width:175px">
+    <button onclick="goPage('kasbon')" style="display:flex;align-items:center;gap:11px;padding:12px 12px;border:none;background:transparent;color:var(--text);font-family:var(--font);font-size:15px;text-align:left;border-radius:9px;cursor:pointer;width:100%"><i class="ti ti-wallet" style="font-size:20px;color:var(--text2)"></i> Kasbon</button>
+    <button onclick="goPage('forecast')" style="display:flex;align-items:center;gap:11px;padding:12px 12px;border:none;background:transparent;color:var(--text);font-family:var(--font);font-size:15px;text-align:left;border-radius:9px;cursor:pointer;width:100%"><i class="ti ti-chart-line" style="font-size:20px;color:var(--text2)"></i> Forecast</button>
+    <button onclick="goPage('piutang')" style="display:flex;align-items:center;gap:11px;padding:12px 12px;border:none;background:transparent;color:var(--text);font-family:var(--font);font-size:15px;text-align:left;border-radius:9px;cursor:pointer;width:100%"><i class="ti ti-cash" style="font-size:20px;color:var(--text2)"></i> Piutang</button>
+  </div>
 
   <!-- FAB -->
   <div id="fabMenu" style="display:none;position:fixed;right:20px;bottom:152px;z-index:51;flex-direction:column;gap:10px;align-items:flex-end">
@@ -2893,6 +2898,8 @@ function openFAB() {
 }
 function toggleFabMenu(){ const m=document.getElementById('fabMenu'); if(m) m.style.display=(m.style.display==='flex')?'none':'flex'; }
 function closeFabMenu(){ const m=document.getElementById('fabMenu'); if(m) m.style.display='none'; }
+function toggleLainnyaMenu(){ const m=document.getElementById('lainnyaMenu'),bg=document.getElementById('lainnyaBg'); if(!m) return; const show=m.style.display!=='flex'; m.style.display=show?'flex':'none'; if(bg) bg.style.display=show?'block':'none'; }
+function closeLainnyaMenu(){ const m=document.getElementById('lainnyaMenu'),bg=document.getElementById('lainnyaBg'); if(m) m.style.display='none'; if(bg) bg.style.display='none'; }
 function addTxnType(j){ closeFabMenu(); openDrawer('txn', null, j); }
 
 function openDrawer(mode, editId = null, preset = null) {
@@ -3281,7 +3288,7 @@ async function confirmImport(){
   }
 }
 function showToast(msg,type){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(type||'success');setTimeout(()=>t.classList.add('show'),10);setTimeout(()=>t.classList.remove('show'),2800);}
-function goPage(page){closeFabMenu();state.currentPage=page;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+page).classList.add('active');document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));const idx=['dashboard','transaksi','transfer','project','kasbon','forecast','piutang','master'].indexOf(page);if(idx>=0){const ab=document.querySelectorAll('.nav-item')[idx];ab.classList.add('active');if(ab&&ab.parentElement)ab.parentElement.scrollTo({left:ab.offsetLeft-ab.parentElement.clientWidth/2+ab.clientWidth/2,behavior:'smooth'});}document.getElementById('content').scrollTop=0;if(page==='master')renderMaster();if(page==='transfer')renderTransferPage();if(page==='kasbon')renderKasbon();if(page==='forecast')renderForecast();if(page==='piutang')renderPiutang();}
+function goPage(page){closeFabMenu();closeLainnyaMenu();state.currentPage=page;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+page).classList.add('active');document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));const navKey=({kasbon:'lainnya',forecast:'lainnya',piutang:'lainnya'})[page]||page;const _ab=document.querySelector('.nav-item[data-nav="'+navKey+'"]');if(_ab)_ab.classList.add('active');document.getElementById('content').scrollTop=0;if(page==='master')renderMaster();if(page==='transfer')renderTransferPage();if(page==='kasbon')renderKasbon();if(page==='forecast')renderForecast();if(page==='piutang')renderPiutang();}
 function renderAll(){renderDashboard();renderTxnMonthTabs();filterTxn();renderProject();renderCCBillReminder();renderPiutangReminder();updatePiutangBadge();if(state.currentPage==='master')renderMaster();if(state.currentPage==='transfer')renderTransferPage();if(state.currentPage==='kasbon')renderKasbon();if(state.currentPage==='forecast')renderForecast();if(state.currentPage==='piutang')renderPiutang();}
 if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{});}
 let logoTimer;
