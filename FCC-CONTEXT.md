@@ -291,6 +291,12 @@ Masalah: bottom-nav v18.9 (1 baris bisa di-geser, overflow-x) bentrok dgn gestur
 - **`goPage`**: highlight aktif kini via `data-nav` (bukan urutan posisi); `navKey` memetakan kasbon/forecast/piutang → 'lainnya' (tombol Lainnya menyala). Hapus auto-scroll nav (tak perlu lagi). `goPage` juga `closeLainnyaMenu()`.
 - sw.js cache **fcc-arthabumi-v11**.
 
+### v19.2 — Keterangan reserve di bawah saldo bank penyimpan — client-only
+Masalah: saldo bank penyimpan (mis. BCA 552) membingungkan — sebagian saldo sebenarnya jatah reserve cicilan. Solusi (keputusan Eddy: buat konsisten + keterangan).
+- Helper `_cicRowRemaining(c)` + **`reserveHeldIn(bank)`** = sisa cicilan yg holding-nya = bank (via `cicilanHoldingOrDefault`) + reserve bebas (diasumsikan di `defaultHoldingBank`).
+- Dashboard "Saldo Rekening": tiap bank yg menyimpan reserve dapat sub-line biru **"🛡️ reserve CC Rp X · bebas Rp Y"** (Y = saldo − X). sw.js cache **fcc-arthabumi-v12**.
+- **Terkait koreksi data 1×** (lihat log 2026-06-05): app BCA 552 dulu understated 20.303.853 karena 4 cicilan dikonversi pra-redeploy v18 (membukukan Pengeluaran reserve dari 552 tanpa leg Pemasukan). Fix manual = tambah 1 TXN Pemasukan ke BCA 552 NOMINAL 20.303.853 KATEGORI 'Reserve Masuk' TIPE_LOG 'Reserve' (excluded dari laba). Setelah itu saldo 552 = fisik 51.719.674; reserveHeldIn=22.503.003; bebas=29.216.671. reserveFunds (earmark) TIDAK berubah (dihitung dari RESERVE_LOG).
+
 ## Boleh edit manual di Google Sheets? BOLEH, dengan aturan:
 1. Jangan ubah baris HEADER / nama kolom / nama tab.
 2. Tiap baris WAJIB punya `ID` unik (kalau nambah manual, isi sendiri mis. `MAN001`) — kalau kosong, edit/hapus dari app tak bisa nemu baris.

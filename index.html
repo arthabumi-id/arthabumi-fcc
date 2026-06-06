@@ -603,6 +603,18 @@ function reserveNow(namaCC) {
 }
 function gotoCCReserve() { goPage('master'); switchMasterTab('cc'); }
 
+// v19.2: berapa dana reserve CC yang tersimpan (diparkir) di sebuah bank penyimpan.
+function _cicRowRemaining(c){ const tenor=+c.TENOR||0, terbayar=+c.TENOR_TERBAYAR||0, per=+c.NOMINAL_PER_BULAN||0; return per*Math.max(0,tenor-terbayar); }
+function reserveHeldIn(bankName){
+  let held=0;
+  (state.cicilan||[]).forEach(c=>{ if(c.STATUS!=='Lunas' && cicilanHoldingOrDefault(c)===bankName) held+=_cicRowRemaining(c); });
+  // reserve bebas (manual, di luar jatah cicilan) diasumsikan di rekening penyimpan default
+  if(bankName===defaultHoldingBank()){
+    state.ccs.forEach(c=>{ held += Math.max(0,(state.reserveFunds[c.NAMA]||0)-cicilanRemaining(c.NAMA)); });
+  }
+  return held;
+}
+
 function getProjCF(nama) {
   const p = state.summary && state.summary.proj && state.summary.proj[nama];
   if (p) return { masuk: p.masuk || 0, keluar: p.keluar || 0, sisa: (p.masuk||0) - (p.keluar||0) };
@@ -896,6 +908,7 @@ function renderDashboard() {
           <div class="list-body">
             <div class="list-title">${esc(b.NAMA)}</div>
             <div class="list-sub">${esc(b.BANK)} · ${b.TIPE}</div>
+            ${(()=>{ const rh=reserveHeldIn(b.NAMA); if(rh<=0) return ''; const bebas=r.saldo-rh; return `<div class="list-sub" style="color:var(--blue);margin-top:2px"><i class="ti ti-shield-check" style="font-size:11px;vertical-align:middle"></i> reserve CC ${fmtS(rh)} · bebas ${fmtS(bebas)}</div>`; })()}
           </div>
           <div class="list-right">
             <div style="font-size:14px;font-weight:700;color:${r.saldo>=0?'var(--green)':'var(--red)'}">${fmt(r.saldo)}</div>
