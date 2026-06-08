@@ -265,7 +265,7 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
           <div class="card-title">Setor ke Reserve Fund CC</div>
           <div class="form-group"><label class="form-label">Dari rekening bank (sumber)</label><select class="form-input" id="res_dari" onchange="previewReserve()"></select></div>
           <div class="form-group"><label class="form-label">Simpan di rekening (penyimpan)</label><select class="form-input" id="res_holding" onchange="previewReserve()"></select></div>
-          <div class="form-group"><label class="form-label">Reserve untuk kartu</label><select class="form-input" id="res_kartu" onchange="var h=document.getElementById('res_holding');if(h&&this.value)h.value=ccHoldingBank(this.value);previewReserve()"></select></div>
+          <div class="form-group"><label class="form-label">Reserve untuk kartu</label><select class="form-input" id="res_kartu" onchange="previewReserve()"></select></div>
           <div class="form-row">
             <div class="form-group"><label class="form-label">Nominal (Rp)</label><input class="form-input" type="text" inputmode="numeric" id="res_nominal" placeholder="0" oninput="fmtMoneyInput(this);previewReserve()"></div>
             <div class="form-group"><label class="form-label">Tanggal</label><input class="form-input" type="date" id="res_tgl"></div>
@@ -428,7 +428,7 @@ function saveLocal() {
   localStorage.setItem('fcc_data', JSON.stringify({
     banks: state.banks, ccs: state.ccs, projects: state.projects,
     kategori: state.kategori, txns: state.txns, transfers: state.transfers,
-    reserves: state.reserves, kasbon: state.kasbon, jadwal: state.jadwal, piutang: state.piutang, cicilan: state.cicilan, ccbills: state.ccbills, marks: state.marks, summary: state.summary, txnsSince: state.txnsSince
+    reserves: state.reserves, kasbon: state.kasbon, jadwal: state.jadwal, piutang: state.piutang, cicilan: state.cicilan, ccbills: state.ccbills, summary: state.summary, txnsSince: state.txnsSince
   }));
 }
 
@@ -588,8 +588,7 @@ function unreservedCC(namaCC) {
 // Strip status reserve utk kartu CC — sampai 2 baris (Cicilan, Belanja lain).
 function ccReserveStrip(namaCC) {
   const u = unreservedCC(namaCC);
-  const _mTot = markTotalCC(namaCC), _mCnt = markCountCC(namaCC);
-  if (u.cicNeed <= 0 && u.regNeed <= 0 && _mCnt <= 0) return '';
+  if (u.cicNeed <= 0 && u.regNeed <= 0) return '';
   const line = (label, need, belum, icon) => {
     if (need <= 0) return '';
     const ok = belum <= 0;
@@ -598,8 +597,7 @@ function ccReserveStrip(namaCC) {
       ${ok?'':`<button class="btn-danger" style="background:#0a2040;color:var(--blue);border-color:#3b82f640;flex-shrink:0" onclick="reserveNow('${esc(namaCC)}')">Reserve</button>`}
     </div>`;
   };
-  const _mLine = _mCnt>0 ? `<div style="padding:5px 9px;border-radius:7px;margin-top:6px;background:#0a1f14;border:1px solid #2dd4a030;font-size:10px;color:var(--text2)">🏷️ Ditandai manual: <strong style="color:var(--green)">${fmtS(_mTot)}</strong> · ${_mCnt} transaksi</div>` : '';
-  return `<div onclick="event.stopPropagation()">${line('Cicilan', u.cicNeed, u.cicBelum, 'ti-calendar-repeat')}${line('Belanja lain', u.regNeed, u.regBelum, 'ti-shopping-cart')}${_mLine}</div>`;
+  return `<div onclick="event.stopPropagation()">${line('Cicilan', u.cicNeed, u.cicBelum, 'ti-calendar-repeat')}${line('Belanja lain', u.regNeed, u.regBelum, 'ti-shopping-cart')}</div>`;
 }
 // Buka form Reserve dgn kartu & nominal (selisih belum di-reserve) sudah ke-prefill.
 function reserveNow(namaCC) {
@@ -608,7 +606,6 @@ function reserveNow(namaCC) {
   switchTTab('reserve');
   const ks = document.getElementById('res_kartu'); if (ks) ks.value = namaCC;
   const nm = document.getElementById('res_nominal'); if (nm) nm.value = u.belum > 0 ? fmtInput(u.belum) : '';
-  const hd = document.getElementById('res_holding'); if (hd) hd.value = ccHoldingBank(namaCC);
   previewReserve();
   const ct = document.getElementById('content'); if (ct) ct.scrollTop = 0;
   showToast('Pilih bank sumber (mis. BCA) & penyimpan, lalu Sisihkan ke Reserve', 'success');
@@ -625,32 +622,6 @@ function reserveHeldIn(bankName){
     state.ccs.forEach(c=>{ held += Math.max(0,(state.reserveFunds[c.NAMA]||0)-cicilanRemaining(c.NAMA)); });
   }
   return held;
-}
-
-// ── v20: rekening penyimpan reserve PER KARTU + penanda manual centang ──────
-// Bank reserve default kartu ini (kolom RESERVE_BANK di MASTER_CC); fallback ke default global.
-function ccHoldingBank(ccNama){
-  const cc = state.ccs.find(c=>c.NAMA===ccNama);
-  const rb = cc && cc.RESERVE_BANK;
-  const names = state.banks.map(b=>b.NAMA);
-  return (rb && names.includes(rb)) ? rb : defaultHoldingBank();
-}
-// Penanda manual: transaksi CC mana yg sudah Eddy buatkan reserve (akumulasi). Lepas dari pot reserve.
-function isMarked(txnId){ return (state.marks||[]).some(m=>String(m.TXN_ID)===String(txnId)); }
-function markTotalCC(ccNama){ return (state.marks||[]).filter(m=>m.CC===ccNama).reduce((s,m)=>s+Number(m.NOMINAL||0),0); }
-function markCountCC(ccNama){ return (state.marks||[]).filter(m=>m.CC===ccNama).length; }
-function toggleMark(txnId, ccNama, nominal){
-  state.marks = state.marks || [];
-  if(isMarked(txnId)){
-    state.marks = state.marks.filter(m=>String(m.TXN_ID)!==String(txnId));
-    if(API_URL) bgPost({action:'unmarkTxn',data:{TXN_ID:txnId}},'Lepas tanda reserve');
-  } else {
-    state.marks.push({TXN_ID:txnId, CC:ccNama||'', NOMINAL:Math.abs(Number(nominal)||0)});
-    if(API_URL) bgPost({action:'markTxn',data:{TXN_ID:txnId, CC:ccNama||'', NOMINAL:Math.abs(Number(nominal)||0), USER:state.user}},'Tandai reserve');
-  }
-  saveLocal();
-  if(typeof window.acctFilter==='function') window.acctFilter();   // refresh drawer detail akun
-  if(state.currentPage==='master' && state.currentMasterTab==='cc') renderMaster();  // refresh ringkasan kartu
 }
 
 function getProjCF(nama) {
@@ -859,7 +830,6 @@ async function syncAll() {
     state.piutang = data.piutang || state.piutang || [];
     state.cicilan = data.cicilan || state.cicilan || [];
     state.ccbills = data.ccbills || state.ccbills || [];
-    state.marks = data.marks || state.marks || [];
     state.summary = data.summary || null; // null bila pakai getAll lama → accessor fallback ke txns
     state.txnsSince = data.since || state.txnsSince;
     computeReserve();
@@ -1666,7 +1636,7 @@ function openCicilan(){
   const katOpts=[...state.kategori].filter(k=>k.TIPE==='Pengeluaran').sort((a,b)=>String(a.NAMA).localeCompare(String(b.NAMA),'id')).map(k=>`<option value="${esc(k.NAMA)}">${esc(k.KELOMPOK)}</option>`).join('');
   document.getElementById('drawerTitle').textContent='Beli Cicilan CC';
   document.getElementById('drawerBody').innerHTML=`
-    <div class="form-group"><label class="form-label">Kartu Kredit (yg dipakai)</label><select class="form-input" id="ci_cc" onchange="var h=document.getElementById('ci_holding');if(h)h.value=ccHoldingBank(this.value)">${ccOpts}</select></div>
+    <div class="form-group"><label class="form-label">Kartu Kredit (yg dipakai)</label><select class="form-input" id="ci_cc">${ccOpts}</select></div>
     <div class="form-group"><label class="form-label">Deskripsi barang</label><input class="form-input" id="ci_desk" placeholder="mis. Mesin las, lemari display"></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Harga Pokok (Rp)</label><input class="form-input" id="ci_pokok" type="text" inputmode="numeric" oninput="fmtMoneyInput(this);ciPreview()" placeholder="0"></div>
@@ -1681,7 +1651,7 @@ function openCicilan(){
     <div class="form-group"><label class="form-label">Kategori biaya</label><input class="form-input" id="ci_kat" list="ci_kat_list" placeholder="Material / Alat…" value="Material"><datalist id="ci_kat_list">${katOpts}</datalist></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Dana reserve dari (sumber)</label><select class="form-input" id="ci_bank">${bankOpts}</select></div>
-      <div class="form-group"><label class="form-label">Simpan di rekening</label><select class="form-input" id="ci_holding">${state.banks.map(b=>`<option ${b.NAMA===ccHoldingBank(state.ccs[0]&&state.ccs[0].NAMA)?'selected':''}>${esc(b.NAMA)}</option>`).join('')}</select></div>
+      <div class="form-group"><label class="form-label">Simpan di rekening</label><select class="form-input" id="ci_holding">${state.banks.map(b=>`<option ${b.NAMA===defaultHoldingBank()?'selected':''}>${esc(b.NAMA)}</option>`).join('')}</select></div>
     </div>
     <div class="form-group"><label class="form-label">Catatan</label><input class="form-input" id="ci_notes" placeholder="opsional"></div>
     <button class="btn-primary" onclick="saveCicilan()"><i class="ti ti-calendar-repeat"></i> Simpan Cicilan</button>
@@ -1783,7 +1753,7 @@ function openConvertCicilan(txnId){
     <div class="card" style="padding:8px 10px;margin:0 0 12px;background:#140d24;border:1px solid #7c5cff40"><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Angsuran per bulan</div><div id="cv_per" style="font-size:16px;font-weight:700;color:#b9a3ff">Rp 0</div><div id="cv_perSub" style="font-size:10px;color:var(--text3)"></div></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Dana reserve dari (sumber)</label><select class="form-input" id="cv_bank">${bankOpts}</select></div>
-      <div class="form-group"><label class="form-label">Simpan di rekening</label><select class="form-input" id="cv_holding">${state.banks.map(b=>`<option ${b.NAMA===ccHoldingBank(t.REKENING)?'selected':''}>${esc(b.NAMA)}</option>`).join('')}</select></div>
+      <div class="form-group"><label class="form-label">Simpan di rekening</label><select class="form-input" id="cv_holding">${state.banks.map(b=>`<option ${b.NAMA===defaultHoldingBank()?'selected':''}>${esc(b.NAMA)}</option>`).join('')}</select></div>
     </div>
     <div class="form-group"><label class="form-label">Tgl mulai cicilan</label><input class="form-input" id="cv_mulai" type="date" value="${String(t.TANGGAL).slice(0,10)}"></div>
     <button class="btn-primary" onclick="saveConvertCicilan('${txnId}',${pokok})"><i class="ti ti-calendar-repeat"></i> Konversi jadi Cicilan</button>
@@ -2413,7 +2383,6 @@ function openAccountDetail(type, nama) {
           </div>
         </div>
       </div>
-      ${isCC ? `<div style="padding:7px 10px;border-radius:8px;margin-bottom:10px;background:#0a1f14;border:1px solid #2dd4a030;font-size:11px;color:var(--text2)">🏷️ Ditandai sudah di-reserve (manual): <strong style="color:var(--green)">${fmt(markTotalCC(nama))}</strong> · ${markCountCC(nama)} transaksi <span style="color:var(--text3)">— reserve app: ${fmtS(state.reserveFunds[nama]||0)}</span></div>` : ''}
       ${donutCardHTML('acctKatDonut', katEntries)}
       <div style="font-size:11px;color:var(--text3);margin-bottom:8px">${data.length} transaksi ditampilkan</div>
       ${data.length ? data.map(t => {
@@ -2431,7 +2400,6 @@ function openAccountDetail(type, nama) {
             <div style="text-align:right;flex-shrink:0">
               <div style="font-size:13px;font-weight:700;color:${t.JENIS==='Pemasukan'?'var(--green)':'var(--red)'}">${t.JENIS==='Pemasukan'?'+':'-'}${fmt(Number(t.NOMINAL))}</div>
               ${(!isTr&&!isRes)?`<button style="font-size:10px;background:transparent;border:none;color:var(--text3);cursor:pointer;padding:0" onclick="closeDrawer();setTimeout(()=>editTxn('${t.ID}'),200)">edit</button>`:''}
-              ${(isCC && t.JENIS==='Pengeluaran' && !isTr && !isRes)?`<div><button onclick="toggleMark('${t.ID}','${esc(nama)}',${Number(t.NOMINAL)})" style="font-size:10px;margin-top:4px;padding:2px 8px;border-radius:10px;cursor:pointer;border:1px solid ${isMarked(t.ID)?'#2dd4a060':'var(--border2)'};background:${isMarked(t.ID)?'#0a2a1e':'transparent'};color:${isMarked(t.ID)?'var(--green)':'var(--text3)'}">${isMarked(t.ID)?'✅ reserved':'☐ tandai'}</button></div>`:''}
             </div>
           </div>
         </div>`;
@@ -3023,7 +2991,6 @@ function openDrawer(mode, editId = null, preset = null) {
         <div class="form-group"><label class="form-label">Jatuh Tempo</label><input class="form-input" type="number" id="fc_tempo" value="${c?c.JATUH_TEMPO:25}" placeholder="25" inputmode="numeric"></div>
       </div>
       <div class="form-group"><label class="form-label">Limit (Rp)</label><input class="form-input" type="text" inputmode="numeric" id="fc_limit" value="${c?fmtInput(c.LIMIT):''}" placeholder="0" oninput="fmtMoneyInput(this)"></div>
-      <div class="form-group"><label class="form-label">Rekening penyimpan reserve</label><select class="form-input" id="fc_reserve">${state.banks.map(b=>`<option ${((c&&c.RESERVE_BANK)?c.RESERVE_BANK:defaultHoldingBank())===b.NAMA?'selected':''}>${esc(b.NAMA)}</option>`).join('')}</select><div style="font-size:10px;color:var(--text3);margin-top:3px">Bank tempat dana reserve kartu ini diparkir (default), biar tidak berantakan. Tetap bisa diganti saat menyisihkan.</div></div>
       <button class="btn-primary" onclick="saveDrawer()"><i class="ti ti-device-floppy"></i> Simpan</button>
       ${editId?`<button class="btn-secondary" onclick="deleteItem('ccs','${editId}','MASTER_CC');closeDrawer()">Hapus Kartu</button>`:''}
     `;
@@ -3061,7 +3028,7 @@ function openDrawer(mode, editId = null, preset = null) {
       <div class="form-group" id="pc_bankWrap"><label class="form-label">Dari Rekening</label>
         <select class="form-input" id="pc_bank">${banks.map(n=>`<option>${esc(n)}</option>`).join('')}</select></div>
       <div class="form-group" id="pc_holdWrap" style="display:none"><label class="form-label">Ambil dari rekening reserve</label>
-        <select class="form-input" id="pc_holding">${banks.map(n=>`<option ${n===ccHoldingBank(cc?cc.NAMA:'')?'selected':''}>${esc(n)}</option>`).join('')}</select></div>
+        <select class="form-input" id="pc_holding">${banks.map(n=>`<option ${n===defaultHoldingBank()?'selected':''}>${esc(n)}</option>`).join('')}</select></div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Nominal (non-cicilan)</label><input class="form-input" id="pc_nominal" type="text" inputmode="numeric" value="${nonCic>0?fmtInput(nonCic):''}" oninput="fmtMoneyInput(this)" placeholder="0"></div>
         <div class="form-group"><label class="form-label">Tanggal</label><input class="form-input" id="pc_tgl" type="date" value="${today()}"></div>
@@ -3132,7 +3099,7 @@ async function saveDrawer() {
     if(API_URL)bgPost({action:eid?'updateRow':'addBank',data:eid?{sheet:'MASTER_BANK',id:eid,updates:obj}:obj},(eid?'Edit ':'')+'Rekening '+obj.NAMA);
     saveLocal();renderMaster();renderDashboard();showToast(eid?'Rekening diperbarui':'Rekening ditambahkan','success');
   } else if (mode === 'cc') {
-    const obj={ID:eid||uid(),NAMA:document.getElementById('fc_nama').value,BANK:document.getElementById('fc_bank').value,LIMIT:unfmtNum(document.getElementById('fc_limit').value),JATUH_TEMPO:parseInt(document.getElementById('fc_tempo').value)||25,RESERVE_BANK:(document.getElementById('fc_reserve')?document.getElementById('fc_reserve').value:''),CREATED_AT:now};
+    const obj={ID:eid||uid(),NAMA:document.getElementById('fc_nama').value,BANK:document.getElementById('fc_bank').value,LIMIT:unfmtNum(document.getElementById('fc_limit').value),JATUH_TEMPO:parseInt(document.getElementById('fc_tempo').value)||25,CREATED_AT:now};
     if(!obj.NAMA){showToast('Nama kartu wajib diisi','error');return;}
     if(eid){const i=state.ccs.findIndex(x=>x.ID===eid);state.ccs[i]=obj;}else state.ccs.push(obj);
     if(API_URL)bgPost({action:eid?'updateRow':'addCC',data:eid?{sheet:'MASTER_CC',id:eid,updates:obj}:obj},(eid?'Edit ':'')+'Kartu '+obj.NAMA);

@@ -16,14 +16,12 @@ const S = {
   TXN: 'TRANSAKSI', BANK: 'MASTER_BANK', CC: 'MASTER_CC', PROJ: 'MASTER_PROJECT',
   KAT: 'MASTER_KATEGORI', TRANSFER: 'TRANSFER_LOG', RESERVE: 'RESERVE_LOG', KASBON: 'KASBON',
   JADWAL: 'JADWAL', PIUTANG: 'PIUTANG', CICILAN: 'CICILAN', CCBILL: 'CC_TAGIHAN',
-  MARK: 'RESERVE_MARK',
 };
 
 const HEADERS = {
   [S.TXN]:      ['ID','TANGGAL','JENIS','PROJECT','REKENING','KATEGORI','NOMINAL','NOTES','TIPE_LOG','CREATED_BY','CREATED_AT'],
   [S.BANK]:     ['ID','NAMA','TIPE','BANK','SALDO_AWAL','CREATED_AT'],
-  // RESERVE_BANK (v20) = rekening penyimpan reserve default kartu ini (boleh kosong → pakai default global).
-  [S.CC]:       ['ID','NAMA','BANK','LIMIT','JATUH_TEMPO','CREATED_AT','RESERVE_BANK'],
+  [S.CC]:       ['ID','NAMA','BANK','LIMIT','JATUH_TEMPO','CREATED_AT'],
   [S.PROJ]:     ['ID','NAMA','KLIEN','TGL_MULAI','STATUS','NILAI_CONTRACT','CREATED_AT'],
   [S.KAT]:      ['ID','KELOMPOK','NAMA','TIPE','CREATED_AT'],
   [S.TRANSFER]: ['ID','TANGGAL','DARI','KE','NOMINAL','NOTES','REF_ID','CREATED_BY','CREATED_AT'],
@@ -46,10 +44,6 @@ const HEADERS = {
   // CC_TAGIHAN = tagihan CC terkunci dari rekonsiliasi statement (pengingat jatuh tempo di dashboard).
   // 1 baris aktif per kartu (lock baru menggantikan yg lama). STATUS='Aktif'/'Lunas'.
   [S.CCBILL]:   ['ID','CC','NOMINAL','JATUH_TEMPO','PERIODE_DARI','PERIODE_SAMPAI','STATUS','CREATED_BY','CREATED_AT'],
-  // RESERVE_MARK (v20) = penanda manual Eddy: transaksi CC mana yg sudah dia buatkan reserve
-  // (dia transfer reserve secara akumulasi). Lepas dari pot reserve (RESERVE_LOG) — murni penanda
-  // ingat-ingatan. 1 baris = 1 TXN dicentang. Lepas centang = hapus baris (by TXN_ID).
-  [S.MARK]:     ['ID','TXN_ID','CC','NOMINAL','CREATED_BY','CREATED_AT'],
 };
 
 // ── INIT ─────────────────────────────────────────────────────
@@ -148,7 +142,6 @@ function doGet(e) {
       case 'getPiutang':   return json(getSheet(ss, S.PIUTANG));
       case 'getCicilan':   return json(getSheet(ss, S.CICILAN));
       case 'getCCBills':   return json(getSheet(ss, S.CCBILL));
-      case 'getMarks':     return json(getSheet(ss, S.MARK));
       default:             return json({ error: 'Unknown action' });
     }
   } catch (err) { return json({ error: err.message }); }
@@ -183,8 +176,6 @@ function doPost(e) {
       case 'deleteCicilan': res = deleteCicilan(ss, data); break;
       case 'convertTxnToCicilan': res = convertTxnToCicilan(ss, data); break;
       case 'changeReserveBank': res = changeReserveBank(ss, data); break;
-      case 'markTxn':     res = markTxn(ss, data); break;
-      case 'unmarkTxn':   res = unmarkTxn(ss, data); break;
       case 'lockCCBill':  res = lockCCBill(ss, data); break;
       case 'updateRow':   res = updateRow(ss, data); break;
       case 'deleteRow':   res = deleteRow(ss, data); break;
@@ -199,7 +190,6 @@ function doPost(e) {
 // ── BUNDLE: 1 round-trip ─────────────────────────────────────
 function getBundle(ss, params) {
   const since = params.since || daysAgoISO(RECENT_DAYS);
-  ensureCol(ss, S.CC, 'RESERVE_BANK');   // v20: pastikan kolom bank reserve per kartu ada
   return {
     banks:     getSheet(ss, S.BANK),
     ccs:       getSheet(ss, S.CC),
@@ -212,7 +202,6 @@ function getBundle(ss, params) {
     piutang:   getSheet(ss, S.PIUTANG),
     cicilan:   getSheet(ss, S.CICILAN),
     ccbills:   getSheet(ss, S.CCBILL),
-    marks:     getSheet(ss, S.MARK),
     summary:   getSummary(ss),
     txns:      getTxns(ss, { since: since }),
     since:     since,
@@ -282,7 +271,7 @@ function getAllData(ss) {
     transfers: getSheet(ss, S.TRANSFER), reserves: getSheet(ss, S.RESERVE),
     kasbon: getSheet(ss, S.KASBON), jadwal: getSheet(ss, S.JADWAL),
     piutang: getSheet(ss, S.PIUTANG), cicilan: getSheet(ss, S.CICILAN),
-    ccbills: getSheet(ss, S.CCBILL), marks: getSheet(ss, S.MARK),
+    ccbills: getSheet(ss, S.CCBILL),
   };
 }
 
@@ -894,37 +883,6 @@ function deleteRow(ss, data) {
     if (String(all[i][idCol]) === String(id)) { sheet.deleteRow(i + 1); return { ok: true }; }
   }
   return { error: 'Row not found' };
-}
-
-// ── v20: penanda manual reserve per transaksi + util kolom ──────────────────
-// Tambah header kolom `col` di akhir sheet bila belum ada (migrasi ringan, idempotent).
-function ensureCol(ss, name, col) {
-  const sh = ss.getSheetByName(name); if (!sh) return;
-  const lastCol = sh.getLastColumn();
-  const hdr = sh.getRange(1, 1, 1, lastCol).getValues()[0];
-  if (hdr.indexOf(col) === -1) sh.getRange(1, lastCol + 1).setValue(col);
-}
-// Centang: catat TXN_ID sbg "sudah dibuatkan reserve" (idempotent). Lepas dari pot reserve.
-function markTxn(ss, data) {
-  let sh = ss.getSheetByName(S.MARK);
-  if (!sh) { sh = ss.insertSheet(S.MARK); sh.appendRow(HEADERS[S.MARK]); sh.getRange(1,1,1,HEADERS[S.MARK].length).setFontWeight('bold').setBackground('#1a1a2e').setFontColor('#ffffff'); sh.setFrozenRows(1); }
-  if (sh.getLastRow() > 1) {
-    const ids = sh.getRange(2, 2, sh.getLastRow()-1, 1).getValues().map(r => String(r[0]));
-    if (ids.indexOf(String(data.TXN_ID)) >= 0) return { ok: true, dup: true };
-  }
-  sh.appendRow(['ID'+Date.now(), data.TXN_ID, data.CC || '', Math.abs(Number(data.NOMINAL)||0), data.USER || '', new Date().toISOString()]);
-  return { ok: true };
-}
-// Lepas centang: hapus baris RESERVE_MARK by TXN_ID.
-function unmarkTxn(ss, data) {
-  const sh = ss.getSheetByName(S.MARK);
-  if (!sh || sh.getLastRow() <= 1) return { ok: true };
-  const all = sh.getRange(1, 1, sh.getLastRow(), sh.getLastColumn()).getValues();
-  const iTxn = all[0].indexOf('TXN_ID');
-  for (let i = 1; i < all.length; i++) {
-    if (String(all[i][iTxn]) === String(data.TXN_ID)) { sh.deleteRow(i + 1); return { ok: true }; }
-  }
-  return { ok: true };
 }
 
 function daysAgoISO(days) {

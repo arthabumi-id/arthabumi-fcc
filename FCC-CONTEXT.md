@@ -304,6 +304,22 @@ Masalah: strip v19 lama menampilkan SATU angka "perlu didanai" yg menyesatkan un
 - **Verifikasi (harness `harness-reserve-v19.js` di folder project, data KRIS asli + 8 skenario):** KRIS → "Cicilan 22.503.003 ter-reserve ✓" (regNeed floored 0, belanja Juni ter-mask oleh distorsi); funded/unfunded/partial/over/empty semua benar. Koreksi 552 +20.303.853 → 51.719.674. sw.js cache **fcc-arthabumi-v13**.
 - **CATATAN data (bukan bug kode):** belanja KRIS Jun 1-5 (4.754.271) ter-mask karena pembayaran Mei 44,25jt jadi "kredit yatim" (belanjanya sudah pindah ke cicilan). Perlu dibereskan terpisah bila ingin akurat.
 
+## ⭐ Perubahan v20 (Centang reserve manual + Bank reserve per kartu) — Juni 2026
+PRD: `PRD-v20-centang-reserve-manual.md` (signed off "Proceed"). **WAJIB REDEPLOY Code.gs** (sheet & kolom baru). sw.js cache **fcc-arthabumi-v14**.
+
+### Fitur A — Centang reserve manual per transaksi CC
+Eddy transfer reserve secara AKUMULASI, mau menandai transaksi CC mana yg sudah dia danai — murni pengingat pribadi, LEPAS dari pot reserve (reserveFunds).
+- **Sheet baru `RESERVE_MARK`** (`ID,TXN_ID,CC,NOMINAL,CREATED_BY,CREATED_AT`). 1 baris = 1 TXN dicentang. Lepas centang = hapus baris by TXN_ID.
+- **Code.gs (redeploy):** action `markTxn` (idempotent: skip bila TXN_ID sudah ada), `unmarkTxn` (hapus by TXN_ID); masuk `getBundle`/`getAllData` (`marks`); doGet `getMarks`; helper `ensureCol`.
+- **Client:** `state.marks` (sync/save/offline). Helper `isMarked(id)`, `markTotalCC(cc)`, `markCountCC(cc)`, `toggleMark(id,cc,nominal)` (optimistic `bgPost`). Di **Detail Akun CC**: tiap belanja (Pengeluaran, non-transfer/reserve) ada tombol **☐ tandai / ✅ reserved** + banner ringkasan "🏷️ Ditandai sudah di-reserve (manual): Rp X · N transaksi — reserve app: Rp Y" (sengaja berdampingan dgn reserve asli → mitigasi 'centang bohong'). Di **strip kartu CC (v19.3)**: baris "🏷️ Ditandai manual: Rp X · N transaksi" (indikator). Ringkasan juga otomatis muncul di kartu Master CC via strip.
+
+### Fitur B — Rekening penyimpan reserve PER KARTU
+- **Skema:** kolom **`RESERVE_BANK`** ditambah di akhir `MASTER_CC` (urutan lama tak diubah). `ensureCol(ss,S.CC,'RESERVE_BANK')` dipanggil di `getBundle` (migrasi otomatis, idempotent) → kolom muncul tanpa run manual. Baris lama kosong → pakai default global.
+- **Client:** form Tambah/Edit Kartu Kredit dapat dropdown **"Rekening penyimpan reserve"** (`fc_reserve`); `saveDrawer` cc kirim `RESERVE_BANK`. Helper **`ccHoldingBank(ccNama)`** = `cc.RESERVE_BANK || defaultHoldingBank()`. Dipakai sbg DEFAULT dropdown penyimpan di: `reserveNow` (`res_holding`), tab Reserve (`res_kartu` onchange set `res_holding`), Beli Cicilan (`ci_cc` onchange → `ci_holding`), Ubah jadi Cicilan (`cv_holding`=ccHoldingBank txn.REKENING), Bayar CC (`pc_holding`). Tetap bisa diganti manual per transaksi.
+
+### Verifikasi v20
+Fungsi backend (markTxn/unmarkTxn/ensureCol) & client (ccHoldingBank/toggleMark/markTotalCC/isMarked) di-`node --check` + run terisolasi = OK (ccHoldingBank hormati RESERVE_BANK & fallback; toggle tandai/lepas akurat). Mount bash macet di file penuh (index.html ~230KB) → audit manual + cek console browser. Backup: `backup-pre-v20-*`.
+
 ## Boleh edit manual di Google Sheets? BOLEH, dengan aturan:
 1. Jangan ubah baris HEADER / nama kolom / nama tab.
 2. Tiap baris WAJIB punya `ID` unik (kalau nambah manual, isi sendiri mis. `MAN001`) — kalau kosong, edit/hapus dari app tak bisa nemu baris.

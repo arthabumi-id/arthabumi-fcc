@@ -3,6 +3,15 @@
 
 ---
 
+## SESSION — 2026-06-08 (v20 Centang reserve manual + Bank reserve per kartu)
+**Topik:** PRD-v20 (signed off). Dua fitur, **WAJIB REDEPLOY Code.gs**.
+- **A. Centang manual:** sheet `RESERVE_MARK` + action `markTxn`/`unmarkTxn` + `marks` di bundle. Client: `state.marks`, `isMarked`/`markTotalCC`/`markCountCC`/`toggleMark` (optimistic). Tombol ☐/✅ di Detail Akun CC + banner ringkasan (berdampingan reserve asli) + indikator di strip v19.3. Lepas dari pot reserve (pengingat pribadi — Eddy reserve secara akumulasi).
+- **B. Bank reserve per kartu:** kolom `RESERVE_BANK` di MASTER_CC (auto via `ensureCol` di getBundle). Dropdown di form Kartu Kredit. Helper `ccHoldingBank` dipakai sbg default penyimpan di reserveNow/tab Reserve/cicilan/convert/paycc.
+**Hasil:** node --check fungsi backend+client OK & run terisolasi benar (ccHoldingBank, toggleMark). sw.js v14. Backup `backup-pre-v20-20260608-1512`. Mount bash macet di file penuh → audit manual.
+**Pending:** push index.html+sw.js+**redeploy Code.gs**. Cek console browser. (Masih terbuka dari sesi lalu: koreksi BCA 552 +20.303.853, saldo-awal April KRIS 44.087.606.)
+
+---
+
 ## SESSION — 2026-06-05 (v19 Status pendanaan reserve per kartu — client-only)
 **Topik:** Eddy bingung mana belanja CC yg sudah ia danai (transfer reserve dari BCA ke bank penyimpan) vs belum, sebelum jatuh tempo. PRD: `PRD-v19-status-reserve-belanja-cc.md` (signed off "Proceed").
 **Keputusan:** Model **B** (per kartu 1 angka agregat, BUKAN centang per item — ditolak krn bikin sumber kebenaran kedua). Basis "perlu didanai" = **tagihan berjalan** `getCCOut` (opsi A, 0 redeploy). Tampil di **tab Kartu Kredit + ringkasan Dashboard**. Client-only.
