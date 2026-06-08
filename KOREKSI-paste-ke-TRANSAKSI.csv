@@ -1,0 +1,8 @@
+ID,TANGGAL,JENIS,PROJECT,REKENING,KATEGORI,NOMINAL,NOTES,TIPE_LOG,CREATED_BY,CREATED_AT
+MAN-SA-BMW,2026-04-30,Pengeluaran,,CC-MAYBANK-BMW,Saldo Awal,47824805,[SALDO AWAL] tagihan pra-pembukuan dibayar 7 Mei,Saldo Awal,Eddy,2026-04-30T00:00:00.000Z
+MAN-SA-KRIS,2026-04-30,Pengeluaran,,CC-BCA-KRIS,Saldo Awal,44087606,[SALDO AWAL] tagihan April (cek Palyja) - ganti 44251790 bila Palyja bukan April,Saldo Awal,Eddy,2026-04-30T00:00:00.000Z
+MAN-SA-ACCOR,2026-04-30,Pengeluaran,,CC-CIMB-ACCOR,Saldo Awal,4405130,[SALDO AWAL] tagihan pra-pembukuan dibayar 12 Mei,Saldo Awal,Eddy,2026-04-30T00:00:00.000Z
+MAN-SA-BNI,2026-04-30,Pengeluaran,,CC-BNI-JCB,Saldo Awal,4044157,[SALDO AWAL] tagihan pra-pembukuan dibayar 9 Mei,Saldo Awal,Eddy,2026-04-30T00:00:00.000Z
+MAN-SA-INFINITE,2026-04-30,Pengeluaran,,CC-MAYBANK-INFINITE,Saldo Awal,1478667,[SALDO AWAL] tagihan pra-pembukuan dibayar 7 Mei,Saldo Awal,Eddy,2026-04-30T00:00:00.000Z
+MAN-SA-DANAMON,2026-04-30,Pengeluaran,,CC-DANAMON-JCB,Saldo Awal,113000,[SALDO AWAL] tagihan pra-pembukuan dibayar 4 Mei,Saldo Awal,Eddy,2026-04-30T00:00:00.000Z
+MAN-KOREKSI-552,2026-06-05,Pemasukan,,BCA 552,Reserve Masuk,20303853,[KOREKSI] reserve 4 cicilan lama fisik tetap di 552,Reserve,Eddy,2026-06-05T00:00:00.000Z
