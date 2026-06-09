@@ -325,7 +325,7 @@ Client-only (index.html). sw.js cache **fcc-arthabumi-v15**.
 - `renderTxn` sort jadi **`TANGGAL desc || CREATED_AT desc`** — tanggal tetap primer, lalu di antara transaksi bertanggal SAMA, yang paling baru di-input (CREATED_AT) naik ke atas. Keputusan Eddy: "tanggal dulu, kemudian input" (transaksi yang di-backdate tetap duduk di posisi tanggalnya, bukan loncat ke puncak). Verifikasi node OK.
 
 ## ⭐ Perubahan v21 (Akun Investasi — pribadi, DIPISAH TOTAL dari bisnis) — Juni 2026
-PRD: `PRD-v21-investasi-saham.md` (signed off "Proceed"). **WAJIB REDEPLOY Code.gs** (3 sheet + action baru). sw.js cache **fcc-arthabumi-v16**.
+PRD: `PRD-v21-investasi-saham.md` (signed off "Proceed"). **WAJIB REDEPLOY Code.gs** (3 sheet + action baru). sw.js cache **fcc-arthabumi-v17** (v16=modul awal; v17=grafik gabungan di halaman).
 
 ### Tujuan & model (keputusan Eddy)
 Catat akun investasi saham (Stockbit, Pluang, Indo Premier, dll). Cakupan = **Kas + Nilai Portofolio**; posisi = **DIPISAH TOTAL** (tidak masuk Laba Bersih, Net Cash, Forecast). Dua angka terpisah per akun:
@@ -347,7 +347,7 @@ Catat akun investasi saham (Stockbit, Pluang, Indo Premier, dll). Cakupan = **Ka
 - `state.investAkun/investLog/investValue` (sync/forceRefresh/saveLocal/loadOffline).
 - Helper: `investModal`, `investModalAsOf` (utk chart), `investLastSnapshot`, `investValueNow`, `investPL`, `investTotals`, `_invFlows`, `_invSnaps`.
 - Nav: masuk popup **"Lainnya"** (ikon `ti-trending-up`, bersama Kasbon/Forecast/Piutang). goPage/navKey/renderAll include 'invest'.
-- Halaman `page-invest` (`renderInvest`): kartu Total Nilai Portofolio (label "pribadi, di luar kas bisnis") + U/R, kartu per akun (`investCard`, klik → `openInvestDetail`). **TIDAK ada kartu di Dashboard** (Q3 = terpisah penuh).
+- Halaman `page-invest` (`renderInvest`): kartu Total Nilai Portofolio (label "pribadi, di luar kas bisnis") + U/R, **grafik garis GABUNGAN semua akun langsung di halaman** (`buildInvestTotalChart`/`investTotalSeries`/`investAcctValueAsOf` — carry-forward: x=union tanggal snapshot, total Nilai vs total Modal as-of; akun tanpa snapshot dihitung sebesar modalnya), lalu kartu per akun (`investCard`, klik → `openInvestDetail`). **TIDAK ada kartu di Dashboard** (Q3 = terpisah penuh). Grafik per-akun tetap ada di drawer detail.
 - `openInvestDetail`: ringkasan modal/nilai/UR + **grafik garis Nilai vs Modal** (`buildInvestChart`, Chart.js, modal dihitung as-of tiap tanggal snapshot) + riwayat snapshot & setor/tarik (hapus per baris) + Edit/Hapus akun (hapus hanya bila tanpa riwayat).
 - Drawer: `openInvestAkun`/`saveInvestAkun`/`delInvestAkun`; `openInvestFlow`/`saveInvestFlow` (**blocking+syncAll bila sumber bank FCC** krn sentuh saldo; **optimistic bgPost bila `(luar)`**); `delInvestFlow`; `openInvestValue`/`saveInvestValue` (optimistic, ID client) / `delInvestValue`.
 - Hint "⚠️ perlu update" bila snapshot nilai > 14 hari. Pengingat scheduled task tiap **Sabtu** (lihat log).

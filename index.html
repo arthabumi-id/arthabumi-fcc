@@ -1637,6 +1637,37 @@ function investLastSnapshot(akun){const s=_invSnaps(akun);return s.length?s[s.le
 function investValueNow(akun){const s=investLastSnapshot(akun);return s?Math.abs(Number(s.NILAI)||0):investModal(akun);}
 function investPL(akun){const modal=investModal(akun),nilai=investValueNow(akun);const rp=nilai-modal;return {modal,nilai,rp,pct:modal?rp/modal*100:0};}
 function investTotals(){let modal=0,nilai=0;(state.investAkun||[]).forEach(a=>{modal+=investModal(a.NAMA);nilai+=investValueNow(a.NAMA);});const rp=nilai-modal;return {modal,nilai,rp,pct:modal?rp/modal*100:0};}
+// Nilai akun pada tanggal D = snapshot terakhir (TANGGAL≤D); bila belum ada snapshot → modal as-of D (proxy, tdk 0).
+function investAcctValueAsOf(akun,dateISO){
+  const snaps=_invSnaps(akun).filter(s=>String(s.TANGGAL||'').slice(0,10)<=dateISO);
+  if(snaps.length)return Math.abs(Number(snaps[snaps.length-1].NILAI)||0);
+  return investModalAsOf(akun,dateISO);
+}
+// Deret gabungan SEMUA akun (carry-forward). x = union tanggal snapshot; total Nilai vs total Modal as-of.
+function investTotalSeries(){
+  const set=new Set();(state.investValue||[]).forEach(v=>{const d=String(v.TANGGAL||'').slice(0,10);if(d)set.add(d);});
+  const dates=Array.from(set).sort();
+  const labels=dates.map(d=>d.slice(5));
+  const nilai=dates.map(d=>(state.investAkun||[]).reduce((s,a)=>s+investAcctValueAsOf(a.NAMA,d),0)/1e6);
+  const modal=dates.map(d=>(state.investAkun||[]).reduce((s,a)=>s+investModalAsOf(a.NAMA,d),0)/1e6);
+  return {dates,labels,nilai,modal};
+}
+function buildInvestTotalChart(){
+  const s=investTotalSeries(); if(!s.dates.length)return;
+  const el=document.getElementById('invTotalChart'); if(!el)return;
+  destroyChart('invTotalChart');
+  Chart.defaults.color='#9090a8';
+  _chartInstances['invTotalChart']=new Chart(el,{
+    type:'line',
+    data:{labels:s.labels,datasets:[
+      {label:'Nilai',data:s.nilai,borderColor:'#2dd4a0',backgroundColor:'rgba(45,212,160,0.12)',fill:true,tension:0.25,pointRadius:2,borderWidth:2},
+      {label:'Modal',data:s.modal,borderColor:'#9090a8',borderDash:[5,4],pointRadius:0,borderWidth:1,fill:false}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:true,labels:{font:{size:10},boxWidth:12}},tooltip:{callbacks:{label:ctx=>' '+ctx.dataset.label+' '+ctx.raw.toFixed(1)+'jt'}}},
+      scales:{x:{grid:{color:'#2e2e3e'},ticks:{maxTicksLimit:8,font:{size:9}}},y:{grid:{color:'#2e2e3e'},ticks:{callback:v=>v+'jt'}}}}
+  });
+}
 
 function renderInvest(){
   const list=(state.investAkun||[]).slice().sort((a,b)=>String(a.NAMA).localeCompare(String(b.NAMA)));
@@ -1647,9 +1678,12 @@ function renderInvest(){
     <div class="metric-value" style="font-size:26px">${fmt(t.nilai)}</div>
     <div class="metric-sub">Modal tertanam ${fmtS(t.modal)} · U/R <span style="color:${plCol};font-weight:700">${t.rp>=0?'+':'−'}${fmt(t.rp)} (${t.pct>=0?'+':''}${t.pct.toFixed(1)}%)</span></div></div>`;
   if(!list.length){html+='<div class="empty">Belum ada akun investasi. Tekan "Tambah Akun Investasi" (Stockbit, Pluang, Indo Premier, dll).</div>';document.getElementById('investList').innerHTML=html;return;}
+  const hasSnap=(state.investValue||[]).length>0;
+  if(hasSnap)html+=`<div class="card" style="margin-bottom:12px"><div style="font-size:12px;font-weight:700;margin-bottom:8px">Nilai vs Modal · Semua Akun</div><div style="height:190px"><canvas id="invTotalChart"></canvas></div></div>`;
   html+=list.map(investCard).join('');
-  html+=`<div class="settings-sub" style="margin-top:10px;line-height:1.5">Nilai = snapshot terakhir yang kamu input (manual). Update berkala biar untung/rugi akurat. Setoran dari rekening FCC mengurangi saldo bank (kas jujur), tapi nilai portofolio tidak pernah dihitung sebagai kas / laba / forecast bisnis.</div>`;
+  html+=`<div class="settings-sub" style="margin-top:10px;line-height:1.5">Grafik gabungan semua akun (carry-forward: tiap titik = jumlah nilai snapshot terakhir tiap akun vs total modal saat itu). Nilai = snapshot terakhir yang kamu input (manual). Update berkala biar untung/rugi akurat. Setoran dari rekening FCC mengurangi saldo bank (kas jujur), tapi nilai portofolio tidak pernah dihitung sebagai kas / laba / forecast bisnis.</div>`;
   document.getElementById('investList').innerHTML=html;
+  if(hasSnap)buildInvestTotalChart();
 }
 function investCard(a){
   const p=investPL(a.NAMA);

@@ -9,7 +9,8 @@
 **Model:** 2 angka per akun — Modal tertanam (ledger setor−tarik) & Nilai kini (snapshot manual terbaru); U/R = selisih. Setor dari bank FCC → saldo bank turun nyata (TXN TIPE_LOG 'Investasi', dikecualikan laba/komposisi/forecast); `(luar)` → hanya log. Nilai portofolio TIDAK pernah dihitung sbg kas.
 **Dikerjakan — Code.gs:** sheet `MASTER_INVEST`/`INVEST_LOG`/`INVEST_VALUE` + HEADERS; action `addInvestAkun`/`addInvestFlow`/`addInvestValue`/`deleteInvestFlow`; `getInvest`; masuk getBundle/getAllData; helper `ensureSheet`. **index.html:** state+helper (investModal/ModalAsOf/ValueNow/PL/Totals), halaman `page-invest` (renderInvest+investCard), drawer detail (chart Nilai vs Modal) + akun/flow/value, masuk popup Lainnya (ti-trending-up). sw.js → **v16**.
 **Hasil:** node --check fungsi backend + helper client + blok UI penuh = OK; uji logika 100% cocok (modal/nilai/UR/modalAsOf/totals/staleness). Mount bash flicker di file penuh → audit manual. Backup `backup-pre-v21-20260609-0952`.
-**Pending:** push index.html+sw.js (GitHub Desktop) + **redeploy Code.gs** (Apps Script). Cek console browser. Pasang scheduled task pengingat update nilai tiap Sabtu. (Masih terbuka dari sesi lalu: koreksi BCA 552, saldo-awal KRIS.)
+**Revisi (sesi sama, v17):** Eddy minta grafik tampil **langsung di halaman Investasi** & **digabung semua akun**. Ditambah `investTotalSeries`/`investAcctValueAsOf`/`buildInvestTotalChart` (carry-forward gabungan) + kartu grafik di `renderInvest`. Grafik per-akun di drawer detail tetap. sw.js → **v17**. node --check + uji nilai gabungan cocok ([19, 19.3]jt vs modal [18,18]jt). Blok UI penuh (22,5KB) syntax OK.
+**Pending:** push index.html+sw.js (GitHub Desktop) + **redeploy Code.gs** (Apps Script). Cek console browser. Scheduled task pengingat Sabtu sudah dipasang. (Masih terbuka dari sesi lalu: koreksi BCA 552, saldo-awal KRIS.)
 
 ---
 
