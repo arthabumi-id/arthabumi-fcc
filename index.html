@@ -1955,7 +1955,8 @@ function renderCCBill(from,to){
 
 // ── RENDER TRANSAKSI ──────────────────────────────────
 function renderTxn(filtered) {
-  const data = (filtered || [...state.txns]).sort((a,b) => String(b.TANGGAL).localeCompare(String(a.TANGGAL)));
+  // Urut: TANGGAL desc, lalu CREATED_AT desc (input terakhir di paling atas utk tanggal sama).
+  const data = (filtered || [...state.txns]).sort((a,b) => String(b.TANGGAL).localeCompare(String(a.TANGGAL)) || String(b.CREATED_AT||'').localeCompare(String(a.CREATED_AT||'')));
   document.getElementById('txnList').innerHTML = data.length ? data.map(t => {
     const isTr = t.TIPE_LOG === 'Transfer', isRes = t.TIPE_LOG === 'Reserve';
     return `<div class="card" style="padding:10px 12px;margin-bottom:8px">
