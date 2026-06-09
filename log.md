@@ -3,6 +3,11 @@
 
 ---
 
+## SESSION — 2026-06-08 (v20.1 Urutan transaksi: tanggal lalu input)
+Client-only. `renderTxn` sort: `TANGGAL desc || CREATED_AT desc` (tanggal primer, input terakhir di atas utk tanggal sama). Keputusan Eddy: tanggal dulu, baru input (backdate tetap di posisi tanggalnya, bukan puncak). sw.js v15. Verifikasi node OK.
+
+---
+
 ## SESSION — 2026-06-08 (v20 Centang reserve manual + Bank reserve per kartu)
 **Topik:** PRD-v20 (signed off). Dua fitur, **WAJIB REDEPLOY Code.gs**.
 - **A. Centang manual:** sheet `RESERVE_MARK` + action `markTxn`/`unmarkTxn` + `marks` di bundle. Client: `state.marks`, `isMarked`/`markTotalCC`/`markCountCC`/`toggleMark` (optimistic). Tombol ☐/✅ di Detail Akun CC + banner ringkasan (berdampingan reserve asli) + indikator di strip v19.3. Lepas dari pot reserve (pengingat pribadi — Eddy reserve secara akumulasi).
