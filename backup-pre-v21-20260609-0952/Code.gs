@@ -17,7 +17,6 @@ const S = {
   KAT: 'MASTER_KATEGORI', TRANSFER: 'TRANSFER_LOG', RESERVE: 'RESERVE_LOG', KASBON: 'KASBON',
   JADWAL: 'JADWAL', PIUTANG: 'PIUTANG', CICILAN: 'CICILAN', CCBILL: 'CC_TAGIHAN',
   MARK: 'RESERVE_MARK',
-  INVEST: 'MASTER_INVEST', INVESTLOG: 'INVEST_LOG', INVESTVAL: 'INVEST_VALUE',  // v21 investasi (terpisah dari bisnis)
 };
 
 const HEADERS = {
@@ -51,15 +50,6 @@ const HEADERS = {
   // (dia transfer reserve secara akumulasi). Lepas dari pot reserve (RESERVE_LOG) — murni penanda
   // ingat-ingatan. 1 baris = 1 TXN dicentang. Lepas centang = hapus baris (by TXN_ID).
   [S.MARK]:     ['ID','TXN_ID','CC','NOMINAL','CREATED_BY','CREATED_AT'],
-  // ── v21 INVESTASI (pribadi, DIPISAH TOTAL dari metrik bisnis) ──
-  // MASTER_INVEST = daftar akun investasi (Stockbit/Pluang/Indo Premier/dll).
-  //   MODAL_AWAL = modal yg sudah tertanam sebelum mulai catat di FCC.
-  [S.INVEST]:   ['ID','NAMA','PLATFORM','JENIS','MODAL_AWAL','CREATED_AT'],
-  // INVEST_LOG = arus kas modal. JENIS: 'Setor'/'Tarik'. REKENING = bank FCC (→ tulis 1 TXN
-  //   TIPE_LOG 'Investasi', dikecualikan dari laba/komposisi) atau '(luar)' (kas pribadi, tak sentuh bank).
-  [S.INVESTLOG]:['ID','TANGGAL','AKUN','JENIS','REKENING','NOMINAL','NOTES','REF_ID','CREATED_BY','CREATED_AT'],
-  // INVEST_VALUE = snapshot nilai portofolio (input manual berkala). Termuda per akun = nilai kini.
-  [S.INVESTVAL]:['ID','TANGGAL','AKUN','NILAI','NOTES','CREATED_BY','CREATED_AT'],
 };
 
 // ── INIT ─────────────────────────────────────────────────────
@@ -159,7 +149,6 @@ function doGet(e) {
       case 'getCicilan':   return json(getSheet(ss, S.CICILAN));
       case 'getCCBills':   return json(getSheet(ss, S.CCBILL));
       case 'getMarks':     return json(getSheet(ss, S.MARK));
-      case 'getInvest':    return json({ investAkun: getSheet(ss, S.INVEST), investLog: getSheet(ss, S.INVESTLOG), investValue: getSheet(ss, S.INVESTVAL) });
       default:             return json({ error: 'Unknown action' });
     }
   } catch (err) { return json({ error: err.message }); }
@@ -196,10 +185,6 @@ function doPost(e) {
       case 'changeReserveBank': res = changeReserveBank(ss, data); break;
       case 'markTxn':     res = markTxn(ss, data); break;
       case 'unmarkTxn':   res = unmarkTxn(ss, data); break;
-      case 'addInvestAkun':   res = addInvestAkun(ss, data); break;
-      case 'addInvestFlow':   res = addInvestFlow(ss, data); break;
-      case 'addInvestValue':  res = addInvestValue(ss, data); break;
-      case 'deleteInvestFlow':res = deleteInvestFlow(ss, data); break;
       case 'lockCCBill':  res = lockCCBill(ss, data); break;
       case 'updateRow':   res = updateRow(ss, data); break;
       case 'deleteRow':   res = deleteRow(ss, data); break;
@@ -228,9 +213,6 @@ function getBundle(ss, params) {
     cicilan:   getSheet(ss, S.CICILAN),
     ccbills:   getSheet(ss, S.CCBILL),
     marks:     getSheet(ss, S.MARK),
-    investAkun:  getSheet(ss, S.INVEST),
-    investLog:   getSheet(ss, S.INVESTLOG),
-    investValue: getSheet(ss, S.INVESTVAL),
     summary:   getSummary(ss),
     txns:      getTxns(ss, { since: since }),
     since:     since,
@@ -301,7 +283,6 @@ function getAllData(ss) {
     kasbon: getSheet(ss, S.KASBON), jadwal: getSheet(ss, S.JADWAL),
     piutang: getSheet(ss, S.PIUTANG), cicilan: getSheet(ss, S.CICILAN),
     ccbills: getSheet(ss, S.CCBILL), marks: getSheet(ss, S.MARK),
-    investAkun: getSheet(ss, S.INVEST), investLog: getSheet(ss, S.INVESTLOG), investValue: getSheet(ss, S.INVESTVAL),
   };
 }
 
@@ -944,92 +925,6 @@ function unmarkTxn(ss, data) {
     if (String(all[i][iTxn]) === String(data.TXN_ID)) { sh.deleteRow(i + 1); return { ok: true }; }
   }
   return { ok: true };
-}
-
-// ── v21 INVESTASI (pribadi, terpisah total dari metrik bisnis) ───────────────
-// Buat sheet bila belum ada (pola header bold + frozen, idempotent).
-function ensureSheet(ss, name) {
-  let sh = ss.getSheetByName(name);
-  if (!sh) {
-    sh = ss.insertSheet(name);
-    sh.appendRow(HEADERS[name]);
-    sh.getRange(1,1,1,HEADERS[name].length).setFontWeight('bold').setBackground('#1a1a2e').setFontColor('#ffffff');
-    sh.setFrozenRows(1);
-  }
-  return sh;
-}
-
-// Tambah akun investasi (Stockbit/Pluang/Indo Premier/dll). MODAL_AWAL = modal yg sudah
-// tertanam sebelum mulai catat di FCC (opsional). Edit/hapus pakai updateRow/deleteRow generik.
-function addInvestAkun(ss, data) {
-  const sh = ensureSheet(ss, S.INVEST);
-  const now = new Date().toISOString();
-  const id = data.ID || ('INV' + Date.now());
-  const o = { ID:id, NAMA:data.NAMA||'', PLATFORM:data.PLATFORM||'', JENIS:data.JENIS||'',
-              MODAL_AWAL:Math.abs(Number(data.MODAL_AWAL)||0), CREATED_AT:now };
-  sh.appendRow(HEADERS[S.INVEST].map(h => o[h] !== undefined ? o[h] : ''));
-  return { ok:true, id:id };
-}
-
-// Catat setor/tarik modal. Bila REKENING = bank FCC (bukan '(luar)') → tulis 1 TXN
-// TIPE_LOG 'Investasi' (saldo bank turun/naik nyata, TAPI dikecualikan dari laba & komposisi
-// karena katExp hanya menghitung 'Pengeluaran'/'Cicilan-Beli'). Bila '(luar)' → hanya log,
-// tak menyentuh bank (modal dari kas pribadi di luar FCC). Nilai portofolio TIDAK pernah
-// dihitung sbg kas — itu murni snapshot di INVEST_VALUE.
-function addInvestFlow(ss, data) {
-  const sh = ensureSheet(ss, S.INVESTLOG);
-  const now = new Date().toISOString();
-  const ref = data.REF_ID || ('IVF' + Date.now());
-  const amt = Math.abs(Number(data.NOMINAL)||0);
-  const jenis = (data.JENIS === 'Tarik') ? 'Tarik' : 'Setor';
-  const akun = data.AKUN || '';
-  const rek = data.REKENING || '';
-  const tgl = data.TANGGAL || now.slice(0,10);
-  const realBank = rek && rek !== '(luar)';
-  sh.appendRow(['ID'+Date.now(), tgl, akun, jenis, rek, amt, data.NOTES||'', ref, data.USER||'', now]);
-  if (realBank) {
-    const tx = ss.getSheetByName(S.TXN);
-    if (jenis === 'Setor') {
-      tx.appendRow(['ID'+Date.now()+'I', tgl, 'Pengeluaran', '', rek, 'Setor Investasi', amt,
-        '[INVEST '+ref+'] setor ke '+akun+' '+(data.NOTES||''), 'Investasi', data.USER||'', now]);
-    } else {
-      tx.appendRow(['ID'+Date.now()+'I', tgl, 'Pemasukan', '', rek, 'Tarik Investasi', amt,
-        '[INVEST '+ref+'] tarik dari '+akun+' '+(data.NOTES||''), 'Investasi', data.USER||'', now]);
-    }
-  }
-  return { ok:true, ref:ref };
-}
-
-// Simpan snapshot nilai portofolio sebuah akun pada tanggal tertentu (input manual).
-// Snapshot termuda per akun = nilai kini (dihitung client). Hapus pakai deleteRow generik.
-function addInvestValue(ss, data) {
-  const sh = ensureSheet(ss, S.INVESTVAL);
-  const now = new Date().toISOString();
-  const id = data.ID || ('IVV' + Date.now());
-  const o = { ID:id, TANGGAL:data.TANGGAL||now.slice(0,10), AKUN:data.AKUN||'',
-              NILAI:Math.abs(Number(data.NILAI)||0), NOTES:data.NOTES||'',
-              CREATED_BY:data.USER||'', CREATED_AT:now };
-  sh.appendRow(HEADERS[S.INVESTVAL].map(h => o[h] !== undefined ? o[h] : ''));
-  return { ok:true, id:id };
-}
-
-// Hapus 1 arus kas investasi (by REF_ID) + TXN terkait (NOTES memuat ref). Dari bawah.
-function deleteInvestFlow(ss, data) {
-  const ref = String(data.refId || data.REF_ID || '');
-  if (!ref) return { error:'refId required' };
-  const sh = ss.getSheetByName(S.INVESTLOG);
-  if (sh && sh.getLastRow() > 1) {
-    const all = sh.getRange(1,1,sh.getLastRow(),sh.getLastColumn()).getValues();
-    const c = all[0].indexOf('REF_ID');
-    for (let i=all.length-1;i>=1;i--) if (String(all[i][c])===ref) sh.deleteRow(i+1);
-  }
-  const tx = ss.getSheetByName(S.TXN);
-  if (tx && tx.getLastRow() > 1) {
-    const all = tx.getRange(1,1,tx.getLastRow(),tx.getLastColumn()).getValues();
-    const c = all[0].indexOf('NOTES');
-    for (let i=all.length-1;i>=1;i--) if (String(all[i][c]).indexOf(ref)>=0) tx.deleteRow(i+1);
-  }
-  return { ok:true };
 }
 
 function daysAgoISO(days) {

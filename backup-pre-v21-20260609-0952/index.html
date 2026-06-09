@@ -320,12 +320,6 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
       <button class="btn-primary" style="margin-bottom:12px" onclick="openPiutang()"><i class="ti ti-plus"></i> Tambah Termin</button>
       <div id="piutangList"></div>
     </div>
-
-    <!-- INVESTASI (v21, pribadi — terpisah dari metrik bisnis) -->
-    <div class="page" id="page-invest">
-      <button class="btn-primary" style="margin-bottom:12px" onclick="openInvestAkun()"><i class="ti ti-plus"></i> Tambah Akun Investasi</button>
-      <div id="investList"></div>
-    </div>
   </div>
 
   <!-- PENDING / OPTIMISTIC SAVE BAR -->
@@ -347,7 +341,6 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
     <button onclick="goPage('kasbon')" style="display:flex;align-items:center;gap:11px;padding:12px 12px;border:none;background:transparent;color:var(--text);font-family:var(--font);font-size:15px;text-align:left;border-radius:9px;cursor:pointer;width:100%"><i class="ti ti-wallet" style="font-size:20px;color:var(--text2)"></i> Kasbon</button>
     <button onclick="goPage('forecast')" style="display:flex;align-items:center;gap:11px;padding:12px 12px;border:none;background:transparent;color:var(--text);font-family:var(--font);font-size:15px;text-align:left;border-radius:9px;cursor:pointer;width:100%"><i class="ti ti-chart-line" style="font-size:20px;color:var(--text2)"></i> Forecast</button>
     <button onclick="goPage('piutang')" style="display:flex;align-items:center;gap:11px;padding:12px 12px;border:none;background:transparent;color:var(--text);font-family:var(--font);font-size:15px;text-align:left;border-radius:9px;cursor:pointer;width:100%"><i class="ti ti-cash" style="font-size:20px;color:var(--text2)"></i> Piutang</button>
-    <button onclick="goPage('invest')" style="display:flex;align-items:center;gap:11px;padding:12px 12px;border:none;background:transparent;color:var(--text);font-family:var(--font);font-size:15px;text-align:left;border-radius:9px;cursor:pointer;width:100%"><i class="ti ti-trending-up" style="font-size:20px;color:var(--text2)"></i> Investasi</button>
   </div>
 
   <!-- FAB -->
@@ -398,9 +391,6 @@ let state = {
   piutang: [],    // termin klien (sheet PIUTANG)
   cicilan: [],    // cicilan kartu kredit (sheet CICILAN)
   ccbills: [],    // tagihan CC terkunci (sheet CC_TAGIHAN) — pengingat jatuh tempo
-  investAkun: [], // v21: akun investasi (MASTER_INVEST) — pribadi, terpisah dari bisnis
-  investLog: [],  // v21: arus kas modal (INVEST_LOG) setor/tarik
-  investValue: [],// v21: snapshot nilai portofolio (INVEST_VALUE)
   pending: [],    // antrian operasi optimistic save yg belum/ gagal terkirim ke server
 };
 
@@ -438,7 +428,7 @@ function saveLocal() {
   localStorage.setItem('fcc_data', JSON.stringify({
     banks: state.banks, ccs: state.ccs, projects: state.projects,
     kategori: state.kategori, txns: state.txns, transfers: state.transfers,
-    reserves: state.reserves, kasbon: state.kasbon, jadwal: state.jadwal, piutang: state.piutang, cicilan: state.cicilan, ccbills: state.ccbills, marks: state.marks, investAkun: state.investAkun, investLog: state.investLog, investValue: state.investValue, summary: state.summary, txnsSince: state.txnsSince
+    reserves: state.reserves, kasbon: state.kasbon, jadwal: state.jadwal, piutang: state.piutang, cicilan: state.cicilan, ccbills: state.ccbills, marks: state.marks, summary: state.summary, txnsSince: state.txnsSince
   }));
 }
 
@@ -870,9 +860,6 @@ async function syncAll() {
     state.cicilan = data.cicilan || state.cicilan || [];
     state.ccbills = data.ccbills || state.ccbills || [];
     state.marks = data.marks || state.marks || [];
-    state.investAkun = data.investAkun || state.investAkun || [];
-    state.investLog = data.investLog || state.investLog || [];
-    state.investValue = data.investValue || state.investValue || [];
     state.summary = data.summary || null; // null bila pakai getAll lama → accessor fallback ke txns
     state.txnsSince = data.since || state.txnsSince;
     computeReserve();
@@ -1612,260 +1599,6 @@ function delPiutang(id){
   if(API_URL)bgPost({action:'deleteRow',data:{sheet:'PIUTANG',id}},'Hapus termin');
   saveLocal(); closeDrawer(); renderPiutang(); renderPiutangReminder(); updatePiutangBadge(); if(state.currentPage==='forecast')renderForecast();
   showToast('Termin dihapus','success');
-}
-
-// ── v21 INVESTASI (pribadi — DIPISAH TOTAL dari metrik bisnis) ──────────────
-// Dua angka terpisah per akun: MODAL tertanam (ledger setor−tarik, dihitung app) &
-// NILAI kini (snapshot manual). Untung/Rugi = selisihnya. Setoran dari bank FCC
-// mengurangi saldo bank (TXN TIPE_LOG 'Investasi', tak masuk laba/komposisi/forecast);
-// nilai portofolio TIDAK pernah dihitung sebagai kas / Net Cash / laba.
-const INV_PLATFORMS=['Stockbit','Pluang','Indo Premier','Bibit','Ajaib','Mirae','BNI Bions','Lainnya'];
-const INV_JENIS=['Saham IDX','Saham US','Reksadana','Emas','Kripto','Obligasi','Lainnya'];
-function _invFlows(akun){return (state.investLog||[]).filter(x=>x.AKUN===akun);}
-function _invSnaps(akun){return (state.investValue||[]).filter(x=>x.AKUN===akun).slice().sort((a,b)=>String(a.TANGGAL||'').localeCompare(String(b.TANGGAL||''))||String(a.CREATED_AT||'').localeCompare(String(b.CREATED_AT||'')));}
-function investModal(akun){
-  let m=Number(((state.investAkun||[]).find(a=>a.NAMA===akun)||{}).MODAL_AWAL)||0;
-  _invFlows(akun).forEach(f=>{const n=Math.abs(Number(f.NOMINAL)||0);m+=(String(f.JENIS)==='Tarik'?-n:n);});
-  return m;
-}
-function investModalAsOf(akun,dateISO){
-  let m=Number(((state.investAkun||[]).find(a=>a.NAMA===akun)||{}).MODAL_AWAL)||0;
-  _invFlows(akun).forEach(f=>{if(String(f.TANGGAL||'').slice(0,10)<=dateISO){const n=Math.abs(Number(f.NOMINAL)||0);m+=(String(f.JENIS)==='Tarik'?-n:n);}});
-  return m;
-}
-function investLastSnapshot(akun){const s=_invSnaps(akun);return s.length?s[s.length-1]:null;}
-function investValueNow(akun){const s=investLastSnapshot(akun);return s?Math.abs(Number(s.NILAI)||0):investModal(akun);}
-function investPL(akun){const modal=investModal(akun),nilai=investValueNow(akun);const rp=nilai-modal;return {modal,nilai,rp,pct:modal?rp/modal*100:0};}
-function investTotals(){let modal=0,nilai=0;(state.investAkun||[]).forEach(a=>{modal+=investModal(a.NAMA);nilai+=investValueNow(a.NAMA);});const rp=nilai-modal;return {modal,nilai,rp,pct:modal?rp/modal*100:0};}
-
-function renderInvest(){
-  const list=(state.investAkun||[]).slice().sort((a,b)=>String(a.NAMA).localeCompare(String(b.NAMA)));
-  const t=investTotals();
-  const plCol=t.rp>=0?'var(--green)':'var(--red)';
-  let html=`<div class="card" style="margin-bottom:12px;background:linear-gradient(135deg,#0a1f2d,#0d1322);border:1px solid #3b82f630">
-    <div class="metric-label">Total Nilai Portofolio <span style="color:var(--text3);font-weight:500">· pribadi, di luar kas bisnis</span></div>
-    <div class="metric-value" style="font-size:26px">${fmt(t.nilai)}</div>
-    <div class="metric-sub">Modal tertanam ${fmtS(t.modal)} · U/R <span style="color:${plCol};font-weight:700">${t.rp>=0?'+':'−'}${fmt(t.rp)} (${t.pct>=0?'+':''}${t.pct.toFixed(1)}%)</span></div></div>`;
-  if(!list.length){html+='<div class="empty">Belum ada akun investasi. Tekan "Tambah Akun Investasi" (Stockbit, Pluang, Indo Premier, dll).</div>';document.getElementById('investList').innerHTML=html;return;}
-  html+=list.map(investCard).join('');
-  html+=`<div class="settings-sub" style="margin-top:10px;line-height:1.5">Nilai = snapshot terakhir yang kamu input (manual). Update berkala biar untung/rugi akurat. Setoran dari rekening FCC mengurangi saldo bank (kas jujur), tapi nilai portofolio tidak pernah dihitung sebagai kas / laba / forecast bisnis.</div>`;
-  document.getElementById('investList').innerHTML=html;
-}
-function investCard(a){
-  const p=investPL(a.NAMA);
-  const plCol=p.rp>=0?'var(--green)':'var(--red)';
-  const snap=investLastSnapshot(a.NAMA);
-  const dd=snap?_daysBetween(String(snap.TANGGAL).slice(0,10),today()):null;
-  const stale=dd!==null&&dd>14;
-  const snapTxt=snap?('nilai '+String(snap.TANGGAL).slice(0,10)+(stale?` · ⚠️ ${dd} hr lalu, perlu update`:'')):'belum ada snapshot nilai';
-  return `<div class="card" style="padding:12px 13px;margin-bottom:8px;cursor:pointer" onclick="openInvestDetail('${a.ID}')">
-    <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">
-      <div style="flex:1;min-width:0">
-        <div style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(a.NAMA)}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">${esc(a.PLATFORM||'')}${a.JENIS?' · '+esc(a.JENIS):''}</div>
-        <div style="font-size:10px;color:${stale?'var(--amber)':'var(--text3)'};margin-top:3px">${esc(snapTxt)}</div>
-      </div>
-      <div style="text-align:right;flex-shrink:0">
-        <div style="font-size:16px;font-weight:700">${fmt(p.nilai)}</div>
-        <div style="font-size:11px;color:${plCol};font-weight:600">${p.rp>=0?'+':'−'}${fmtS(p.rp)} (${p.pct>=0?'+':''}${p.pct.toFixed(1)}%)</div>
-        <div style="font-size:10px;color:var(--text3)">modal ${fmtS(p.modal)}</div>
-      </div>
-    </div></div>`;
-}
-function openInvestDetail(id){
-  const a=(state.investAkun||[]).find(x=>x.ID===id); if(!a)return;
-  const p=investPL(a.NAMA);
-  const plCol=p.rp>=0?'var(--green)':'var(--red)';
-  const flows=_invFlows(a.NAMA).slice().sort((x,y)=>String(y.TANGGAL||'').localeCompare(String(x.TANGGAL||'')));
-  const snaps=_invSnaps(a.NAMA).slice().reverse();
-  document.getElementById('drawerTitle').textContent=a.NAMA;
-  let html=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px">
-      <div class="metric"><div class="metric-label">Modal</div><div class="metric-value" style="font-size:15px">${fmt(p.modal)}</div></div>
-      <div class="metric"><div class="metric-label">Nilai kini</div><div class="metric-value" style="font-size:15px">${fmt(p.nilai)}</div></div>
-      <div class="metric"><div class="metric-label">Untung/Rugi</div><div class="metric-value" style="font-size:15px;color:${plCol}">${p.rp>=0?'+':'−'}${fmtS(p.rp)}</div><div class="metric-sub" style="color:${plCol}">${p.pct>=0?'+':''}${p.pct.toFixed(1)}%</div></div>
-    </div>
-    <div style="display:flex;gap:8px;margin-bottom:12px">
-      <button class="btn-primary" style="flex:1;margin:0" onclick="openInvestFlow('${esc(a.NAMA)}')"><i class="ti ti-arrows-exchange"></i> Setor / Tarik</button>
-      <button class="btn-secondary" style="flex:1;margin:0" onclick="openInvestValue('${esc(a.NAMA)}')"><i class="ti ti-refresh"></i> Update Nilai</button>
-    </div>`;
-  if(snaps.length>=1)html+=`<div class="card" style="margin-bottom:12px"><div style="font-size:12px;font-weight:700;margin-bottom:8px">Nilai vs Modal</div><div style="height:180px"><canvas id="invChart"></canvas></div></div>`;
-  html+=`<div style="font-size:12px;font-weight:700;margin:6px 0 6px">Riwayat Nilai (${snaps.length})</div>`;
-  html+= snaps.length? snaps.map(s=>`<div class="card" style="padding:9px 12px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">
-      <div><div style="font-size:13px;font-weight:600">${fmt(s.NILAI)}</div><div style="font-size:10px;color:var(--text3)">${String(s.TANGGAL).slice(0,10)}${s.NOTES?' · '+esc(s.NOTES):''}</div></div>
-      <button style="font-size:10px;background:transparent;border:none;color:var(--text3);cursor:pointer" onclick="delInvestValue('${s.ID}')">hapus</button></div>`).join('') : '<div class="settings-sub">Belum ada snapshot nilai. Tekan "Update Nilai".</div>';
-  html+=`<div style="font-size:12px;font-weight:700;margin:14px 0 6px">Riwayat Setor / Tarik (${flows.length})</div>`;
-  html+= flows.length? flows.map(f=>{const tarik=String(f.JENIS)==='Tarik';const rek=(f.REKENING&&f.REKENING!=='(luar)')?esc(f.REKENING):'kas luar';return `<div class="card" style="padding:9px 12px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">
-      <div><div style="font-size:13px;font-weight:600;color:${tarik?'var(--amber)':'var(--green)'}">${tarik?'Tarik':'Setor'} ${fmt(f.NOMINAL)}</div><div style="font-size:10px;color:var(--text3)">${String(f.TANGGAL).slice(0,10)} · ${rek}${f.NOTES?' · '+esc(f.NOTES):''}</div></div>
-      <button style="font-size:10px;background:transparent;border:none;color:var(--text3);cursor:pointer" onclick="delInvestFlow('${f.REF_ID}','${esc(f.REKENING||'')}')">hapus</button></div>`;}).join('') : '<div class="settings-sub">Belum ada setoran. Tekan "Setor / Tarik".</div>';
-  html+=`<div style="display:flex;gap:8px;margin-top:14px">
-      <button class="btn-secondary" style="flex:1;margin:0" onclick="openInvestAkun('${a.ID}')">Edit Akun</button>
-      ${(!flows.length&&!snaps.length)?`<button class="btn-secondary" style="flex:1;margin:0;color:var(--red)" onclick="delInvestAkun('${a.ID}')">Hapus Akun</button>`:''}
-    </div>
-    ${(flows.length||snaps.length)?'<div class="settings-sub" style="margin-top:8px">Akun dengan riwayat tidak bisa dihapus. Hapus dulu semua setoran &amp; snapshot bila ingin menghapus akun.</div>':''}`;
-  document.getElementById('drawerBody').innerHTML=html;
-  drawerMode='investdetail'; drawerEditId=id;
-  document.getElementById('drawerBg').classList.add('open');
-  if(snaps.length>=1)buildInvestChart(a.NAMA);
-}
-function buildInvestChart(akun){
-  const snaps=_invSnaps(akun); if(!snaps.length)return;
-  const el=document.getElementById('invChart'); if(!el)return;
-  destroyChart('invChart');
-  const labels=snaps.map(s=>String(s.TANGGAL).slice(5,10));
-  const nilai=snaps.map(s=>Math.abs(Number(s.NILAI)||0)/1e6);
-  const modal=snaps.map(s=>investModalAsOf(akun,String(s.TANGGAL).slice(0,10))/1e6);
-  Chart.defaults.color='#9090a8';
-  _chartInstances['invChart']=new Chart(el,{
-    type:'line',
-    data:{labels,datasets:[
-      {label:'Nilai',data:nilai,borderColor:'#2dd4a0',backgroundColor:'rgba(45,212,160,0.12)',fill:true,tension:0.25,pointRadius:2,borderWidth:2},
-      {label:'Modal',data:modal,borderColor:'#9090a8',borderDash:[5,4],pointRadius:0,borderWidth:1,fill:false}
-    ]},
-    options:{responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{display:true,labels:{font:{size:10},boxWidth:12}},tooltip:{callbacks:{label:ctx=>' '+ctx.dataset.label+' '+ctx.raw.toFixed(1)+'jt'}}},
-      scales:{x:{grid:{color:'#2e2e3e'},ticks:{maxTicksLimit:8,font:{size:9}}},y:{grid:{color:'#2e2e3e'},ticks:{callback:v=>v+'jt'}}}}
-  });
-}
-function openInvestAkun(editId){
-  editId=editId||null;
-  const a=editId?(state.investAkun||[]).find(x=>x.ID===editId):null;
-  document.getElementById('drawerTitle').textContent=editId?'Edit Akun Investasi':'Tambah Akun Investasi';
-  document.getElementById('drawerBody').innerHTML=`
-    <div class="form-group"><label class="form-label">Nama akun</label><input class="form-input" id="iv_nama" value="${a?esc(a.NAMA):''}" placeholder="mis. Stockbit Saham, Pluang Emas"></div>
-    <div class="form-row">
-      <div class="form-group"><label class="form-label">Platform</label><input class="form-input" id="iv_platform" list="iv_platform_list" value="${a?esc(a.PLATFORM||''):''}" placeholder="Stockbit"><datalist id="iv_platform_list">${INV_PLATFORMS.map(x=>`<option>${x}</option>`).join('')}</datalist></div>
-      <div class="form-group"><label class="form-label">Jenis</label><select class="form-input" id="iv_jenis">${INV_JENIS.map(x=>`<option ${a&&a.JENIS===x?'selected':''}>${x}</option>`).join('')}</select></div>
-    </div>
-    <div class="form-group"><label class="form-label">Modal awal (sudah tertanam sebelum dicatat di FCC)</label><input class="form-input" id="iv_modal" type="text" inputmode="numeric" value="${a?fmtInput(a.MODAL_AWAL):''}" oninput="fmtMoneyInput(this)" placeholder="0 (boleh kosong)"></div>
-    <button class="btn-primary" onclick="saveInvestAkun('${editId||''}')"><i class="ti ti-device-floppy"></i> Simpan</button>
-    <div class="settings-sub" style="margin-top:8px">Modal awal = total uang yang sudah kamu setor sebelum mulai mencatat di sini (opsional). Setoran berikutnya catat lewat "Setor / Tarik".</div>`;
-  drawerMode='investakun'; drawerEditId=editId||null;
-  document.getElementById('drawerBg').classList.add('open');
-}
-function saveInvestAkun(editId){
-  editId=editId||null;
-  const nama=(document.getElementById('iv_nama').value||'').trim();
-  const platform=(document.getElementById('iv_platform').value||'').trim();
-  const jenis=document.getElementById('iv_jenis').value;
-  const modal=unfmtNum(document.getElementById('iv_modal').value);
-  if(!nama){showToast('Nama akun wajib diisi','error');return;}
-  const old=editId?(state.investAkun||[]).find(x=>x.ID===editId):null;
-  if(!editId&&(state.investAkun||[]).some(x=>String(x.NAMA).toLowerCase()===nama.toLowerCase())){showToast('Nama akun sudah ada','error');return;}
-  const now=new Date().toISOString();
-  const obj={ID:editId||uid(),NAMA:nama,PLATFORM:platform,JENIS:jenis,MODAL_AWAL:modal,CREATED_AT:old?(old.CREATED_AT||now):now};
-  state.investAkun=state.investAkun||[];
-  if(editId){const i=state.investAkun.findIndex(x=>x.ID===editId);if(i>=0)state.investAkun[i]=obj;else state.investAkun.push(obj);}else state.investAkun.push(obj);
-  if(API_URL){ if(editId) bgPost({action:'updateRow',data:{sheet:'MASTER_INVEST',id:editId,updates:obj}},'Akun '+nama); else bgPost({action:'addInvestAkun',data:{...obj,USER:state.user}},'Akun '+nama); }
-  saveLocal(); closeDrawer(); renderInvest();
-  showToast(editId?'Akun diperbarui':'Akun ditambahkan','success');
-}
-function delInvestAkun(id){
-  const a=(state.investAkun||[]).find(x=>x.ID===id); if(!a)return;
-  if(_invFlows(a.NAMA).length||_invSnaps(a.NAMA).length){showToast('Akun punya riwayat — hapus dulu setoran & snapshotnya','error');return;}
-  if(!confirm('Hapus akun '+a.NAMA+'?'))return;
-  state.investAkun=(state.investAkun||[]).filter(x=>x.ID!==id);
-  if(API_URL)bgPost({action:'deleteRow',data:{sheet:'MASTER_INVEST',id}},'Hapus akun');
-  saveLocal(); closeDrawer(); renderInvest();
-  showToast('Akun dihapus','success');
-}
-function openInvestFlow(akunNama){
-  const akun=akunNama||((state.investAkun||[])[0]&&state.investAkun[0].NAMA)||'';
-  if(!akun){showToast('Tambah akun investasi dulu','error');return;}
-  const banks=state.banks.map(b=>b.NAMA);
-  document.getElementById('drawerTitle').textContent='Setor / Tarik — '+akun;
-  document.getElementById('drawerBody').innerHTML=`
-    <div class="form-row">
-      <div class="form-group"><label class="form-label">Jenis</label><select class="form-input" id="if_jenis"><option value="Setor">Setor (modal masuk)</option><option value="Tarik">Tarik (modal keluar)</option></select></div>
-      <div class="form-group"><label class="form-label">Tanggal</label><input class="form-input" id="if_tgl" type="date" value="${today()}"></div>
-    </div>
-    <div class="form-group"><label class="form-label">Sumber / tujuan dana</label>
-      <select class="form-input" id="if_rek"><option value="(luar)">(luar) — kas pribadi di luar FCC</option>${banks.map(n=>`<option>${esc(n)}</option>`).join('')}</select>
-      <div class="settings-sub" style="margin-top:4px">Pilih bank FCC → saldo bank ikut bergerak (kas jujur). Pilih "(luar)" → hanya catat modal, tak menyentuh bank.</div></div>
-    <div class="form-group"><label class="form-label">Nominal</label><input class="form-input" id="if_nominal" type="text" inputmode="numeric" oninput="fmtMoneyInput(this)" placeholder="0"></div>
-    <div class="form-group"><label class="form-label">Catatan</label><input class="form-input" id="if_notes" placeholder="opsional"></div>
-    <input type="hidden" id="if_akun" value="${esc(akun)}">
-    <button class="btn-primary" onclick="saveInvestFlow()"><i class="ti ti-device-floppy"></i> Simpan</button>`;
-  drawerMode='investflow'; drawerEditId=null;
-  document.getElementById('drawerBg').classList.add('open');
-}
-async function saveInvestFlow(){
-  const akun=document.getElementById('if_akun').value;
-  const jenis=document.getElementById('if_jenis').value;
-  const rek=document.getElementById('if_rek').value;
-  const nominal=unfmtNum(document.getElementById('if_nominal').value);
-  const tgl=document.getElementById('if_tgl').value;
-  const notes=document.getElementById('if_notes').value;
-  if(!nominal||!tgl){showToast('Nominal & tanggal wajib diisi','error');return;}
-  const realBank=rek&&rek!=='(luar)';
-  closeDrawer();
-  if(API_URL&&realBank){
-    // sentuh saldo bank → blocking + syncAll utk angka authoritative
-    showToast('Menyimpan...','success');
-    const res=await apiPost({action:'addInvestFlow',data:{AKUN:akun,JENIS:jenis,REKENING:rek,NOMINAL:nominal,TANGGAL:tgl,NOTES:notes,USER:state.user}});
-    if(res&&res.error){showToast('Gagal: '+res.error,'error');return;}
-    await syncAll();
-    if(state.currentPage==='invest')renderInvest();
-    showToast('Tersimpan ✓','success');
-  } else {
-    // (luar) atau offline → tidak sentuh bank → optimistic
-    const ref='IVF'+Date.now().toString(36).toUpperCase();
-    state.investLog=state.investLog||[];
-    state.investLog.push({ID:uid(),TANGGAL:tgl,AKUN:akun,JENIS:jenis,REKENING:realBank?rek:'(luar)',NOMINAL:nominal,NOTES:notes,REF_ID:ref,CREATED_BY:state.user,CREATED_AT:new Date().toISOString()});
-    if(API_URL)bgPost({action:'addInvestFlow',data:{REF_ID:ref,AKUN:akun,JENIS:jenis,REKENING:'(luar)',NOMINAL:nominal,TANGGAL:tgl,NOTES:notes,USER:state.user}},(jenis==='Tarik'?'Tarik ':'Setor ')+akun);
-    saveLocal(); renderInvest();
-    showToast('Tersimpan ✓','success');
-  }
-}
-function delInvestFlow(refId,rek){
-  if(!confirm('Hapus catatan setor/tarik ini?'))return;
-  const realBank=rek&&rek!=='(luar)';
-  state.investLog=(state.investLog||[]).filter(x=>x.REF_ID!==refId);
-  saveLocal();
-  if(API_URL){
-    if(realBank){ apiPost({action:'deleteInvestFlow',data:{refId}}).then(()=>syncAll()).then(()=>{ if(state.currentPage==='invest')renderInvest(); }); }
-    else bgPost({action:'deleteInvestFlow',data:{refId}},'Hapus setoran');
-  }
-  renderInvest();
-  if(drawerMode==='investdetail'&&drawerEditId)openInvestDetail(drawerEditId);
-}
-function openInvestValue(akunNama){
-  const akun=akunNama||((state.investAkun||[])[0]&&state.investAkun[0].NAMA)||'';
-  if(!akun){showToast('Tambah akun investasi dulu','error');return;}
-  const last=investLastSnapshot(akun);
-  document.getElementById('drawerTitle').textContent='Update Nilai — '+akun;
-  document.getElementById('drawerBody').innerHTML=`
-    <div class="settings-row"><div class="settings-label">Modal tertanam</div><div style="font-weight:700">${fmt(investModal(akun))}</div></div>
-    ${last?`<div class="settings-row"><div class="settings-label">Nilai terakhir</div><div>${fmt(last.NILAI)} · ${String(last.TANGGAL).slice(0,10)}</div></div>`:''}
-    <div class="form-row">
-      <div class="form-group"><label class="form-label">Nilai portofolio sekarang</label><input class="form-input" id="ivv_nilai" type="text" inputmode="numeric" oninput="fmtMoneyInput(this)" placeholder="dari app ${esc(akun)}"></div>
-      <div class="form-group"><label class="form-label">Tanggal</label><input class="form-input" id="ivv_tgl" type="date" value="${today()}"></div>
-    </div>
-    <div class="form-group"><label class="form-label">Catatan</label><input class="form-input" id="ivv_notes" placeholder="opsional"></div>
-    <input type="hidden" id="ivv_akun" value="${esc(akun)}">
-    <button class="btn-primary" onclick="saveInvestValue()"><i class="ti ti-device-floppy"></i> Simpan Snapshot</button>
-    <div class="settings-sub" style="margin-top:8px">Buka app ${esc(akun)}, lihat total nilai portofolio, ketik di sini. Lakukan rutin (mis. tiap Sabtu) supaya grafik untung/rugi terbentuk.</div>`;
-  drawerMode='investvalue'; drawerEditId=null;
-  document.getElementById('drawerBg').classList.add('open');
-}
-function saveInvestValue(){
-  const akun=document.getElementById('ivv_akun').value;
-  const nilai=unfmtNum(document.getElementById('ivv_nilai').value);
-  const tgl=document.getElementById('ivv_tgl').value;
-  const notes=document.getElementById('ivv_notes').value;
-  if(!nilai||!tgl){showToast('Nilai & tanggal wajib diisi','error');return;}
-  const id=uid();
-  state.investValue=state.investValue||[];
-  state.investValue.push({ID:id,TANGGAL:tgl,AKUN:akun,NILAI:nilai,NOTES:notes,CREATED_BY:state.user,CREATED_AT:new Date().toISOString()});
-  if(API_URL)bgPost({action:'addInvestValue',data:{ID:id,AKUN:akun,NILAI:nilai,TANGGAL:tgl,NOTES:notes,USER:state.user}},'Nilai '+akun);
-  saveLocal(); closeDrawer(); renderInvest();
-  showToast('Snapshot nilai tersimpan ✓','success');
-}
-function delInvestValue(id){
-  if(!confirm('Hapus snapshot nilai ini?'))return;
-  state.investValue=(state.investValue||[]).filter(x=>x.ID!==id);
-  if(API_URL)bgPost({action:'deleteRow',data:{sheet:'INVEST_VALUE',id}},'Hapus nilai');
-  saveLocal(); renderInvest();
-  if(drawerMode==='investdetail'&&drawerEditId)openInvestDetail(drawerEditId);
 }
 
 // ── CICILAN KARTU KREDIT (UI) ─────────────────────────
@@ -3505,7 +3238,7 @@ async function forceRefresh(){
   if(data&&!data.error){
     state.banks=data.banks||state.banks;state.ccs=data.ccs||state.ccs;state.projects=data.projects||state.projects;
     state.kategori=data.kategori||state.kategori;state.txns=data.txns||state.txns;state.transfers=data.transfers||state.transfers;
-    state.reserves=data.reserves||state.reserves;state.kasbon=data.kasbon||state.kasbon;state.jadwal=data.jadwal||state.jadwal;state.piutang=data.piutang||state.piutang||[];state.cicilan=data.cicilan||state.cicilan||[];state.ccbills=data.ccbills||state.ccbills||[];state.investAkun=data.investAkun||state.investAkun||[];state.investLog=data.investLog||state.investLog||[];state.investValue=data.investValue||state.investValue||[];state.summary=data.summary||null;state.txnsSince=data.since||state.txnsSince;
+    state.reserves=data.reserves||state.reserves;state.kasbon=data.kasbon||state.kasbon;state.jadwal=data.jadwal||state.jadwal;state.piutang=data.piutang||state.piutang||[];state.cicilan=data.cicilan||state.cicilan||[];state.ccbills=data.ccbills||state.ccbills||[];state.summary=data.summary||null;state.txnsSince=data.since||state.txnsSince;
     computeReserve();saveLocal();renderAll();closeDrawer();showToast('Total dihitung ulang ✓','success');
   } else { showToast('Gagal refresh','error'); }
 }
@@ -3611,8 +3344,8 @@ async function confirmImport(){
   }
 }
 function showToast(msg,type){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(type||'success');setTimeout(()=>t.classList.add('show'),10);setTimeout(()=>t.classList.remove('show'),2800);}
-function goPage(page){closeFabMenu();closeLainnyaMenu();state.currentPage=page;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+page).classList.add('active');document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));const navKey=({kasbon:'lainnya',forecast:'lainnya',piutang:'lainnya',invest:'lainnya'})[page]||page;const _ab=document.querySelector('.nav-item[data-nav="'+navKey+'"]');if(_ab)_ab.classList.add('active');document.getElementById('content').scrollTop=0;if(page==='master')renderMaster();if(page==='transfer')renderTransferPage();if(page==='kasbon')renderKasbon();if(page==='forecast')renderForecast();if(page==='piutang')renderPiutang();if(page==='invest')renderInvest();}
-function renderAll(){renderDashboard();renderTxnMonthTabs();filterTxn();renderProject();renderCCBillReminder();renderPiutangReminder();updatePiutangBadge();if(state.currentPage==='master')renderMaster();if(state.currentPage==='transfer')renderTransferPage();if(state.currentPage==='kasbon')renderKasbon();if(state.currentPage==='forecast')renderForecast();if(state.currentPage==='piutang')renderPiutang();if(state.currentPage==='invest')renderInvest();}
+function goPage(page){closeFabMenu();closeLainnyaMenu();state.currentPage=page;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+page).classList.add('active');document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));const navKey=({kasbon:'lainnya',forecast:'lainnya',piutang:'lainnya'})[page]||page;const _ab=document.querySelector('.nav-item[data-nav="'+navKey+'"]');if(_ab)_ab.classList.add('active');document.getElementById('content').scrollTop=0;if(page==='master')renderMaster();if(page==='transfer')renderTransferPage();if(page==='kasbon')renderKasbon();if(page==='forecast')renderForecast();if(page==='piutang')renderPiutang();}
+function renderAll(){renderDashboard();renderTxnMonthTabs();filterTxn();renderProject();renderCCBillReminder();renderPiutangReminder();updatePiutangBadge();if(state.currentPage==='master')renderMaster();if(state.currentPage==='transfer')renderTransferPage();if(state.currentPage==='kasbon')renderKasbon();if(state.currentPage==='forecast')renderForecast();if(state.currentPage==='piutang')renderPiutang();}
 if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{});}
 let logoTimer;
 document.querySelector('.topbar-title').addEventListener('touchstart',()=>{logoTimer=setTimeout(()=>openDrawer('settings'),800);});

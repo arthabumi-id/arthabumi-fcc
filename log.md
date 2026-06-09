@@ -3,6 +3,16 @@
 
 ---
 
+## SESSION — 2026-06-09 (v21 Akun Investasi — pribadi, dipisah total)
+**Topik:** Eddy minta data akun investasi saham (Stockbit, Pluang, Indo Premier, dll). PRD: `PRD-v21-investasi-saham.md` (signed off "Proceed"). **WAJIB REDEPLOY Code.gs.**
+**Keputusan (AskUserQuestion):** Cakupan = **Kas + Nilai Portofolio**; Posisi = **DIPISAH TOTAL** dari Laba/Net Cash/Forecast. Q1 sumber setor dukung **keduanya** (bank FCC + `(luar)`); Q2 nilai **manual snapshot**; Q3 **tanpa kartu Dashboard** (murni halaman Investasi); Q4 pengingat **Sabtu** + **grafik garis**.
+**Model:** 2 angka per akun — Modal tertanam (ledger setor−tarik) & Nilai kini (snapshot manual terbaru); U/R = selisih. Setor dari bank FCC → saldo bank turun nyata (TXN TIPE_LOG 'Investasi', dikecualikan laba/komposisi/forecast); `(luar)` → hanya log. Nilai portofolio TIDAK pernah dihitung sbg kas.
+**Dikerjakan — Code.gs:** sheet `MASTER_INVEST`/`INVEST_LOG`/`INVEST_VALUE` + HEADERS; action `addInvestAkun`/`addInvestFlow`/`addInvestValue`/`deleteInvestFlow`; `getInvest`; masuk getBundle/getAllData; helper `ensureSheet`. **index.html:** state+helper (investModal/ModalAsOf/ValueNow/PL/Totals), halaman `page-invest` (renderInvest+investCard), drawer detail (chart Nilai vs Modal) + akun/flow/value, masuk popup Lainnya (ti-trending-up). sw.js → **v16**.
+**Hasil:** node --check fungsi backend + helper client + blok UI penuh = OK; uji logika 100% cocok (modal/nilai/UR/modalAsOf/totals/staleness). Mount bash flicker di file penuh → audit manual. Backup `backup-pre-v21-20260609-0952`.
+**Pending:** push index.html+sw.js (GitHub Desktop) + **redeploy Code.gs** (Apps Script). Cek console browser. Pasang scheduled task pengingat update nilai tiap Sabtu. (Masih terbuka dari sesi lalu: koreksi BCA 552, saldo-awal KRIS.)
+
+---
+
 ## SESSION — 2026-06-08 (v20.1 Urutan transaksi: tanggal lalu input)
 Client-only. `renderTxn` sort: `TANGGAL desc || CREATED_AT desc` (tanggal primer, input terakhir di atas utk tanggal sama). Keputusan Eddy: tanggal dulu, baru input (backdate tetap di posisi tanggalnya, bukan puncak). sw.js v15. Verifikasi node OK.
 

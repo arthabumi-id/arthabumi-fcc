@@ -1,4 +1,4 @@
-# FCC Arthabumi — Context & Status (v18)
+# FCC Arthabumi — Context & Status (v21)
 
 ## Apa itu FCC?
 Financial Control Center — web app pribadi Eddy untuk tracking keuangan bisnis Arthabumi (kontraktor/interior). Single-user, dihosting di GitHub Pages.
@@ -319,6 +319,44 @@ Eddy transfer reserve secara AKUMULASI, mau menandai transaksi CC mana yg sudah 
 
 ### Verifikasi v20
 Fungsi backend (markTxn/unmarkTxn/ensureCol) & client (ccHoldingBank/toggleMark/markTotalCC/isMarked) di-`node --check` + run terisolasi = OK (ccHoldingBank hormati RESERVE_BANK & fallback; toggle tandai/lepas akurat). Mount bash macet di file penuh (index.html ~230KB) → audit manual + cek console browser. Backup: `backup-pre-v20-*`.
+
+## ⭐ Perubahan v20.1 (Urutan transaksi: tanggal lalu input) — Juni 2026
+Client-only (index.html). sw.js cache **fcc-arthabumi-v15**.
+- `renderTxn` sort jadi **`TANGGAL desc || CREATED_AT desc`** — tanggal tetap primer, lalu di antara transaksi bertanggal SAMA, yang paling baru di-input (CREATED_AT) naik ke atas. Keputusan Eddy: "tanggal dulu, kemudian input" (transaksi yang di-backdate tetap duduk di posisi tanggalnya, bukan loncat ke puncak). Verifikasi node OK.
+
+## ⭐ Perubahan v21 (Akun Investasi — pribadi, DIPISAH TOTAL dari bisnis) — Juni 2026
+PRD: `PRD-v21-investasi-saham.md` (signed off "Proceed"). **WAJIB REDEPLOY Code.gs** (3 sheet + action baru). sw.js cache **fcc-arthabumi-v16**.
+
+### Tujuan & model (keputusan Eddy)
+Catat akun investasi saham (Stockbit, Pluang, Indo Premier, dll). Cakupan = **Kas + Nilai Portofolio**; posisi = **DIPISAH TOTAL** (tidak masuk Laba Bersih, Net Cash, Forecast). Dua angka terpisah per akun:
+- **Modal tertanam** (ledger, dihitung app) = `MODAL_AWAL + Σsetor − Σtarik`.
+- **Nilai kini** = snapshot manual terbaru (input berkala). Fallback = modal bila belum ada snapshot.
+- **Untung/Rugi (belum terealisasi)** = nilai − modal (+ %).
+- Setor dari **bank FCC** → saldo bank turun nyata (TXN `TIPE_LOG 'Investasi'`, dikecualikan laba/komposisi/forecast karena katExp hanya hitung Pengeluaran/Cicilan-Beli & dailyBurn hanya TIPE_LOG 'Pengeluaran'). Setor dari **`(luar)`** → hanya log INVEST_LOG, tak menyentuh bank. **Nilai portofolio TIDAK pernah dihitung sebagai kas.**
+
+### Sheet baru (3, wajib redeploy — auto-create pola KASBON via `ensureSheet`)
+- `MASTER_INVEST`: `ID,NAMA,PLATFORM,JENIS,MODAL_AWAL,CREATED_AT`
+- `INVEST_LOG`: `ID,TANGGAL,AKUN,JENIS,REKENING,NOMINAL,NOTES,REF_ID,CREATED_BY,CREATED_AT` (JENIS=Setor/Tarik; REKENING=bank FCC atau `(luar)`)
+- `INVEST_VALUE`: `ID,TANGGAL,AKUN,NILAI,NOTES,CREATED_BY,CREATED_AT` (snapshot nilai; termuda per akun = nilai kini)
+
+### Code.gs (wajib redeploy)
+- Action baru: `addInvestAkun`, `addInvestFlow` (REKENING bank → tulis TXN 'Setor/Tarik Investasi' TIPE_LOG 'Investasi'; honor `REF_ID` utk optimistic), `addInvestValue` (honor `ID`), `deleteInvestFlow` (hapus log+TXN via REF_ID). Edit/hapus akun & nilai pakai `updateRow`/`deleteRow` generik (sheet 'MASTER_INVEST'/'INVEST_VALUE').
+- doGet `getInvest`; masuk `getBundle`/`getAllData` (`investAkun`,`investLog`,`investValue`). Helper `ensureSheet(ss,name)` baru.
+
+### Client (index.html)
+- `state.investAkun/investLog/investValue` (sync/forceRefresh/saveLocal/loadOffline).
+- Helper: `investModal`, `investModalAsOf` (utk chart), `investLastSnapshot`, `investValueNow`, `investPL`, `investTotals`, `_invFlows`, `_invSnaps`.
+- Nav: masuk popup **"Lainnya"** (ikon `ti-trending-up`, bersama Kasbon/Forecast/Piutang). goPage/navKey/renderAll include 'invest'.
+- Halaman `page-invest` (`renderInvest`): kartu Total Nilai Portofolio (label "pribadi, di luar kas bisnis") + U/R, kartu per akun (`investCard`, klik → `openInvestDetail`). **TIDAK ada kartu di Dashboard** (Q3 = terpisah penuh).
+- `openInvestDetail`: ringkasan modal/nilai/UR + **grafik garis Nilai vs Modal** (`buildInvestChart`, Chart.js, modal dihitung as-of tiap tanggal snapshot) + riwayat snapshot & setor/tarik (hapus per baris) + Edit/Hapus akun (hapus hanya bila tanpa riwayat).
+- Drawer: `openInvestAkun`/`saveInvestAkun`/`delInvestAkun`; `openInvestFlow`/`saveInvestFlow` (**blocking+syncAll bila sumber bank FCC** krn sentuh saldo; **optimistic bgPost bila `(luar)`**); `delInvestFlow`; `openInvestValue`/`saveInvestValue` (optimistic, ID client) / `delInvestValue`.
+- Hint "⚠️ perlu update" bila snapshot nilai > 14 hari. Pengingat scheduled task tiap **Sabtu** (lihat log).
+
+### Verifikasi v21
+Fungsi backend (addInvestAkun/Flow/Value, deleteInvestFlow, ensureSheet) `node --check` OK + run terisolasi benar (setor bank tulis TXN, `(luar)` hanya log). Helper client (investModal/ModalAsOf/ValueNow/PL/Totals) `node --check` OK + uji nilai cocok 100% (modal ledger, nilai snapshot terbaru, U/R, modal as-of, totals, staleness). Blok UI penuh (20KB, template literal) `node --check` OK terisolasi. Mount bash flicker di file penuh (index.html ~237KB, Code.gs) → audit manual; **cek console browser saat buka**. Backup: `backup-pre-v21-*`.
+
+## ⭐ Catatan koreksi data pra-pembukuan (8 Jun 2026) — DIINPUT MANUAL OLEH EDDY
+Audit DB menemukan **6 kartu CC** punya "pembayaran yatim" (tagihan pra-pembukuan dibayar, belanjanya tak tercatat) ≈ Rp 101,95jt + saldo BCA 552 understated 20.303.853. Entri koreksi (saldo-awal CC + reserve 552) di file **`KOREKSI-SALDO-AWAL-CC.md`** & **`KOREKSI-paste-ke-TRANSAKSI.xlsx`/`.csv`** (TIPE_LOG 'Saldo Awal'/'Reserve' → tidak masuk laba/komposisi). KRIS perlu konfirmasi Palyja (44.087.606 vs 44.251.790). Belum tentu sudah diinput — cek tab TRANSAKSI. Saldo bank selain 552 BELUM direkonsiliasi (snapshot belum sinkron penuh).
 
 ## Boleh edit manual di Google Sheets? BOLEH, dengan aturan:
 1. Jangan ubah baris HEADER / nama kolom / nama tab.
