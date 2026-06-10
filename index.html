@@ -953,7 +953,7 @@ function renderDashboard() {
       <div class="card-title">Saldo Rekening</div>
       ${state.banks.map(b => {
         const r = getSaldo(b.NAMA);
-        return `<div class="list-item">
+        return `<div class="list-item" style="cursor:pointer" onclick="openAccountDetail('bank','${esc(b.NAMA)}')">
           <div class="list-icon" style="background:${b.TIPE==='Kas'?'#2a1a0a':'#0a2040'}">
             <i class="ti ti-${b.TIPE==='Kas'?'cash':'building-bank'}" style="color:${b.TIPE==='Kas'?'var(--amber)':'var(--blue)'}"></i>
           </div>
@@ -2684,6 +2684,9 @@ function openAccountDetail(type, nama) {
   const now = new Date();
   const defFrom = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
   const defTo   = now.toISOString().slice(0,10);
+  // tab cepat rentang tanggal (UTC-safe, konsisten dgn today())
+  const _ad_ago=(n)=>{const d=new Date(defTo+'T00:00:00Z');d.setUTCDate(d.getUTCDate()-n);return d.toISOString().slice(0,10);};
+  const dYest=_ad_ago(1), dWeek=_ad_ago(6);
 
   function renderDetail(fromDate, toDate, jenis, search) {
     let data = acctTxns.slice();
@@ -2743,6 +2746,12 @@ function openAccountDetail(type, nama) {
   }
 
   document.getElementById('drawerBody').innerHTML = `
+    <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+      <button class="filter-chip range-chip" onclick="acctRange(this,'${defTo}','${defTo}')">Hari ini</button>
+      <button class="filter-chip range-chip" onclick="acctRange(this,'${dYest}','${dYest}')">Kemarin</button>
+      <button class="filter-chip range-chip" onclick="acctRange(this,'${dWeek}','${defTo}')">1 Minggu</button>
+      <button class="filter-chip range-chip active" onclick="acctRange(this,'${defFrom}','${defTo}')">Bulan ini</button>
+    </div>
     <div class="filter-row">
       <input class="form-input" type="date" id="ad_from" value="${defFrom}">
       <input class="form-input" type="date" id="ad_to" value="${defTo}">
@@ -2756,10 +2765,19 @@ function openAccountDetail(type, nama) {
     <div id="acctDetailBody"></div>
   `;
 
-  // Bind filter changes
+  // Bind filter changes (ubah tanggal manual → matikan highlight tab cepat)
   ['ad_from','ad_to'].forEach(id => {
-    document.getElementById(id).addEventListener('change', () => { if(typeof acctFilter==='function') acctFilter(); });
+    document.getElementById(id).addEventListener('change', () => { document.querySelectorAll('.range-chip').forEach(c=>c.classList.remove('active')); if(typeof acctFilter==='function') acctFilter(); });
   });
+
+  // Tab cepat rentang: set tanggal lalu filter ulang
+  window.acctRange = function(el, from, to){
+    document.querySelectorAll('.range-chip').forEach(c=>c.classList.remove('active'));
+    if(el)el.classList.add('active');
+    const f=document.getElementById('ad_from'), t=document.getElementById('ad_to');
+    if(f)f.value=from; if(t)t.value=to;
+    if(typeof acctFilter==='function') acctFilter();
+  };
 
   window._acctJenis = '';
   window.acctChip = function(el, val) {

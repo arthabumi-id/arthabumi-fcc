@@ -3,6 +3,15 @@
 
 ---
 
+## SESSION — 2026-06-09 (v22 Klik bank Dashboard + tab cepat tanggal)
+Client-only, tanpa redeploy. sw.js → **v18**.
+- Baris bank di **Saldo Rekening Dashboard** kini bisa diklik → `openAccountDetail('bank',NAMA)` (reuse drawer detail akun yang sudah ada).
+- `openAccountDetail` dapat **tab cepat rentang**: Hari ini · Kemarin · 1 Minggu · Bulan ini (`.range-chip`/`acctRange`, tanggal UTC-safe `_ad_ago`). Default Bulan ini; ubah tanggal manual mematikan highlight. Berlaku juga di Master.
+- Verifikasi: node --check openAccountDetail OK; uji `_ad_ago` (kemarin 06-08, 1mgg 06-03) cocok.
+**Pending:** push index.html+sw.js (GitHub Desktop). Tidak perlu redeploy Code.gs (client-only).
+
+---
+
 ## SESSION — 2026-06-09 (v21 Akun Investasi — pribadi, dipisah total)
 **Topik:** Eddy minta data akun investasi saham (Stockbit, Pluang, Indo Premier, dll). PRD: `PRD-v21-investasi-saham.md` (signed off "Proceed"). **WAJIB REDEPLOY Code.gs.**
 **Keputusan (AskUserQuestion):** Cakupan = **Kas + Nilai Portofolio**; Posisi = **DIPISAH TOTAL** dari Laba/Net Cash/Forecast. Q1 sumber setor dukung **keduanya** (bank FCC + `(luar)`); Q2 nilai **manual snapshot**; Q3 **tanpa kartu Dashboard** (murni halaman Investasi); Q4 pengingat **Sabtu** + **grafik garis**.

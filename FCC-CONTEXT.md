@@ -355,6 +355,12 @@ Catat akun investasi saham (Stockbit, Pluang, Indo Premier, dll). Cakupan = **Ka
 ### Verifikasi v21
 Fungsi backend (addInvestAkun/Flow/Value, deleteInvestFlow, ensureSheet) `node --check` OK + run terisolasi benar (setor bank tulis TXN, `(luar)` hanya log). Helper client (investModal/ModalAsOf/ValueNow/PL/Totals) `node --check` OK + uji nilai cocok 100% (modal ledger, nilai snapshot terbaru, U/R, modal as-of, totals, staleness). Blok UI penuh (20KB, template literal) `node --check` OK terisolasi. Mount bash flicker di file penuh (index.html ~237KB, Code.gs) → audit manual; **cek console browser saat buka**. Backup: `backup-pre-v21-*`.
 
+## ⭐ Perubahan v22 (Klik bank di Dashboard + tab cepat rentang tanggal) — Juni 2026
+Client-only (index.html), **tanpa redeploy**. sw.js cache **fcc-arthabumi-v18**.
+- **Saldo Rekening (Dashboard) bisa diklik:** tiap baris bank (`.list-item` di `dashSaldo`) kini `cursor:pointer` + `onclick="openAccountDetail('bank', NAMA)"` → buka drawer detail akun yang sudah ada (ringkasan masuk/keluar/saldo + donut komposisi + daftar transaksi + fetch riwayat penuh `getTxns?rekening`). Reuse penuh, tidak bikin drawer baru.
+- **Tab cepat rentang tanggal di `openAccountDetail`:** baris chip **Hari ini · Kemarin · 1 Minggu · Bulan ini** (`.range-chip`, helper `acctRange(el,from,to)` set `ad_from`/`ad_to` lalu `acctFilter()`). Default aktif = Bulan ini (sama spt sebelumnya). Tanggal dihitung UTC-safe (`_ad_ago(n)` pakai `setUTCDate`, konsisten dgn `today()`): Hari ini=[today,today], Kemarin=[today-1,today-1], 1 Minggu=[today-6,today]. Ubah tanggal manual → highlight tab cepat mati. Berlaku juga saat drawer dibuka dari Master (kartu akun) — fitur sama untuk bank & CC.
+- Verifikasi: `openAccountDetail` `node --check` OK (8,3KB, backtick seimbang); uji `_ad_ago`: kemarin & 1-minggu cocok. Mount bash flicker di file penuh → audit manual; cek console browser.
+
 ## ⭐ Catatan koreksi data pra-pembukuan (8 Jun 2026) — DIINPUT MANUAL OLEH EDDY
 Audit DB menemukan **6 kartu CC** punya "pembayaran yatim" (tagihan pra-pembukuan dibayar, belanjanya tak tercatat) ≈ Rp 101,95jt + saldo BCA 552 understated 20.303.853. Entri koreksi (saldo-awal CC + reserve 552) di file **`KOREKSI-SALDO-AWAL-CC.md`** & **`KOREKSI-paste-ke-TRANSAKSI.xlsx`/`.csv`** (TIPE_LOG 'Saldo Awal'/'Reserve' → tidak masuk laba/komposisi). KRIS perlu konfirmasi Palyja (44.087.606 vs 44.251.790). Belum tentu sudah diinput — cek tab TRANSAKSI. Saldo bank selain 552 BELUM direkonsiliasi (snapshot belum sinkron penuh).
 
