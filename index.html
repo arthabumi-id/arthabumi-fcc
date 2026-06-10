@@ -992,7 +992,7 @@ function renderDashboard() {
             <div style="display:flex;gap:5px;flex-shrink:0"><button class="btn-danger" style="background:#0a2a1e;color:var(--green);border-color:#2dd4a040" onclick="payCCFromReminder('${esc(c.NAMA)}')">Bayar</button><button class="btn-danger" onclick="clearCCBill('${bill.ID}')">Lunas</button></div>
           </div>`;
         }
-        return `<div class="list-item" style="flex-wrap:wrap">
+        return `<div class="list-item" style="flex-wrap:wrap;cursor:pointer" onclick="if(!event.target.closest('button'))openAccountDetail('cc','${esc(c.NAMA)}')">
           <div class="list-icon" style="background:#2a0a2a"><i class="ti ti-credit-card" style="color:var(--purple)"></i></div>
           <div class="list-body">
             <div class="list-title" style="font-size:12px">${esc(c.NAMA)}</div>

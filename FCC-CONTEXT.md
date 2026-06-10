@@ -355,9 +355,10 @@ Catat akun investasi saham (Stockbit, Pluang, Indo Premier, dll). Cakupan = **Ka
 ### Verifikasi v21
 Fungsi backend (addInvestAkun/Flow/Value, deleteInvestFlow, ensureSheet) `node --check` OK + run terisolasi benar (setor bank tulis TXN, `(luar)` hanya log). Helper client (investModal/ModalAsOf/ValueNow/PL/Totals) `node --check` OK + uji nilai cocok 100% (modal ledger, nilai snapshot terbaru, U/R, modal as-of, totals, staleness). Blok UI penuh (20KB, template literal) `node --check` OK terisolasi. Mount bash flicker di file penuh (index.html ~237KB, Code.gs) → audit manual; **cek console browser saat buka**. Backup: `backup-pre-v21-*`.
 
-## ⭐ Perubahan v22 (Klik bank di Dashboard + tab cepat rentang tanggal) — Juni 2026
-Client-only (index.html), **tanpa redeploy**. sw.js cache **fcc-arthabumi-v18**.
+## ⭐ Perubahan v22 (Klik bank & CC di Dashboard + tab cepat rentang tanggal) — Juni 2026
+Client-only (index.html), **tanpa redeploy**. sw.js cache **fcc-arthabumi-v19**.
 - **Saldo Rekening (Dashboard) bisa diklik:** tiap baris bank (`.list-item` di `dashSaldo`) kini `cursor:pointer` + `onclick="openAccountDetail('bank', NAMA)"` → buka drawer detail akun yang sudah ada (ringkasan masuk/keluar/saldo + donut komposisi + daftar transaksi + fetch riwayat penuh `getTxns?rekening`). Reuse penuh, tidak bikin drawer baru.
+- **Kartu Kredit (Dashboard) bisa diklik (v19):** tiap kartu CC (`.list-item` di `dashCC`) `cursor:pointer` + `onclick="if(!event.target.closest('button'))openAccountDetail('cc', NAMA)"` → detail CC (tagihan, banner reserve manual, donut, daftar transaksi + tombol tandai reserve). **Guard `!closest('button')`** supaya klik tombol Bayar/Lunas di dalam kartu tidak ikut membuka detail (billStrip sudah `stopPropagation`).
 - **Tab cepat rentang tanggal di `openAccountDetail`:** baris chip **Hari ini · Kemarin · 1 Minggu · Bulan ini** (`.range-chip`, helper `acctRange(el,from,to)` set `ad_from`/`ad_to` lalu `acctFilter()`). Default aktif = Bulan ini (sama spt sebelumnya). Tanggal dihitung UTC-safe (`_ad_ago(n)` pakai `setUTCDate`, konsisten dgn `today()`): Hari ini=[today,today], Kemarin=[today-1,today-1], 1 Minggu=[today-6,today]. Ubah tanggal manual → highlight tab cepat mati. Berlaku juga saat drawer dibuka dari Master (kartu akun) — fitur sama untuk bank & CC.
 - Verifikasi: `openAccountDetail` `node --check` OK (8,3KB, backtick seimbang); uji `_ad_ago`: kemarin & 1-minggu cocok. Mount bash flicker di file penuh → audit manual; cek console browser.
 

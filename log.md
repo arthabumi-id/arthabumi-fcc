@@ -3,9 +3,10 @@
 
 ---
 
-## SESSION — 2026-06-09 (v22 Klik bank Dashboard + tab cepat tanggal)
-Client-only, tanpa redeploy. sw.js → **v18**.
+## SESSION — 2026-06-09 (v22 Klik bank & CC Dashboard + tab cepat tanggal)
+Client-only, tanpa redeploy. sw.js → **v19**.
 - Baris bank di **Saldo Rekening Dashboard** kini bisa diklik → `openAccountDetail('bank',NAMA)` (reuse drawer detail akun yang sudah ada).
+- **Kartu CC di Dashboard juga bisa diklik** → `openAccountDetail('cc',NAMA)` dgn guard `!event.target.closest('button')` (klik tombol Bayar/Lunas tidak ikut buka detail). sw.js → v19.
 - `openAccountDetail` dapat **tab cepat rentang**: Hari ini · Kemarin · 1 Minggu · Bulan ini (`.range-chip`/`acctRange`, tanggal UTC-safe `_ad_ago`). Default Bulan ini; ubah tanggal manual mematikan highlight. Berlaku juga di Master.
 - Verifikasi: node --check openAccountDetail OK; uji `_ad_ago` (kemarin 06-08, 1mgg 06-03) cocok.
 **Pending:** push index.html+sw.js (GitHub Desktop). Tidak perlu redeploy Code.gs (client-only).
