@@ -987,12 +987,12 @@ function renderDashboard() {
           const due = String(bill.JATUH_TEMPO||'').slice(0,10);
           const dd = due ? _daysBetween(today(),due) : null;
           const lbl = dd===null?'':(dd<0?`<span style="color:var(--red)">lewat ${Math.abs(dd)} hr</span>`:dd===0?`<span style="color:var(--red)">hari ini</span>`:`<span style="color:var(--amber)">${dd} hr lagi</span>`);
-          billStrip = `<div style="width:100%;margin-top:8px;padding:7px 9px;border-radius:8px;background:#1a1206;border:1px solid #f59e0b40;display:flex;align-items:center;justify-content:space-between;gap:8px" onclick="event.stopPropagation()">
+          billStrip = `<div style="width:100%;margin-top:8px;padding:7px 9px;border-radius:8px;background:#1a1206;border:1px solid #f59e0b40;display:flex;align-items:center;justify-content:space-between;gap:8px">
             <div style="min-width:0"><div style="font-size:12px;font-weight:700;color:var(--amber)">Tagihan ${fmt(bill.NOMINAL)}</div><div style="font-size:10px;color:var(--text3)">jth tempo ${due||'—'} · ${lbl}</div></div>
-            <div style="display:flex;gap:5px;flex-shrink:0"><button class="btn-danger" style="background:#0a2a1e;color:var(--green);border-color:#2dd4a040" onclick="payCCFromReminder('${esc(c.NAMA)}')">Bayar</button><button class="btn-danger" onclick="clearCCBill('${bill.ID}')">Lunas</button></div>
+            <div style="display:flex;gap:5px;flex-shrink:0"><button class="btn-danger" style="background:#0a2a1e;color:var(--green);border-color:#2dd4a040" onclick="event.stopPropagation();payCCFromReminder('${esc(c.NAMA)}')">Bayar</button><button class="btn-danger" onclick="event.stopPropagation();clearCCBill('${bill.ID}')">Lunas</button></div>
           </div>`;
         }
-        return `<div class="list-item" style="flex-wrap:wrap;cursor:pointer" onclick="if(!event.target.closest('button'))openAccountDetail('cc','${esc(c.NAMA)}')">
+        return `<div class="list-item" style="flex-wrap:wrap;cursor:pointer" onclick="openAccountDetail('cc','${esc(c.NAMA)}')">
           <div class="list-icon" style="background:#2a0a2a"><i class="ti ti-credit-card" style="color:var(--purple)"></i></div>
           <div class="list-body">
             <div class="list-title" style="font-size:12px">${esc(c.NAMA)}</div>
