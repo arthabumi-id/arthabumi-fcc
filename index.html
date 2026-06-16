@@ -3398,6 +3398,7 @@ function openDrawer(mode, editId = null, preset = null) {
       <div class="settings-row"><div><div class="settings-label">Rekening Penyimpan Reserve</div><div class="settings-sub">Default: ${esc(defaultHoldingBank()||'—')}</div></div><button class="btn-danger" onclick="setReserveBank()">Ubah</button></div>
       <div class="settings-row"><div><div class="settings-label">Sinkronkan Reserve Lama</div><div class="settings-sub">Sekali pakai bila ada sisa reserve model lama (kreditkan saldo penyimpan)</div></div><button class="btn-danger" onclick="syncReserveHolding()">Sinkron</button></div>
       <div class="settings-row"><div><div class="settings-label">Hitung Ulang Total</div><div class="settings-sub">Pakai setelah edit manual di Google Sheets</div></div><button class="btn-danger" onclick="forceRefresh()">Refresh</button></div>
+      <div class="settings-row"><div><div class="settings-label">Export Excel</div><div class="settings-sub">Download semua data: Transaksi · Project · Piutang · Kasbon · Cicilan · Saldo</div></div><button class="btn-primary" onclick="exportToExcel()">Export</button></div>
       <div class="settings-row"><div><div class="settings-label">Import Excel</div><div class="settings-sub">Tambah banyak transaksi dari file .xlsx (template)</div></div><button class="btn-danger" onclick="document.getElementById('importFile').click()">Import</button></div>
       <input type="file" id="importFile" accept=".xlsx,.xls" style="display:none" onchange="handleImportFile(event)">
       <div class="settings-row"><div><div class="settings-label">Cache lokal</div><div class="settings-sub">${state.txns.length} txn cached</div></div><button class="btn-danger" onclick="if(confirm('Reset data lokal?')){localStorage.removeItem('fcc_data');location.reload()}">Reset</button></div>
@@ -3573,6 +3574,94 @@ function impDateISO(v){
   if(m)return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
   return null;
 }
+// ── Export Excel (semua sheet sekaligus) ──────────────────────────────────────
+function exportToExcel() {
+  if(!state.txns.length && !state.projects.length) {
+    showToast('Data belum dimuat. Tekan Sync dulu.','error'); return;
+  }
+  try {
+    const wb = XLSX.utils.book_new();
+    const today = new Date().toISOString().slice(0,10);
+
+    // --- Sheet 1: Transaksi ---
+    const txnH = ['ID','TANGGAL','JENIS','PROJECT','REKENING','KATEGORI','NOMINAL','NOTES','TIPE_LOG','CREATED_BY','CREATED_AT'];
+    const txnRows = state.txns
+      .slice().sort((a,b)=>(a.TANGGAL||'').localeCompare(b.TANGGAL||''))
+      .map(t => txnH.map(h => t[h]!==undefined ? t[h] : ''));
+    const wsTxn = XLSX.utils.aoa_to_sheet([txnH, ...txnRows]);
+    wsTxn['!cols'] = [8,10,12,18,18,20,14,30,12,12,18].map(w=>({wch:w}));
+    XLSX.utils.book_append_sheet(wb, wsTxn, 'Transaksi');
+
+    // --- Sheet 2: Project Summary ---
+    const projH = ['ID','NAMA','KLIEN','STATUS','NILAI_CONTRACT','MASUK','KELUAR','LABA','MARGIN_%','TGL_MULAI'];
+    const projRows = state.projects.map(p => {
+      const cf = getProjCF(p.NAMA);
+      const masuk = cf.masuk||0, keluar = cf.keluar||0;
+      const laba = masuk - keluar;
+      const margin = masuk ? Math.round(laba/masuk*100*10)/10 : 0;
+      return [p.ID, p.NAMA, p.KLIEN||'', p.STATUS||'', Number(p.NILAI_CONTRACT)||0, masuk, keluar, laba, margin, p.TGL_MULAI||''];
+    });
+    const wsProj = XLSX.utils.aoa_to_sheet([projH, ...projRows]);
+    wsProj['!cols'] = [8,24,18,10,16,14,14,14,10,12].map(w=>({wch:w}));
+    XLSX.utils.book_append_sheet(wb, wsProj, 'Project');
+
+    // --- Sheet 3: Piutang ---
+    const piuH = ['ID','PROJECT','KLIEN','TERMIN','NOMINAL','JATUH_TEMPO','STATUS','TGL_BAYAR','REKENING','NOTES'];
+    const piuRows = state.piutang
+      .slice().sort((a,b)=>(a.JATUH_TEMPO||'').localeCompare(b.JATUH_TEMPO||''))
+      .map(p => piuH.map(h => p[h]!==undefined ? p[h] : ''));
+    const wsPiu = XLSX.utils.aoa_to_sheet([piuH, ...piuRows]);
+    wsPiu['!cols'] = [8,20,16,16,14,12,8,12,18,30].map(w=>({wch:w}));
+    XLSX.utils.book_append_sheet(wb, wsPiu, 'Piutang');
+
+    // --- Sheet 4: Kasbon ---
+    const kbH = ['ID','TANGGAL','KARYAWAN','JENIS','NOMINAL','METODE','REKENING','NOTES','CREATED_AT'];
+    const kbRows = state.kasbon
+      .slice().sort((a,b)=>(a.TANGGAL||'').localeCompare(b.TANGGAL||''))
+      .map(k => kbH.map(h => k[h]!==undefined ? k[h] : ''));
+    const wsKb = XLSX.utils.aoa_to_sheet([kbH, ...kbRows]);
+    wsKb['!cols'] = [8,10,16,10,14,12,18,30,18].map(w=>({wch:w}));
+    XLSX.utils.book_append_sheet(wb, wsKb, 'Kasbon');
+
+    // --- Sheet 5: Cicilan ---
+    const cicH = ['ID','TANGGAL_BELI','CC','DESKRIPSI','NOMINAL_POKOK','BUNGA_TOTAL','TENOR','NOMINAL_PER_BULAN','TGL_MULAI','TENOR_TERBAYAR','STATUS','PROJECT','KATEGORI'];
+    const cicRows = state.cicilan
+      .slice().sort((a,b)=>(a.TANGGAL_BELI||'').localeCompare(b.TANGGAL_BELI||''))
+      .map(c => cicH.map(h => c[h]!==undefined ? c[h] : ''));
+    const wsCic = XLSX.utils.aoa_to_sheet([cicH, ...cicRows]);
+    wsCic['!cols'] = [8,12,20,24,14,12,8,16,12,12,8,18,16].map(w=>({wch:w}));
+    XLSX.utils.book_append_sheet(wb, wsCic, 'Cicilan');
+
+    // --- Sheet 6: Saldo Rekening ---
+    const totBank = state.banks.reduce((s,b)=>s+getSaldo(b.NAMA),0);
+    const totRes = Object.values(state.reserveFunds||{}).reduce((s,v)=>s+v,0);
+    const saldoRows = [
+      ['REKENING','TIPE','BANK','SALDO'],
+      ...state.banks.map(b => [b.NAMA, 'Bank', b.BANK||'', getSaldo(b.NAMA)]),
+      [],
+      ['KARTU KREDIT','BANK','LIMIT','TAGIHAN BERJALAN','RESERVE'],
+      ...state.ccs.map(c => [c.NAMA, c.BANK||'', Number(c.LIMIT)||0, getCCOut(c.NAMA), (state.reserveFunds||{})[c.NAMA]||0]),
+      [],
+      ['RINGKASAN','','',''],
+      ['Total Saldo Bank','','', totBank],
+      ['Total Reserve CC','','', totRes],
+      ['Net Cash (bebas)','','', totBank - totRes],
+      ['Export per','','', today],
+      ['Catatan','','', 'Transaksi = ' + state.txns.length + ' baris (±120 hari termuat). Untuk data penuh, muat lebih lama dulu.'],
+    ];
+    const wsSaldo = XLSX.utils.aoa_to_sheet(saldoRows);
+    wsSaldo['!cols'] = [24,10,14,18,18].map(w=>({wch:w}));
+    XLSX.utils.book_append_sheet(wb, wsSaldo, 'Saldo');
+
+    XLSX.writeFile(wb, `FCC-Arthabumi-${today}.xlsx`);
+    showToast('Export berhasil! File tersimpan di Downloads.', 'ok');
+  } catch(e) {
+    console.error('exportToExcel error', e);
+    showToast('Export gagal: ' + e.message, 'error');
+  }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 function handleImportFile(ev){
   const file=ev.target.files[0]; ev.target.value=''; if(!file)return;
   if(!API_URL){showToast('API URL belum diset','error');return;}
