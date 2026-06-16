@@ -3833,7 +3833,169 @@ function exportToExcel() {
     wsSld['!rows']=[{hpt:24},{hpt:16}];
     XLSX.utils.book_append_sheet(wb,wsSld,'Saldo');
 
-    XLSX.writeFile(wb,'FCC-Arthabumi-'+today+'.xlsx');
+
+    // ── SHEET 7: DETAIL PROJECT (transaksi per project) ──────────────────────
+    var dpExcl=['Transfer','Reserve','Kasbon','Investasi','Cicilan-Beli','Saldo Awal'];
+    var dpProjs=state.projects.filter(function(p){return p.STATUS!=='Abaikan';})
+      .map(function(p){
+        var cf=getProjCF(p.NAMA),m=cf.masuk||0,k=cf.keluar||0;
+        var tx=state.txns.filter(function(t){return t.PROJECT===p.NAMA;}).sort(function(a,b){return (a.TANGGAL||'').localeCompare(b.TANGGAL||'');});
+        return {p:p,m:m,k:k,lb:m-k,tx:tx};
+      }).sort(function(a,b){return b.lb-a.lb;});
+    var dpCols=6, dpRows=[];
+    var dpMerges=[];
+    dpProjs.forEach(function(dp){
+      var p=dp.p, mg=dp.m?Math.round(dp.lb/dp.m*100):0;
+      var sts=p.STATUS||'',stsST=sts==='Selesai'?ST.lunas:sts==='Hold'?ST.hold:sts==='Abaikan'?ST.belum:ST.jalan;
+      // Project header
+      var hdr1R=dpRows.length;
+      dpRows.push([C(p.NAMA||'',{font:{bold:true,sz:11,color:{rgb:BG.white}},fill:{patternType:'solid',fgColor:{rgb:BG.navy}},alignment:{horizontal:'left',vertical:'center'}}),C('',{fill:{patternType:'solid',fgColor:{rgb:BG.navy}}}),C('',{fill:{patternType:'solid',fgColor:{rgb:BG.navy}}}),C('',{fill:{patternType:'solid',fgColor:{rgb:BG.navy}}}),C('',{fill:{patternType:'solid',fgColor:{rgb:BG.navy}}}),C('',{fill:{patternType:'solid',fgColor:{rgb:BG.navy}}})]);
+      dpMerges.push({s:{r:hdr1R,c:0},e:{r:hdr1R,c:dpCols-1}});
+      dpRows.push([C('Klien: '+(p.KLIEN||'—'),ST.info),C('',ST.info),C('Kontrak: Rp '+(Number(p.NILAI_CONTRACT)||0).toLocaleString('id'),ST.info),C('',ST.info),C('',ST.info),C('',ST.info)]);
+      dpMerges.push({s:{r:dpRows.length-1,c:0},e:{r:dpRows.length-1,c:1}});
+      dpMerges.push({s:{r:dpRows.length-1,c:2},e:{r:dpRows.length-1,c:dpCols-1}});
+      dpRows.push([C('Status',ST.hdr),C(sts,stsST),C('Masuk',ST.hdrR),C(dp.m,ST.pos(false)),C('Keluar',ST.hdrR),C(dp.k,ST.neg(false))]);
+      dpRows.push([C('Laba Bersih',ST.hdr),C(dp.lb,dp.lb>=0?ST.netPos:ST.netNeg),C('Margin',ST.hdrR),C(mg+'%',{font:{bold:true},alignment:{horizontal:'center'},fill:{patternType:'solid',fgColor:{rgb:BG.lblue}}}),C('Jml Txn',ST.hdrR),C(dp.tx.length,{numFmt:'#,##0',alignment:{horizontal:'center'},fill:{patternType:'solid',fgColor:{rgb:BG.lblue}}})]);
+      dpMerges.push({s:{r:dpRows.length-2,c:0},e:{r:dpRows.length-2,c:0}});
+      // Transaction sub-header
+      dpRows.push(['Tanggal','Jenis','Rekening','Kategori','Nominal','Keterangan'].map(function(h,i){return C(h,i===4?ST.hdrR:ST.hdr);}));
+      if(dp.tx.length===0){
+        dpRows.push([C('— Belum ada transaksi —',{font:{italic:true,color:{rgb:'9AA5B4'}},fill:{patternType:'solid',fgColor:{rgb:BG.lgray}},alignment:{horizontal:'center'}}),C('',{fill:{patternType:'solid',fgColor:{rgb:BG.lgray}}}),C('',{fill:{patternType:'solid',fgColor:{rgb:BG.lgray}}}),C('',{fill:{patternType:'solid',fgColor:{rgb:BG.lgray}}}),C('',{fill:{patternType:'solid',fgColor:{rgb:BG.lgray}}}),C('',{fill:{patternType:'solid',fgColor:{rgb:BG.lgray}}})]);
+        dpMerges.push({s:{r:dpRows.length-1,c:0},e:{r:dpRows.length-1,c:dpCols-1}});
+      } else {
+        var txMasuk=0,txKeluar=0;
+        dp.tx.forEach(function(t,ti){
+          var e=ti%2===0,j=t.JENIS||'',nom=Number(t.NOMINAL||0);
+          if(j==='Pemasukan')txMasuk+=nom; else txKeluar+=nom;
+          dpRows.push([
+            C(t.TANGGAL||'', e?ST.ce:ST.co),
+            C(j, j==='Pemasukan'?ST.lunas:j==='Pengeluaran'?ST.belum:(e?ST.ce:ST.co)),
+            C(t.REKENING||'', e?ST.ce:ST.co),
+            C(t.KATEGORI||'', e?ST.le:ST.lo),
+            C(nom, nom>=0?ST.pos(e):ST.neg(e)),
+            C(t.NOTES||'', e?ST.le:ST.lo),
+          ]);
+        });
+        dpRows.push([C('SUBTOTAL',ST.lbl),C('',ST.lbl),C('',ST.lbl),C('',ST.lbl),C('',ST.lbl),C('',ST.lbl)]);
+        dpMerges.push({s:{r:dpRows.length-1,c:0},e:{r:dpRows.length-1,c:3}});
+        dpRows[dpRows.length-1][4]=C(txMasuk,ST.pos(false));
+        var lblRow=dpRows.length-1;
+        dpRows[lblRow][0]=C('↑ Masuk: Rp '+txMasuk.toLocaleString('id')+'  ↓ Keluar: Rp '+txKeluar.toLocaleString('id'),ST.lbl);
+        dpRows[lblRow][4]=C(dp.lb,dp.lb>=0?ST.netPos:ST.netNeg);
+      }
+      dpRows.push(eRow(dpCols));
+    });
+    var wsDP=makeWS(dpRows,[14,13,20,22,15,32],dpMerges);
+    XLSX.utils.book_append_sheet(wb,wsDP,'Detail Project');
+
+    // ── SHEET 8: MUTASI REKENING (transaksi per rekening) ────────────────────
+    var mrCols=7, mrRows=[], mrMerges=[];
+    state.banks.forEach(function(b){
+      var sal=(getSaldo(b.NAMA).saldo||0);
+      var tx=state.txns.filter(function(t){return t.REKENING===b.NAMA;}).sort(function(a,b2){return (a.TANGGAL||'').localeCompare(b2.TANGGAL||'');});
+      var saldoAwal=state.banks.find(function(bk){return bk.NAMA===b.NAMA;});
+      var awal=saldoAwal?Number(saldoAwal.SALDO_AWAL||0):0;
+      // Header
+      var hR=mrRows.length;
+      mrRows.push([C(b.NAMA||'',{font:{bold:true,sz:11,color:{rgb:BG.white}},fill:{patternType:'solid',fgColor:{rgb:BG.navy}},alignment:{horizontal:'left'}}),C('',{fill:{patternType:'solid',fgColor:{rgb:BG.navy}}}),C('',{fill:{patternType:'solid',fgColor:{rgb:BG.navy}}}),C('',{fill:{patternType:'solid',fgColor:{rgb:BG.navy}}}),C('',{fill:{patternType:'solid',fgColor:{rgb:BG.navy}}}),C('',{fill:{patternType:'solid',fgColor:{rgb:BG.navy}}}),C('',{fill:{patternType:'solid',fgColor:{rgb:BG.navy}}})]);
+      mrMerges.push({s:{r:hR,c:0},e:{r:hR,c:mrCols-1}});
+      mrRows.push([C('Bank: '+(b.BANK||'—')+'  |  Saldo Awal: Rp '+awal.toLocaleString('id')+'  |  Saldo Akhir: Rp '+sal.toLocaleString('id'),ST.info),C('',ST.info),C('',ST.info),C('',ST.info),C('',ST.info),C('',ST.info),C('',ST.info)]);
+      mrMerges.push({s:{r:mrRows.length-1,c:0},e:{r:mrRows.length-1,c:mrCols-1}});
+      mrRows.push(['Tanggal','Jenis','Project','Kategori','Nominal','Keterangan','Saldo'].map(function(h,i){return C(h,[4,6].indexOf(i)>=0?ST.hdrR:ST.hdr);}));
+      if(tx.length===0){
+        mrRows.push([C('— Tidak ada transaksi —',{font:{italic:true,color:{rgb:'9AA5B4'}},fill:{patternType:'solid',fgColor:{rgb:BG.lgray}},alignment:{horizontal:'center'}}),C('',{fill:{patternType:'solid',fgColor:{rgb:BG.lgray}}}),C('',{fill:{patternType:'solid',fgColor:{rgb:BG.lgray}}}),C('',{fill:{patternType:'solid',fgColor:{rgb:BG.lgray}}}),C('',{fill:{patternType:'solid',fgColor:{rgb:BG.lgray}}}),C('',{fill:{patternType:'solid',fgColor:{rgb:BG.lgray}}}),C('',{fill:{patternType:'solid',fgColor:{rgb:BG.lgray}}})]);
+        mrMerges.push({s:{r:mrRows.length-1,c:0},e:{r:mrRows.length-1,c:mrCols-1}});
+      } else {
+        var running=awal,mMasuk=0,mKeluar=0;
+        tx.forEach(function(t,ti){
+          var e=ti%2===0,j=t.JENIS||'',nom=Number(t.NOMINAL||0);
+          if(j==='Pemasukan'){running+=nom;mMasuk+=nom;}else{running-=nom;mKeluar+=nom;}
+          mrRows.push([
+            C(t.TANGGAL||'', e?ST.ce:ST.co),
+            C(j, j==='Pemasukan'?ST.lunas:j==='Pengeluaran'?ST.belum:(e?ST.ce:ST.co)),
+            C(t.PROJECT||'', e?ST.le:ST.lo),
+            C(t.KATEGORI||'', e?ST.le:ST.lo),
+            C(nom, j==='Pemasukan'?ST.pos(e):ST.neg(e)),
+            C(t.NOTES||'', e?ST.le:ST.lo),
+            C(running, running>=0?ST.pos(e):ST.neg(e)),
+          ]);
+        });
+        mrRows.push([C('↑ Masuk: Rp '+mMasuk.toLocaleString('id')+'   ↓ Keluar: Rp '+mKeluar.toLocaleString('id'),ST.lbl),C('',ST.lbl),C('',ST.lbl),C('',ST.lbl),C('',ST.lbl),C('Saldo Akhir',ST.lbl),C(sal,sal>=0?ST.netPos:ST.netNeg)]);
+        mrMerges.push({s:{r:mrRows.length-1,c:0},e:{r:mrRows.length-1,c:4}});
+      }
+      mrRows.push(eRow(mrCols));
+    });
+    var wsMR=makeWS(mrRows,[14,13,22,22,15,32,16],mrMerges);
+    XLSX.utils.book_append_sheet(wb,wsMR,'Mutasi Rekening');
+
+    // ── SHEET 9: PRIBADI (rekap + rincian) ───────────────────────────────────
+    var pribKatsXL=new Set(state.kategori.filter(function(k){return k.KELOMPOK==='PRIBADI';}).map(function(k){return k.NAMA;}));
+    var pribTxnsXL=state.txns.filter(function(t){return t.JENIS==='Pengeluaran'&&pribKatsXL.has(t.KATEGORI);});
+    var pribMonXL=[...new Set(pribTxnsXL.map(function(t){return (t.TANGGAL||'').slice(0,7);}))].filter(Boolean).sort().slice(-6);
+    var pribCatSetXL={};
+    pribTxnsXL.forEach(function(t){pribCatSetXL[t.KATEGORI]=(pribCatSetXL[t.KATEGORI]||0)+Number(t.NOMINAL||0);});
+    var pribCatsXL=Object.keys(pribCatSetXL).sort(function(a,b){return pribCatSetXL[b]-pribCatSetXL[a];});
+    var pribMatXL={};
+    pribCatsXL.forEach(function(c){pribMatXL[c]={};pribMonXL.forEach(function(m){pribMatXL[c][m]=0;});});
+    pribTxnsXL.forEach(function(t){var m=(t.TANGGAL||'').slice(0,7);if(pribMatXL[t.KATEGORI]&&m&&pribMonXL.indexOf(m)>=0)pribMatXL[t.KATEGORI][m]+=Number(t.NOMINAL||0);});
+    var pribColTotXL={};pribMonXL.forEach(function(m){pribColTotXL[m]=pribCatsXL.reduce(function(s,c){return s+(pribMatXL[c][m]||0);},0);});
+    var pribGrandXL=pribMonXL.reduce(function(s,m){return s+(pribColTotXL[m]||0);},0);
+
+    var pnCols=pribMonXL.length+2, pnRows=[], pnMerges=[];
+    // Title
+    pnRows.push([C('PENGELUARAN PRIBADI — Arthabumi',ST.title)].concat(Array.from({length:pnCols-1},function(){return C('',ST.title);})));
+    pnMerges.push({s:{r:0,c:0},e:{r:0,c:pnCols-1}});
+    pnRows.push([C('Diekspor: '+today+'  |  '+pribTxnsXL.length+' transaksi  |  Total: Rp '+pribGrandXL.toLocaleString('id'),ST.info)].concat(Array.from({length:pnCols-1},function(){return C('',ST.info);})));
+    pnMerges.push({s:{r:1,c:0},e:{r:1,c:pnCols-1}});
+    pnRows.push(eRow(pnCols));
+    // Matrix header
+    var matHdr=[C('Kategori',ST.hdr)].concat(pribMonXL.map(function(m){var p=m.split('-');return C(p[1]+'/'+p[0].slice(2),ST.hdrR);})).concat([C('Total',ST.hdrR)]);
+    pnRows.push(matHdr);
+    pribCatsXL.forEach(function(c,ci){
+      var e=ci%2===0,rowTot=pribMonXL.reduce(function(s,m){return s+(pribMatXL[c][m]||0);},0);
+      var row=[C(c,e?ST.le:ST.lo)];
+      pribMonXL.forEach(function(m){var v=pribMatXL[c][m]||0;row.push(C(v,v>0?ST.neg(e):(e?ST.ne:ST.no)));});
+      row.push(C(rowTot,{numFmt:'#,##0',font:{bold:true,color:{rgb:'6A1B9A'}},fill:{patternType:'solid',fgColor:{rgb:'EDE7F6'}},alignment:{horizontal:'right'}}));
+      pnRows.push(row);
+    });
+    // Footer total row
+    var ftRow=[C('TOTAL / BULAN',{font:{bold:true,color:{rgb:BG.white}},fill:{patternType:'solid',fgColor:{rgb:'6A1B9A'}},alignment:{horizontal:'left'}})];
+    pribMonXL.forEach(function(m){ftRow.push(C(pribColTotXL[m]||0,{numFmt:'#,##0',font:{bold:true,color:{rgb:BG.white}},fill:{patternType:'solid',fgColor:{rgb:'6A1B9A'}},alignment:{horizontal:'right'}}));});
+    ftRow.push(C(pribGrandXL,{numFmt:'#,##0',font:{bold:true,color:{rgb:'FFEE58'}},fill:{patternType:'solid',fgColor:{rgb:'6A1B9A'}},alignment:{horizontal:'right'}}));
+    pnRows.push(ftRow);
+    pnRows.push(eRow(pnCols));
+
+    // Rincian per kategori
+    var nTxnCols=6;
+    pnRows.push([C('RINCIAN TRANSAKSI PER KATEGORI',{font:{bold:true,sz:11,color:{rgb:BG.white}},fill:{patternType:'solid',fgColor:{rgb:'4A148C'}},alignment:{horizontal:'left'}}),C('',{fill:{patternType:'solid',fgColor:{rgb:'4A148C'}}}),C('',{fill:{patternType:'solid',fgColor:{rgb:'4A148C'}}}),C('',{fill:{patternType:'solid',fgColor:{rgb:'4A148C'}}}),C('',{fill:{patternType:'solid',fgColor:{rgb:'4A148C'}}}),C('',{fill:{patternType:'solid',fgColor:{rgb:'4A148C'}}})]);
+    pnMerges.push({s:{r:pnRows.length-1,c:0},e:{r:pnRows.length-1,c:nTxnCols-1}});
+    pribCatsXL.forEach(function(c){
+      var catTx=pribTxnsXL.filter(function(t){return t.KATEGORI===c;}).sort(function(a,b){return (a.TANGGAL||'').localeCompare(b.TANGGAL||'');});
+      var catHR=pnRows.length;
+      pnRows.push([C(c,{font:{bold:true,color:{rgb:'4A148C'}},fill:{patternType:'solid',fgColor:{rgb:'EDE7F6'}},alignment:{horizontal:'left'}}),C('',{fill:{patternType:'solid',fgColor:{rgb:'EDE7F6'}}}),C('',{fill:{patternType:'solid',fgColor:{rgb:'EDE7F6'}}}),C('',{fill:{patternType:'solid',fgColor:{rgb:'EDE7F6'}}}),C('',{fill:{patternType:'solid',fgColor:{rgb:'EDE7F6'}}}),C('',{fill:{patternType:'solid',fgColor:{rgb:'EDE7F6'}}})]);
+      pnMerges.push({s:{r:catHR,c:0},e:{r:catHR,c:nTxnCols-1}});
+      pnRows.push(['Tanggal','Rekening','Project','Keterangan','Nominal','Kumulatif'].map(function(h,i){return C(h,[4,5].indexOf(i)>=0?ST.hdrR:ST.hdr);}));
+      var cumul=0;
+      catTx.forEach(function(t,ti){
+        var e=ti%2===0,nom=Number(t.NOMINAL||0);cumul+=nom;
+        pnRows.push([
+          C(t.TANGGAL||'', e?ST.ce:ST.co),
+          C(t.REKENING||'', e?ST.le:ST.lo),
+          C(t.PROJECT||'', e?ST.le:ST.lo),
+          C(t.NOTES||'', e?ST.le:ST.lo),
+          C(nom, ST.neg(e)),
+          C(cumul, {numFmt:'#,##0',font:{color:{rgb:'4A148C'}},fill:{patternType:'solid',fgColor:{rgb:e?'F5F0FF':BG.white}},alignment:{horizontal:'right'}}),
+        ]);
+      });
+      pnRows.push([C('Total '+c,{font:{bold:true,color:{rgb:'4A148C'}},fill:{patternType:'solid',fgColor:{rgb:'CE93D8'}},alignment:{horizontal:'left'}}),C('',{fill:{patternType:'solid',fgColor:{rgb:'CE93D8'}}}),C('',{fill:{patternType:'solid',fgColor:{rgb:'CE93D8'}}}),C('',{fill:{patternType:'solid',fgColor:{rgb:'CE93D8'}}}),C(cumul,{numFmt:'#,##0',font:{bold:true,color:{rgb:'4A148C'}},fill:{patternType:'solid',fgColor:{rgb:'CE93D8'}},alignment:{horizontal:'right'}}),C(catTx.length+' txn',{font:{italic:true,color:{rgb:'6A1B9A'}},fill:{patternType:'solid',fgColor:{rgb:'CE93D8'}},alignment:{horizontal:'center'}})]);
+      pnMerges.push({s:{r:pnRows.length-1,c:0},e:{r:pnRows.length-1,c:3}});
+      pnRows.push(eRow(nTxnCols));
+    });
+    var wsPN=makeWS(pnRows,[22].concat(pribMonXL.map(function(){return 14;})).concat([14]),pnMerges);
+    wsPN['!rows']=[{hpt:24},{hpt:16}];
+    XLSX.utils.book_append_sheet(wb,wsPN,'Pribadi');
+
+        XLSX.writeFile(wb,'FCC-Arthabumi-'+today+'.xlsx');
     showToast('Export berhasil! File tersimpan di Downloads.','ok');
   } catch(e){
     console.error('exportToExcel error',e);
@@ -4104,12 +4266,39 @@ function exportHTMLReport() {
       H+='<th class="r pribcol">Total</th></tr>';
       pribCats.forEach(function(c,ci){
         var bg=ci%2===0?'#F9F5FF':'#FFF';
-        H+='<tr><td style="background:'+bg+';font-weight:500">'+esc(c)+'</td>';
+        var accId='prib'+ci;
+        var catTxns=pribTxns.filter(function(t){return t.KATEGORI===c;}).sort(function(a,b){return String(a.TANGGAL||'').localeCompare(String(b.TANGGAL||''));});
+        H+='<tr class="acc-row" style="background:'+bg+'" onclick="tog(''+accId+'')">';
+        H+='<td style="background:'+bg+';font-weight:600">'+esc(c)+'&nbsp;<span style="font-size:9px;color:#9AA5B4">('+catTxns.length+' txn)</span></td>';
         pribMonths.forEach(function(m){
           var v=pribMatrix[c][m]||0;
           H+='<td class="r" style="background:'+bg+';color:'+(v>0?'#C62828':'#9AA5B4')+'">'+fmtN(v)+'</td>';
         });
         H+='<td class="r pribcol">'+fmtN(pribRowTotal[c])+'</td></tr>';
+        var cs=pribMonths.length+2;
+        H+='<tr class="detail-row" id="'+accId+'"><td colspan="'+cs+'"><div class="detail-inner" style="border-left-color:#6A1B9A">';
+        if(catTxns.length===0){H+='<div style="padding:6px 8px;color:#9AA5B4;font-size:11px">Tidak ada transaksi.</div>';}
+        else{
+          H+='<table>';
+          H+='<tr><th style="background:#6A1B9A">Tgl</th><th style="background:#6A1B9A">Rekening</th><th style="background:#6A1B9A">Project</th><th class="r" style="background:#6A1B9A">Nominal</th><th style="background:#6A1B9A">Notes</th><th class="r" style="background:#6A1B9A">Kumulatif</th></tr>';
+          var cumul=0;
+          catTxns.forEach(function(t,ti){
+            cumul+=Number(t.NOMINAL||0);
+            var bg2=ti%2===0?'#F5F0FF':'#FFF';
+            H+='<tr>';
+            H+='<td style="background:'+bg2+'">'+esc(String(t.TANGGAL||'').slice(0,10))+'</td>';
+            H+='<td style="background:'+bg2+'">'+esc(t.REKENING||'—')+'</td>';
+            H+='<td style="background:'+bg2+';max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(t.PROJECT||'—')+'</td>';
+            H+='<td class="r" style="background:'+bg2+';color:#C62828;font-weight:600">'+fmtN(Number(t.NOMINAL||0))+'</td>';
+            H+='<td style="background:'+bg2+';font-size:10px;color:#6B7C93">'+esc(t.NOTES||'')+'</td>';
+            H+='<td class="r" style="background:'+bg2+';color:#4A148C;font-size:11px">'+fmtN(cumul)+'</td></tr>';
+          });
+          H+='<tr style="background:#EDE7F6"><td colspan="3" style="font-weight:700;color:#6A1B9A;font-size:11px">TOTAL '+esc(c)+'</td>';
+          H+='<td class="r" style="font-weight:700;color:#6A1B9A">'+fmtN(cumul)+'</td><td></td>';
+          H+='<td class="r" style="color:#9AA5B4;font-size:10px">'+catTxns.length+' transaksi</td></tr>';
+          H+='</table>';
+        }
+        H+='</div></td></tr>';
       });
       // Footer
       H+='<tr class="tfoot-row prib"><td>TOTAL / BULAN</td>';
