@@ -4101,6 +4101,16 @@ function exportHTMLReport() {
     var pribColTotal={};
     pribMonths.forEach(function(m){pribColTotal[m]=pribCats.reduce(function(s,c){return s+(pribMatrix[c][m]||0);},0);});
     var pribGrandTotal=pribMonths.reduce(function(s,m){return s+(pribColTotal[m]||0);},0);
+    // Embed txn data per cat/month for pmClick
+    var pribDataObj={};
+    pribCats.forEach(function(cat){
+      pribDataObj[cat]={};
+      pribMonths.forEach(function(mon){
+        pribDataObj[cat][mon]=pribTxns.filter(function(t){return t.KATEGORI===cat&&(t.TANGGAL||'').slice(0,7)===mon;})
+          .sort(function(a,b){return (a.TANGGAL||'').localeCompare(b.TANGGAL||'');})
+          .map(function(t){return {d:String(t.TANGGAL||'').slice(0,10),r:t.REKENING||'',p:t.PROJECT||'',n:Number(t.NOMINAL||0),x:t.NOTES||''};});
+      });
+    });
     // Chart bar per bulan (total pribadi)
     var pribMLabels=pribMonths.map(function(k){var p=k.split('-');return p[1]+'/'+p[0].slice(2);});
     var pribMVals  =pribMonths.map(function(m){return Math.round((pribColTotal[m]||0)/1e4)/100;});
@@ -4147,6 +4157,9 @@ function exportHTMLReport() {
     H+='.detail-inner td{padding:5px 8px;border-bottom:1px solid #D6DCE4;color:#2C3E50;}';
     H+='.tfoot-row td{font-weight:700;background:#DEEAF1!important;border-top:2px solid #2E75B6;}';
     H+='.tfoot-row.prib td{background:#EDE7F6!important;border-color:#7B1FA2;}';
+    H+='.pm-cell{cursor:pointer;transition:filter .12s;user-select:none;}';
+    H+='.pm-cell:hover{filter:brightness(.88);}';
+    H+='.pm-cell.pm-on{outline:2px solid #6A1B9A;outline-offset:-2px;font-weight:800!important;}';
     // Pribadi palette
     H+='.pribhdr{background:#6A1B9A!important;}.pribcol{background:#F3E5F5!important;color:#4A148C;font-weight:700;}';
     H+='@media print{.topbar{display:none!important;}.page{padding-top:0!important;}.gr2{grid-template-columns:1fr 1fr;}.detail-row{display:table-row!important;}}';
