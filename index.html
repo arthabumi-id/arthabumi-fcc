@@ -4268,7 +4268,7 @@ function exportHTMLReport() {
         var bg=ci%2===0?'#F9F5FF':'#FFF';
         var accId='prib'+ci;
         var catTxns=pribTxns.filter(function(t){return t.KATEGORI===c;}).sort(function(a,b){return String(a.TANGGAL||'').localeCompare(String(b.TANGGAL||''));});
-        H+='<tr class="acc-row" style="background:'+bg+'" onclick="tog(''+accId+'')">';
+        H+='<tr class="acc-row" style="background:'+bg+'" onclick="tog(\''+accId+'\')">';
         H+='<td style="background:'+bg+';font-weight:600">'+esc(c)+'&nbsp;<span style="font-size:9px;color:#9AA5B4">('+catTxns.length+' txn)</span></td>';
         pribMonths.forEach(function(m){
           var v=pribMatrix[c][m]||0;
