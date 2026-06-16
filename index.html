@@ -3398,6 +3398,7 @@ function openDrawer(mode, editId = null, preset = null) {
       <div class="settings-row"><div><div class="settings-label">Rekening Penyimpan Reserve</div><div class="settings-sub">Default: ${esc(defaultHoldingBank()||'—')}</div></div><button class="btn-danger" onclick="setReserveBank()">Ubah</button></div>
       <div class="settings-row"><div><div class="settings-label">Sinkronkan Reserve Lama</div><div class="settings-sub">Sekali pakai bila ada sisa reserve model lama (kreditkan saldo penyimpan)</div></div><button class="btn-danger" onclick="syncReserveHolding()">Sinkron</button></div>
       <div class="settings-row"><div><div class="settings-label">Hitung Ulang Total</div><div class="settings-sub">Pakai setelah edit manual di Google Sheets</div></div><button class="btn-danger" onclick="forceRefresh()">Refresh</button></div>
+      <div class="settings-row"><div><div class="settings-label">Laporan (PDF)</div><div class="settings-sub">Laporan visual dengan chart cashflow, project, piutang — buka di tab baru, lalu Print → Save as PDF</div></div><button class="btn-primary" onclick="exportHTMLReport()">Buka Laporan</button></div>
       <div class="settings-row"><div><div class="settings-label">Export Excel</div><div class="settings-sub">Download semua data: Transaksi · Project · Piutang · Kasbon · Cicilan · Saldo</div></div><button class="btn-primary" onclick="exportToExcel()">Export</button></div>
       <div class="settings-row"><div><div class="settings-label">Import Excel</div><div class="settings-sub">Tambah banyak transaksi dari file .xlsx (template)</div></div><button class="btn-danger" onclick="document.getElementById('importFile').click()">Import</button></div>
       <input type="file" id="importFile" accept=".xlsx,.xls" style="display:none" onchange="handleImportFile(event)">
@@ -3799,7 +3800,7 @@ function exportToExcel() {
 
     // ── SHEET 6: SALDO ───────────────────────────────────────────────────────
     var nSl=4;
-    var totBankV=state.banks.reduce(function(s,b){return s+getSaldo(b.NAMA);},0);
+    var totBankV=state.banks.reduce(function(s,b){return s+(getSaldo(b.NAMA).saldo||0);},0);
     var totResV=Object.values(state.reserveFunds||{}).reduce(function(s,v){return s+v;},0);
     var netCash=totBankV-totResV;
     var sldRows=[
@@ -3809,7 +3810,7 @@ function exportToExcel() {
       ['Rekening Bank','Tipe','Bank','Saldo'].map(function(h,i){return C(h,i===3?ST.hdrR:ST.hdr);}),
     ];
     state.banks.forEach(function(b,i){
-      var e=i%2===0, sal=getSaldo(b.NAMA);
+      var e=i%2===0, sal=(getSaldo(b.NAMA).saldo||0);
       sldRows.push([C(b.NAMA||'',e?ST.le:ST.lo),C('Bank',e?ST.ce:ST.co),C(b.BANK||'',e?ST.ce:ST.co),C(sal,sal>=0?ST.pos(e):ST.neg(e))]);
     });
     sldRows.push(eRow(nSl));
@@ -3837,6 +3838,180 @@ function exportToExcel() {
   } catch(e){
     console.error('exportToExcel error',e);
     showToast('Export gagal: '+e.message,'error');
+  }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Export HTML Report (Laporan + Charts → Print/PDF) ────────────────────────
+function exportHTMLReport() {
+  try {
+    var today = new Date().toISOString().slice(0,10);
+    var fmtN  = function(n){ return Math.round(n||0).toLocaleString('id'); };
+
+    // --- Kumpulkan data ---
+    var totBank = state.banks.reduce(function(s,b){ return s+(getSaldo(b.NAMA).saldo||0); },0);
+    var totRes  = Object.values(state.reserveFunds||{}).reduce(function(s,v){return s+v;},0);
+    var netCash = totBank - totRes;
+    var totPiu  = state.piutang.filter(function(p){return p.STATUS!=='Lunas';}).reduce(function(s,p){return s+Number(p.NOMINAL||0);},0);
+    var ovdPiu  = state.piutang.filter(function(p){return p.STATUS!=='Lunas'&&p.JATUH_TEMPO&&p.JATUH_TEMPO<today;}).length;
+    var kbMap   = {}; state.kasbon.forEach(function(k){var n=k.KARYAWAN||'?';if(!kbMap[n])kbMap[n]={p:0,b:0};if(k.JENIS==='Pinjam')kbMap[n].p+=Number(k.NOMINAL||0);else kbMap[n].b+=Number(k.NOMINAL||0);});
+    var totKasbon = Object.values(kbMap).reduce(function(s,v){return s+(v.p-v.b);},0);
+    var totCic  = state.cicilan.filter(function(c){return c.STATUS!=='Lunas';}).length;
+
+    // --- Cashflow bulanan (6 bulan, exclude Transfer/Reserve/dll) ---
+    var excl=['Transfer','Reserve','Kasbon','Investasi','Cicilan-Beli','Saldo Awal'];
+    var mAgg={};
+    state.txns.forEach(function(t){
+      if(excl.indexOf(t.TIPE_LOG||'')>=0) return;
+      var m=(t.TANGGAL||'').slice(0,7); if(!m) return;
+      if(!mAgg[m]) mAgg[m]={masuk:0,keluar:0};
+      if(t.JENIS==='Pemasukan')   mAgg[m].masuk +=Number(t.NOMINAL)||0;
+      else if(t.JENIS==='Pengeluaran') mAgg[m].keluar+=Number(t.NOMINAL)||0;
+    });
+    var mKeys   = Object.keys(mAgg).sort().slice(-6);
+    var mLabels = mKeys.map(function(k){var p=k.split('-');return p[1]+'/'+p[0].slice(2);});
+    var mMasuk  = mKeys.map(function(k){return Math.round((mAgg[k].masuk||0)/1e4)/100;});
+    var mKeluar = mKeys.map(function(k){return Math.round((mAgg[k].keluar||0)/1e4)/100;});
+
+    // --- Komposisi pengeluaran (dari summary, fallback txns) ---
+    var katRaw=(state.summary&&state.summary.katExp)||{};
+    if(Object.keys(katRaw).length===0){
+      state.txns.forEach(function(t){if(t.JENIS==='Pengeluaran'&&excl.indexOf(t.TIPE_LOG||'')<0){var k=t.KATEGORI||'Lainnya';katRaw[k]=(katRaw[k]||0)+Number(t.NOMINAL||0);}});
+    }
+    var katArr2=Object.entries(katRaw).sort(function(a,b){return b[1]-a[1];});
+    var topKat=katArr2.slice(0,7);
+    var lain2=katArr2.slice(7).reduce(function(s,e){return s+e[1];},0);
+    if(lain2>0) topKat.push(['Lainnya',lain2]);
+    var katLabels=topKat.map(function(e){return e[0];});
+    var katVals  =topKat.map(function(e){return Math.round(e[1]/1e4)/100;});
+    var katColors=['#1F4E79','#2E75B6','#42A5F5','#64B5F6','#90CAF9','#2196F3','#0D47A1','#BBDEFB'];
+
+    // --- Project performance ---
+    var projPerf2=state.projects
+      .filter(function(p){return p.STATUS!=='Abaikan';})
+      .map(function(p){var cf=getProjCF(p.NAMA),m=cf.masuk||0,k=cf.keluar||0;
+        return {nama:p.NAMA,klien:p.KLIEN||'',sts:p.STATUS||'',m:m,k:k,lb:m-k};})
+      .sort(function(a,b){return b.lb-a.lb;}).slice(0,10);
+
+    // --- Piutang belum lunas ---
+    var piuOpen=state.piutang.filter(function(p){return p.STATUS!=='Lunas';})
+      .sort(function(a,b){return (a.JATUH_TEMPO||'').localeCompare(b.JATUH_TEMPO||'');});
+
+    // --- Saldo per rekening ---
+    var bankRows=state.banks.map(function(b){var s=(getSaldo(b.NAMA).saldo||0);return {nama:b.NAMA,bank:b.BANK||'',sal:s};});
+
+    // === Bangun HTML =========================================================
+    var H='';
+    H+='<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">';
+    H+='<title>Laporan Arthabumi '+today+'</title>';
+    H+='<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"><\/script>';
+    H+='<style>';
+    H+='*{margin:0;padding:0;box-sizing:border-box;font-family:"Segoe UI",Arial,sans-serif;}';
+    H+='body{background:#EEF2F7;color:#1A2B3C;font-size:13px;}';
+    H+='.page{max-width:1080px;margin:0 auto;padding:20px 20px 40px;}';
+    H+='.topbar{background:linear-gradient(135deg,#1F4E79 0%,#2E75B6 100%);color:#fff;padding:14px 24px;display:flex;justify-content:space-between;align-items:center;position:fixed;top:0;left:0;right:0;z-index:99;box-shadow:0 2px 10px rgba(0,0,0,.25);}';
+    H+='.topbar h1{font-size:16px;font-weight:700;letter-spacing:.3px;}';
+    H+='.topbar span{font-size:11px;opacity:.8;}';
+    H+='.topbar button{background:#fff;color:#1F4E79;border:none;padding:8px 20px;border-radius:6px;font-weight:700;font-size:13px;cursor:pointer;}';
+    H+='.page{padding-top:72px;}';
+    H+='.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:18px;}';
+    H+='.card{background:#fff;border-radius:10px;padding:16px;box-shadow:0 1px 5px rgba(0,0,0,.08);border-top:3px solid #2E75B6;}';
+    H+='.card.pos{border-color:#2E7D32;}.card.neg{border-color:#C62828;}.card.warn{border-color:#E65100;}';
+    H+='.cl{font-size:10px;color:#6B7C93;font-weight:700;text-transform:uppercase;letter-spacing:.6px;}';
+    H+='.cv{font-size:19px;font-weight:800;margin-top:5px;}.cs{font-size:11px;color:#9AA5B4;margin-top:2px;}';
+    H+='.card.pos .cv{color:#1B5E20;}.card.neg .cv{color:#C62828;}.card.warn .cv{color:#E65100;}';
+    H+='.gr2{display:grid;grid-template-columns:3fr 2fr;gap:14px;margin-bottom:18px;}';
+    H+='.panel{background:#fff;border-radius:10px;padding:18px 22px;box-shadow:0 1px 5px rgba(0,0,0,.08);margin-bottom:18px;}';
+    H+='.panel h2{font-size:13px;font-weight:700;color:#1F4E79;padding-bottom:8px;border-bottom:2px solid #DEEAF1;margin-bottom:14px;}';
+    H+='table{width:100%;border-collapse:collapse;font-size:12px;}';
+    H+='th{background:#2E75B6;color:#fff;padding:8px 10px;text-align:left;font-weight:600;}th.r,td.r{text-align:right;}';
+    H+='tr:nth-child(even) td{background:#F5F7FA;}td{padding:7px 10px;border-bottom:1px solid #EEF2F7;}';
+    H+='.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;}';
+    H+='.bl{background:#E8F5E9;color:#1B5E20;}.bb{background:#FFF3E0;color:#E65100;}.bo{background:#FFEBEE;color:#C62828;}.bj{background:#E3F2FD;color:#0D47A1;}.bh{background:#EFEBE9;color:#5D4037;}';
+    H+='@media print{.topbar{display:none!important;}.page{padding-top:0!important;}.gr2{grid-template-columns:1fr 1fr;}}';
+    H+='</style></head><body>';
+
+    H+='<div class="topbar"><div><h1>Arthabumi — Laporan Keuangan</h1><span>'+today+'  ·  '+state.txns.length+' transaksi termuat</span></div>';
+    H+='<button onclick="window.print()">🖨 Print / Save as PDF</button></div>';
+    H+='<div class="page">';
+
+    // Summary cards
+    H+='<div class="cards">';
+    H+='<div class="card '+(netCash>=0?'pos':'neg')+'"><div class="cl">Net Cash (Bebas)</div><div class="cv">Rp '+fmtN(netCash)+'</div><div class="cs">Total bank: Rp '+fmtN(totBank)+'</div></div>';
+    H+='<div class="card"><div class="cl">Reserve CC</div><div class="cv">Rp '+fmtN(totRes)+'</div><div class="cs">Dana disisihkan</div></div>';
+    H+='<div class="card '+(totPiu>0?'warn':'')+'"><div class="cl">Piutang Beredar</div><div class="cv">Rp '+fmtN(totPiu)+'</div><div class="cs">'+ovdPiu+' overdue</div></div>';
+    H+='<div class="card"><div class="cl">Kasbon Beredar</div><div class="cv">Rp '+fmtN(totKasbon)+'</div><div class="cs">Pinjaman karyawan</div></div>';
+    H+='<div class="card"><div class="cl">Cicilan Aktif</div><div class="cv">'+totCic+' item</div><div class="cs">Kartu Kredit</div></div>';
+    H+='</div>';
+
+    // Charts row
+    H+='<div class="gr2">';
+    H+='<div class="panel"><h2>Cashflow 6 Bulan Terakhir (Juta Rp)</h2><canvas id="cfC" height="220"></canvas></div>';
+    H+='<div class="panel"><h2>Komposisi Pengeluaran</h2><canvas id="katC" height="260"></canvas></div>';
+    H+='</div>';
+
+    // Project table
+    H+='<div class="panel"><h2>Performance Project</h2><table>';
+    H+='<tr><th>Project</th><th>Klien</th><th>Status</th><th class="r">Nilai Kontrak</th><th class="r">Masuk</th><th class="r">Keluar</th><th class="r">Laba</th><th class="r">Margin</th></tr>';
+    projPerf2.forEach(function(p){
+      var mg=p.m?Math.round(p.lb/p.m*100):0;
+      var bSts=p.sts==='Selesai'?'bl':p.sts==='Hold'?'bh':'bj';
+      var valKon=0; state.projects.forEach(function(pr){if(pr.NAMA===p.nama)valKon=Number(pr.NILAI_CONTRACT)||0;});
+      H+='<tr><td>'+esc(p.nama)+'</td><td>'+esc(p.klien)+'</td>';
+      H+='<td><span class="badge '+bSts+'">'+p.sts+'</span></td>';
+      H+='<td class="r">'+fmtN(valKon)+'</td><td class="r">'+fmtN(p.m)+'</td><td class="r">'+fmtN(p.k)+'</td>';
+      H+='<td class="r" style="font-weight:700;color:'+(p.lb>=0?'#1B5E20':'#C62828')+'">'+fmtN(p.lb)+'</td>';
+      H+='<td class="r">'+mg+'%</td></tr>';
+    });
+    H+='</table></div>';
+
+    // Piutang
+    if(piuOpen.length>0){
+      H+='<div class="panel"><h2>Piutang Belum Lunas</h2><table>';
+      H+='<tr><th>Project</th><th>Klien</th><th>Termin</th><th class="r">Nominal</th><th>Jatuh Tempo</th><th>Status</th></tr>';
+      piuOpen.forEach(function(p){
+        var ovd=p.JATUH_TEMPO&&p.JATUH_TEMPO<today;
+        H+='<tr><td>'+esc(p.PROJECT||'')+'</td><td>'+esc(p.KLIEN||'')+'</td><td>'+esc(p.TERMIN||'')+'</td>';
+        H+='<td class="r">'+fmtN(Number(p.NOMINAL||0))+'</td><td>'+(p.JATUH_TEMPO||'')+'</td>';
+        H+='<td><span class="badge '+(ovd?'bo':'bb')+'">'+(ovd?'⚠ Overdue':'Belum')+'</span></td></tr>';
+      });
+      H+='</table></div>';
+    }
+
+    // Saldo rekening
+    H+='<div class="panel"><h2>Posisi Saldo Rekening</h2><table>';
+    H+='<tr><th>Rekening</th><th>Bank</th><th class="r">Saldo</th></tr>';
+    bankRows.forEach(function(b){
+      H+='<tr><td>'+esc(b.nama)+'</td><td>'+esc(b.bank)+'</td>';
+      H+='<td class="r" style="color:'+(b.sal<0?'#C62828':'inherit')+'">Rp '+fmtN(b.sal)+'</td></tr>';
+    });
+    H+='</table></div>';
+
+    H+='<div style="text-align:center;color:#9AA5B4;font-size:11px;padding:8px 0">FCC Arthabumi · '+today+' · Data ±120 hari termuat</div>';
+    H+='</div>'; // .page
+
+    // Chart scripts
+    H+='<script>';
+    H+='(function(){';
+    H+='var cfD='+JSON.stringify({l:mLabels,m:mMasuk,k:mKeluar})+';';
+    H+='new Chart(document.getElementById("cfC"),{type:"bar",data:{labels:cfD.l,datasets:[';
+    H+='{label:"Pemasukan",data:cfD.m,backgroundColor:"rgba(46,117,182,.85)",borderColor:"#2E75B6",borderWidth:1,borderRadius:4},';
+    H+='{label:"Pengeluaran",data:cfD.k,backgroundColor:"rgba(198,40,40,.75)",borderColor:"#C62828",borderWidth:1,borderRadius:4}]},';
+    H+='options:{responsive:true,plugins:{legend:{position:"top"}},scales:{y:{beginAtZero:true,ticks:{callback:function(v){return v+" jt";}},grid:{color:"rgba(0,0,0,.05)"}},x:{grid:{display:false}}}}});';
+    H+='var kD='+JSON.stringify({l:katLabels,v:katVals,c:katColors})+';';
+    H+='new Chart(document.getElementById("katC"),{type:"doughnut",data:{labels:kD.l,datasets:[{data:kD.v,backgroundColor:kD.c,borderWidth:2,borderColor:"#fff",hoverOffset:6}]},';
+    H+='options:{responsive:true,cutout:"62%",plugins:{legend:{position:"bottom",labels:{font:{size:10},boxWidth:12,padding:8}}}}});';
+    H+='}());';
+    H+='<\/script></body></html>';
+
+    var w=window.open('','_blank');
+    if(!w){showToast('Pop-up diblokir. Izinkan pop-up untuk FCC.','error');return;}
+    w.document.write(H);
+    w.document.close();
+    showToast('Laporan siap! Klik "Print / Save as PDF" di halaman baru.','ok');
+  } catch(e){
+    console.error('exportHTMLReport error',e);
+    showToast('Gagal buat laporan: '+e.message,'error');
   }
 }
 // ─────────────────────────────────────────────────────────────────────────────
