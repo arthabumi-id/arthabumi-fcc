@@ -4267,38 +4267,17 @@ function exportHTMLReport() {
       pribCats.forEach(function(c,ci){
         var bg=ci%2===0?'#F9F5FF':'#FFF';
         var accId='prib'+ci;
-        var catTxns=pribTxns.filter(function(t){return t.KATEGORI===c;}).sort(function(a,b){return String(a.TANGGAL||'').localeCompare(String(b.TANGGAL||''));});
-        H+='<tr class="acc-row" style="background:'+bg+'" onclick="tog(\''+accId+'\')">';
-        H+='<td style="background:'+bg+';font-weight:600">'+esc(c)+'&nbsp;<span style="font-size:9px;color:#9AA5B4">('+catTxns.length+' txn)</span></td>';
+        var catTotTxn=pribTxns.filter(function(t){return t.KATEGORI===c;}).length;
+        H+='<tr style="background:'+bg+'">';
+        H+='<td style="background:'+bg+';font-weight:600">'+esc(c)+'&nbsp;<span style="font-size:9px;color:#9AA5B4">('+catTotTxn+' txn)</span></td>';
         pribMonths.forEach(function(m){
           var v=pribMatrix[c][m]||0;
-          H+='<td class="r" style="background:'+bg+';color:'+(v>0?'#C62828':'#9AA5B4')+'">'+fmtN(v)+'</td>';
+          var cellStyle='background:'+bg+';color:'+(v>0?'#C62828':'#9AA5B4')+';';
+          H+='<td class="r pm-cell" data-base="'+accId+'" data-cat="'+esc(c)+'" data-month="'+m+'" onclick="pmClick(this)" style="'+cellStyle+'">'+(v>0?fmtN(v)+'<br><span style="font-size:9px;color:#A040A0">▼ lihat</span>':'—')+'</td>';
         });
         H+='<td class="r pribcol">'+fmtN(pribRowTotal[c])+'</td></tr>';
         var cs=pribMonths.length+2;
-        H+='<tr class="detail-row" id="'+accId+'"><td colspan="'+cs+'"><div class="detail-inner" style="border-left-color:#6A1B9A">';
-        if(catTxns.length===0){H+='<div style="padding:6px 8px;color:#9AA5B4;font-size:11px">Tidak ada transaksi.</div>';}
-        else{
-          H+='<table>';
-          H+='<tr><th style="background:#6A1B9A">Tgl</th><th style="background:#6A1B9A">Rekening</th><th style="background:#6A1B9A">Project</th><th class="r" style="background:#6A1B9A">Nominal</th><th style="background:#6A1B9A">Notes</th><th class="r" style="background:#6A1B9A">Kumulatif</th></tr>';
-          var cumul=0;
-          catTxns.forEach(function(t,ti){
-            cumul+=Number(t.NOMINAL||0);
-            var bg2=ti%2===0?'#F5F0FF':'#FFF';
-            H+='<tr>';
-            H+='<td style="background:'+bg2+'">'+esc(String(t.TANGGAL||'').slice(0,10))+'</td>';
-            H+='<td style="background:'+bg2+'">'+esc(t.REKENING||'—')+'</td>';
-            H+='<td style="background:'+bg2+';max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(t.PROJECT||'—')+'</td>';
-            H+='<td class="r" style="background:'+bg2+';color:#C62828;font-weight:600">'+fmtN(Number(t.NOMINAL||0))+'</td>';
-            H+='<td style="background:'+bg2+';font-size:10px;color:#6B7C93">'+esc(t.NOTES||'')+'</td>';
-            H+='<td class="r" style="background:'+bg2+';color:#4A148C;font-size:11px">'+fmtN(cumul)+'</td></tr>';
-          });
-          H+='<tr style="background:#EDE7F6"><td colspan="3" style="font-weight:700;color:#6A1B9A;font-size:11px">TOTAL '+esc(c)+'</td>';
-          H+='<td class="r" style="font-weight:700;color:#6A1B9A">'+fmtN(cumul)+'</td><td></td>';
-          H+='<td class="r" style="color:#9AA5B4;font-size:10px">'+catTxns.length+' transaksi</td></tr>';
-          H+='</table>';
-        }
-        H+='</div></td></tr>';
+        H+='<tr class="detail-row" id="'+accId+'"><td colspan="'+cs+'"><div class="prib-detail-body"></div></td></tr>';
       });
       // Footer
       H+='<tr class="tfoot-row prib"><td>TOTAL / BULAN</td>';
@@ -4307,6 +4286,62 @@ function exportHTMLReport() {
       H+='</table></div>';
     }
 
+    // ── Analisis & Saran Keuangan ──────────────────────────────────────────
+    var insights=[];
+    // 1. Net cash
+    if(netCash<0){insights.push({l:'r',t:'Net Cash Negatif',b:'Saldo bebas minus Rp '+fmtN(Math.abs(netCash))+'. Prioritaskan penagihan piutang dan tunda pengeluaran non-esensial.'});}
+    else if(netCash<5e6){insights.push({l:'y',t:'Net Cash Sangat Rendah',b:'Kas bebas hanya Rp '+fmtN(netCash)+'. Idealnya jaga minimal 1–2× pengeluaran operasional bulanan sebagai buffer proyek.'});}
+    else{insights.push({l:'g',t:'Net Cash Sehat',b:'Kas bebas Rp '+fmtN(netCash)+'. Pertahankan buffer ini sebagai modal mobilisasi proyek baru.'});}
+    // 2. Piutang overdue
+    if(ovdPiu>0){
+      var ovdAmt=state.piutang.filter(function(p){return p.STATUS!=='Lunas'&&p.JATUH_TEMPO&&p.JATUH_TEMPO<today;}).reduce(function(s,p){return s+Number(p.NOMINAL||0);},0);
+      insights.push({l:'r',t:ovdPiu+' Piutang Overdue — Rp '+fmtN(ovdAmt),b:'Piutang melewati jatuh tempo. Kirim invoice reminder segera. Keterlambatan >30 hari meningkatkan risiko bad debt. Pertimbangkan charge late fee di kontrak berikutnya.'});
+    }
+    // 3. Piutang vs kas
+    if(totPiu>0&&netCash>0&&totPiu>netCash*1.5){insights.push({l:'y',t:'Piutang Beredar Besar vs Kas Bebas',b:'Piutang Rp '+fmtN(totPiu)+' >> kas bebas Rp '+fmtN(netCash)+'. Likuiditas sangat tergantung klien bayar tepat waktu. Naikkan DP minimal 40–50% di kontrak berikutnya.'});}
+    // 4. Cashflow trend
+    if(mKeys.length>=2){
+      var lM=mAgg[mKeys[mKeys.length-1]],pM=mAgg[mKeys[mKeys.length-2]],lN=(lM.masuk||0)-(lM.keluar||0),pN=(pM.masuk||0)-(pM.keluar||0);
+      if(lN<pN*0.5&&pN>0){insights.push({l:'y',t:'Cashflow Turun Signifikan Bulan Ini',b:'Net cashflow bulan ini Rp '+fmtN(lN)+' vs bulan lalu Rp '+fmtN(pN)+'. Cek pengeluaran tak terduga atau pemasukan yang tertunda.'});}
+      else if(lN>0&&pN>0){insights.push({l:'g',t:'Cashflow 2 Bulan Berturut Positif',b:'Net positif Rp '+fmtN(lN)+' (bulan ini) dan Rp '+fmtN(pN)+' (bulan lalu). Ritme keuangan bisnis stabil.'});}
+    }
+    // 5. Project margin
+    var lowMarg=projPerf2.filter(function(p){return p.m>0&&p.lb/p.m<0.15;});
+    if(lowMarg.length>0){insights.push({l:'y',t:lowMarg.length+' Project Margin di Bawah 15%',b:'Project: '+lowMarg.slice(0,3).map(function(p){return p.nama+' ('+Math.round(p.lb/p.m*100)+'%)';}).join(', ')+(lowMarg.length>3?'...':'')+'. Margin sehat konstruksi/interior minimal 20-25%. Review cost material, upah, dan scope creep.'});}
+    // 6. Pribadi ratio
+    var totIncomeAll=mKeys.reduce(function(s,m){return s+(mAgg[m].masuk||0);},0);
+    if(pribGrandTotal>0&&totIncomeAll>0){
+      var pribPct=Math.round(pribGrandTotal/totIncomeAll*100);
+      if(pribPct>35){insights.push({l:'r',t:'Pengeluaran Pribadi '+pribPct+'% dari Pemasukan',b:'Rp '+fmtN(pribGrandTotal)+' pengeluaran pribadi dari total pemasukan Rp '+fmtN(totIncomeAll)+'. Idealnya di bawah 30%. Pisahkan rekening bisnis & pribadi secara tegas.'});}
+      else if(pribPct>20){insights.push({l:'y',t:'Pengeluaran Pribadi '+pribPct+'% dari Pemasukan',b:'Masih dalam batas wajar, namun perlu dimonitor. Buat budget pribadi bulanan agar tidak menggerus modal bisnis.'});}
+      else{insights.push({l:'g',t:'Pengeluaran Pribadi Terkendali ('+pribPct+'%)',b:'Proporsional terhadap pemasukan. Terus jaga disiplin pemisahan keuangan pribadi dan bisnis.'});}
+    }
+    // 7. Kasbon
+    if(totKasbon>0&&netCash>0){var kbPct=Math.round(totKasbon/netCash*100);if(kbPct>40){insights.push({l:'y',t:'Kasbon '+kbPct+'% dari Kas Bebas',b:'Kasbon beredar Rp '+fmtN(totKasbon)+'. Buat jadwal cicilan pengembalian resmi per karyawan agar tidak jadi hidden liability yang ganggu cashflow.'});}}
+    // 8. Revenue concentration
+    var projInc={};state.txns.filter(function(t){return t.JENIS==='Pemasukan'&&t.PROJECT;}).forEach(function(t){projInc[t.PROJECT]=(projInc[t.PROJECT]||0)+Number(t.NOMINAL||0);});
+    var totPI=Object.values(projInc).reduce(function(s,v){return s+v;},0);
+    if(totPI>0){var topE=Object.entries(projInc).sort(function(a,b){return b[1]-a[1];})[0];var topPct=Math.round(topE[1]/totPI*100);if(topPct>65){insights.push({l:'y',t:'Revenue Terkonsentrasi 1 Project ('+topPct+'%)',b:'"'+topE[0]+'" menyumbang '+topPct+'% total pemasukan. Jika project ini selesai tanpa pipeline baru, cashflow bisa anjlok. Mulai bangun 2-3 pipeline project paralel.'});}}
+    // 9. Cicilan CC
+    var cicMon=state.cicilan.filter(function(c){return c.STATUS!=='Lunas';}).reduce(function(s,c){return s+Number(c.NOMINAL_PER_BULAN||0);},0);
+    var avgMonIn=mKeys.length>0?totIncomeAll/mKeys.length:0;
+    if(cicMon>0&&avgMonIn>0){var cicPct=Math.round(cicMon/avgMonIn*100);if(cicPct>20){insights.push({l:'y',t:'Cicilan CC '+cicPct+'% dari Rata-rata Income Bulanan',b:'Total cicilan Rp '+fmtN(cicMon)+'/bulan. Jika >20% income rata-rata, pertimbangkan pelunasan lebih cepat untuk potong beban bunga CC 2-3%/bulan.'});}}
+    // Render insights panel
+    if(insights.length>0){
+      H+='<div class="panel" style="border-top:4px solid #1F4E79;margin-top:4px">';
+      H+='<h2 style="color:#1F4E79">💡 Analisis &amp; Saran Keuangan <span>dihitung otomatis dari data Anda</span></h2>';
+      H+='<p style="font-size:11px;color:#6B7C93;margin:0 0 12px">Gunakan sebagai panduan, bukan keputusan final. Konsultasikan dengan akuntan untuk keputusan besar.</p>';
+      insights.forEach(function(ins){
+        var bC=ins.l==='r'?'#C62828':ins.l==='y'?'#E65100':'#2E7D32';
+        var bgC=ins.l==='r'?'#FFEBEE':ins.l==='y'?'#FFF8E1':'#E8F5E9';
+        var ico=ins.l==='r'?'🔴':ins.l==='y'?'🟡':'🟢';
+        H+='<div style="border-left:3px solid '+bC+';background:'+bgC+';padding:10px 14px;margin-bottom:8px;border-radius:0 6px 6px 0">';
+        H+='<div style="font-weight:700;font-size:12px;color:'+bC+'">'+ico+' '+esc(ins.t)+'</div>';
+        H+='<div style="font-size:12px;color:#2C3E50;margin-top:4px;line-height:1.6">'+esc(ins.b)+'</div>';
+        H+='</div>';
+      });
+      H+='</div>';
+    }
     H+='<div style="text-align:center;color:#9AA5B4;font-size:11px;padding:8px 0">FCC Arthabumi · '+today+'</div>';
     H+='</div>'; // .page
 
@@ -4329,7 +4364,32 @@ function exportHTMLReport() {
       H+='new Chart(document.getElementById("pribC"),{type:"bar",data:{labels:pD.l,datasets:[{label:"Total Pribadi (jt)",data:pD.v,backgroundColor:"rgba(106,27,154,.75)",borderRadius:4}]},';
       H+='options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{callback:function(v){return v+" jt";}},grid:{color:"rgba(0,0,0,.05)"}},x:{grid:{display:false}}}}});';
     }
-    H+='<\/script></body></html>';
+    H+='var PDATA='+JSON.stringify(pribDataObj)+';';
+    H+='function pmClick(c){';
+    H+='var b=c.dataset.base,k=c.dataset.cat,m=c.dataset.month,r=document.getElementById(b),body=r.querySelector(".prib-detail-body");';
+    H+='if(r.classList.contains("open")&&r.dataset.m===m){r.classList.remove("open");r.dataset.m="";document.querySelectorAll(".pm-on").forEach(function(x){x.classList.remove("pm-on");});return;}';
+    H+='r.classList.add("open");r.dataset.m=m;';
+    H+='document.querySelectorAll(".pm-on").forEach(function(x){x.classList.remove("pm-on");});c.classList.add("pm-on");';
+    H+='var tx=(PDATA[k]&&PDATA[k][m])||[],ml=m.slice(5)+"/"+m.slice(2,4),tot=tx.reduce(function(s,t){return s+t.n;},0);';
+    H+='var fm=function(n){return Math.round(n||0).toLocaleString("id");};';
+    H+='var ex=function(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");};';
+    H+='body.innerHTML="";';
+    H+='var wrap=document.createElement("div");';
+    H+='wrap.style.cssText="border-left:3px solid #6A1B9A;background:#F3E5F5;padding:8px 0 8px 8px";';
+    H+='var hdr=document.createElement("div");';
+    H+='hdr.style.cssText="padding:0 8px 8px;font-weight:700;color:#6A1B9A;font-size:12px";';
+    H+='hdr.textContent=ex(k)+" · "+ml+" · "+tx.length+" transaksi · Rp "+fm(tot);';
+    H+='wrap.appendChild(hdr);';
+    H+='if(tx.length>0){';
+    H+='var tbl=document.createElement("table");tbl.style.cssText="width:100%;border-collapse:collapse;font-size:11px";';
+    H+='var hrow=tbl.createTHead().insertRow();';
+    H+='["Tgl","Rekening","Project / Notes","Nominal"].forEach(function(h,i){var th=document.createElement("th");th.textContent=h;th.style.cssText="background:#6A1B9A;color:#fff;padding:5px 8px;text-align:"+(i===3?"right":"left");hrow.appendChild(th);});';
+    H+='tx.forEach(function(t,ti){var bg=ti%2===0?"#F5F0FF":"#FFF",row=tbl.insertRow();[t.d,t.r,(t.p||t.x||"—")+(t.p&&t.x?" · "+t.x:""),fm(t.n)].forEach(function(v,i){var td=row.insertCell();td.textContent=v;td.style.cssText="background:"+bg+";padding:5px 8px;border-bottom:1px solid #E1BEE7;"+(i===3?"text-align:right;color:#C62828;font-weight:600":"");});});';
+    H+='var fr=tbl.insertRow();["TOTAL "+ml,"","",fm(tot)].forEach(function(v,i){var td=fr.insertCell();td.textContent=v;td.style.cssText="background:#EDE7F6;padding:5px 8px;font-weight:700;color:#6A1B9A;"+(i===3?"text-align:right":"");});';
+    H+='wrap.appendChild(tbl);';
+    H+='}else{var em=document.createElement("div");em.style.cssText="padding:8px;color:#9AA5B4;font-size:11px";em.textContent="Tidak ada transaksi bulan ini.";wrap.appendChild(em);}';
+    H+='body.appendChild(wrap);}';
+        H+='<\/script></body></html>';
 
     var w=window.open('','_blank');
     if(!w){showToast('Pop-up diblokir. Izinkan pop-up untuk FCC.','error');return;}
