@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <style>
 :root{
   --bg:#0f0f13;--bg2:#16161d;--bg3:#1e1e28;--bg4:#252532;
@@ -3574,90 +3574,269 @@ function impDateISO(v){
   if(m)return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
   return null;
 }
-// ── Export Excel (semua sheet sekaligus) ──────────────────────────────────────
+// ── Export Excel — Laporan Terformat ─────────────────────────────────────────
 function exportToExcel() {
-  if(!state.txns.length && !state.projects.length) {
+  if(!state.txns.length && !state.projects.length){
     showToast('Data belum dimuat. Tekan Sync dulu.','error'); return;
   }
   try {
     const wb = XLSX.utils.book_new();
     const today = new Date().toISOString().slice(0,10);
 
-    // --- Sheet 1: Transaksi ---
-    const txnH = ['ID','TANGGAL','JENIS','PROJECT','REKENING','KATEGORI','NOMINAL','NOTES','TIPE_LOG','CREATED_BY','CREATED_AT'];
-    const txnRows = state.txns
-      .slice().sort((a,b)=>(a.TANGGAL||'').localeCompare(b.TANGGAL||''))
-      .map(t => txnH.map(h => t[h]!==undefined ? t[h] : ''));
-    const wsTxn = XLSX.utils.aoa_to_sheet([txnH, ...txnRows]);
-    wsTxn['!cols'] = [8,10,12,18,18,20,14,30,12,12,18].map(w=>({wch:w}));
-    XLSX.utils.book_append_sheet(wb, wsTxn, 'Transaksi');
+    const BG={
+      navy:'1F4E79', blue:'2E75B6', lgray:'D6DCE4', lblue:'DEEAF1',
+      white:'FFFFFF', green:'E8F5E9', greenDk:'1B5E20',
+      orange:'FFF3E0', orangeDk:'E65100', red:'FFEBEE', redDk:'B71C1C',
+      blueLt:'E3F2FD', blueDk:'0D47A1'
+    };
+    const ST={
+      title: {font:{bold:true,sz:13,color:{rgb:BG.white}}, fill:{patternType:'solid',fgColor:{rgb:BG.navy}}, alignment:{horizontal:'center',vertical:'center'}},
+      info:  {font:{sz:9,italic:true,color:{rgb:'595959'}}, fill:{patternType:'solid',fgColor:{rgb:BG.lgray}}, alignment:{horizontal:'left',vertical:'center'}},
+      hdr:   {font:{bold:true,sz:10,color:{rgb:BG.white}}, fill:{patternType:'solid',fgColor:{rgb:BG.blue}}, alignment:{horizontal:'center',vertical:'center'}},
+      hdrR:  {font:{bold:true,sz:10,color:{rgb:BG.white}}, fill:{patternType:'solid',fgColor:{rgb:BG.blue}}, alignment:{horizontal:'right',vertical:'center'}},
+      le:    {fill:{patternType:'solid',fgColor:{rgb:BG.lblue}}, alignment:{horizontal:'left'}},
+      lo:    {fill:{patternType:'solid',fgColor:{rgb:BG.white}}, alignment:{horizontal:'left'}},
+      ce:    {fill:{patternType:'solid',fgColor:{rgb:BG.lblue}}, alignment:{horizontal:'center'}},
+      co:    {fill:{patternType:'solid',fgColor:{rgb:BG.white}}, alignment:{horizontal:'center'}},
+      ne:    {numFmt:'#,##0', fill:{patternType:'solid',fgColor:{rgb:BG.lblue}}, alignment:{horizontal:'right'}},
+      no:    {numFmt:'#,##0', fill:{patternType:'solid',fgColor:{rgb:BG.white}}, alignment:{horizontal:'right'}},
+      lbl:   {font:{bold:true,sz:10}, fill:{patternType:'solid',fgColor:{rgb:BG.lgray}}, alignment:{horizontal:'left'}},
+      val:   {font:{bold:true,sz:10}, numFmt:'#,##0', fill:{patternType:'solid',fgColor:{rgb:BG.lgray}}, alignment:{horizontal:'right'}},
+      lunas: {font:{bold:true,color:{rgb:BG.greenDk}}, fill:{patternType:'solid',fgColor:{rgb:BG.green}}, alignment:{horizontal:'center'}},
+      belum: {font:{bold:true,color:{rgb:BG.orangeDk}}, fill:{patternType:'solid',fgColor:{rgb:BG.orange}}, alignment:{horizontal:'center'}},
+      jalan: {font:{bold:true,color:{rgb:BG.blueDk}},  fill:{patternType:'solid',fgColor:{rgb:BG.blueLt}}, alignment:{horizontal:'center'}},
+      hold:  {font:{bold:true,color:{rgb:'5D4037'}},   fill:{patternType:'solid',fgColor:{rgb:'EFEBE9'}},  alignment:{horizontal:'center'}},
+      overdue:{font:{bold:true,color:{rgb:BG.redDk}},  fill:{patternType:'solid',fgColor:{rgb:BG.red}},   alignment:{horizontal:'center'}},
+      netPos:{font:{bold:true,sz:11,color:{rgb:BG.greenDk}}, numFmt:'#,##0', fill:{patternType:'solid',fgColor:{rgb:BG.green}}, alignment:{horizontal:'right'}},
+      netNeg:{font:{bold:true,sz:11,color:{rgb:BG.redDk}},   numFmt:'#,##0', fill:{patternType:'solid',fgColor:{rgb:BG.red}},  alignment:{horizontal:'right'}},
+      pos:   function(e){return {numFmt:'#,##0', font:{color:{rgb:BG.greenDk}}, fill:{patternType:'solid',fgColor:{rgb:e?BG.lblue:BG.white}}, alignment:{horizontal:'right'}};},
+      neg:   function(e){return {numFmt:'#,##0', font:{color:{rgb:BG.redDk}},   fill:{patternType:'solid',fgColor:{rgb:e?BG.lblue:BG.white}}, alignment:{horizontal:'right'}};},
+      pct:   function(e){return {numFmt:'0.0', fill:{patternType:'solid',fgColor:{rgb:e?BG.lblue:BG.white}}, alignment:{horizontal:'center'}};},
+    };
 
-    // --- Sheet 2: Project Summary ---
-    const projH = ['ID','NAMA','KLIEN','STATUS','NILAI_CONTRACT','MASUK','KELUAR','LABA','MARGIN_%','TGL_MULAI'];
-    const projRows = state.projects.map(p => {
-      const cf = getProjCF(p.NAMA);
-      const masuk = cf.masuk||0, keluar = cf.keluar||0;
-      const laba = masuk - keluar;
-      const margin = masuk ? Math.round(laba/masuk*100*10)/10 : 0;
-      return [p.ID, p.NAMA, p.KLIEN||'', p.STATUS||'', Number(p.NILAI_CONTRACT)||0, masuk, keluar, laba, margin, p.TGL_MULAI||''];
-    });
-    const wsProj = XLSX.utils.aoa_to_sheet([projH, ...projRows]);
-    wsProj['!cols'] = [8,24,18,10,16,14,14,14,10,12].map(w=>({wch:w}));
-    XLSX.utils.book_append_sheet(wb, wsProj, 'Project');
+    function C(v,s){
+      if(v===null||v===undefined) return {v:'',t:'z',s:s||{}};
+      return {v:v, t:typeof v==='number'?'n':'s', s:s||{}};
+    }
+    function eRow(n){ return Array.from({length:n},function(){return C('');}); }
+    function makeWS(rows,colW,merges){
+      var ws={};
+      rows.forEach(function(row,r){
+        (row||[]).forEach(function(cell,c){
+          var ref=XLSX.utils.encode_cell({r:r,c:c});
+          ws[ref]=(cell&&typeof cell==='object'&&'t'in cell)?cell:C(cell);
+        });
+      });
+      var lastR=rows.length-1;
+      var lastC=Math.max(0,...rows.map(function(r){return (r||[]).length-1;}));
+      ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:lastR,c:lastC}});
+      if(colW)   ws['!cols']=colW.map(function(w){return {wch:w};});
+      if(merges) ws['!merges']=merges;
+      return ws;
+    }
 
-    // --- Sheet 3: Piutang ---
-    const piuH = ['ID','PROJECT','KLIEN','TERMIN','NOMINAL','JATUH_TEMPO','STATUS','TGL_BAYAR','REKENING','NOTES'];
-    const piuRows = state.piutang
-      .slice().sort((a,b)=>(a.JATUH_TEMPO||'').localeCompare(b.JATUH_TEMPO||''))
-      .map(p => piuH.map(h => p[h]!==undefined ? p[h] : ''));
-    const wsPiu = XLSX.utils.aoa_to_sheet([piuH, ...piuRows]);
-    wsPiu['!cols'] = [8,20,16,16,14,12,8,12,18,30].map(w=>({wch:w}));
-    XLSX.utils.book_append_sheet(wb, wsPiu, 'Piutang');
-
-    // --- Sheet 4: Kasbon ---
-    const kbH = ['ID','TANGGAL','KARYAWAN','JENIS','NOMINAL','METODE','REKENING','NOTES','CREATED_AT'];
-    const kbRows = state.kasbon
-      .slice().sort((a,b)=>(a.TANGGAL||'').localeCompare(b.TANGGAL||''))
-      .map(k => kbH.map(h => k[h]!==undefined ? k[h] : ''));
-    const wsKb = XLSX.utils.aoa_to_sheet([kbH, ...kbRows]);
-    wsKb['!cols'] = [8,10,16,10,14,12,18,30,18].map(w=>({wch:w}));
-    XLSX.utils.book_append_sheet(wb, wsKb, 'Kasbon');
-
-    // --- Sheet 5: Cicilan ---
-    const cicH = ['ID','TANGGAL_BELI','CC','DESKRIPSI','NOMINAL_POKOK','BUNGA_TOTAL','TENOR','NOMINAL_PER_BULAN','TGL_MULAI','TENOR_TERBAYAR','STATUS','PROJECT','KATEGORI'];
-    const cicRows = state.cicilan
-      .slice().sort((a,b)=>(a.TANGGAL_BELI||'').localeCompare(b.TANGGAL_BELI||''))
-      .map(c => cicH.map(h => c[h]!==undefined ? c[h] : ''));
-    const wsCic = XLSX.utils.aoa_to_sheet([cicH, ...cicRows]);
-    wsCic['!cols'] = [8,12,20,24,14,12,8,16,12,12,8,18,16].map(w=>({wch:w}));
-    XLSX.utils.book_append_sheet(wb, wsCic, 'Cicilan');
-
-    // --- Sheet 6: Saldo Rekening ---
-    const totBank = state.banks.reduce((s,b)=>s+getSaldo(b.NAMA),0);
-    const totRes = Object.values(state.reserveFunds||{}).reduce((s,v)=>s+v,0);
-    const saldoRows = [
-      ['REKENING','TIPE','BANK','SALDO'],
-      ...state.banks.map(b => [b.NAMA, 'Bank', b.BANK||'', getSaldo(b.NAMA)]),
-      [],
-      ['KARTU KREDIT','BANK','LIMIT','TAGIHAN BERJALAN','RESERVE'],
-      ...state.ccs.map(c => [c.NAMA, c.BANK||'', Number(c.LIMIT)||0, getCCOut(c.NAMA), (state.reserveFunds||{})[c.NAMA]||0]),
-      [],
-      ['RINGKASAN','','',''],
-      ['Total Saldo Bank','','', totBank],
-      ['Total Reserve CC','','', totRes],
-      ['Net Cash (bebas)','','', totBank - totRes],
-      ['Export per','','', today],
-      ['Catatan','','', 'Transaksi = ' + state.txns.length + ' baris (±120 hari termuat). Untuk data penuh, muat lebih lama dulu.'],
+    // ── SHEET 1: TRANSAKSI ───────────────────────────────────────────────────
+    var txnData=state.txns.slice().sort(function(a,b){return (a.TANGGAL||'').localeCompare(b.TANGGAL||'');});
+    var nT=8;
+    var txnRows=[
+      [C('LAPORAN TRANSAKSI — Arthabumi',ST.title)].concat(Array.from({length:nT-1},function(){return C('',ST.title);})),
+      [C('Diekspor: '+today+'  |  '+txnData.length+' transaksi  |  Periode: '+(txnData[0]?txnData[0].TANGGAL:'—')+' s/d '+(txnData[txnData.length-1]?txnData[txnData.length-1].TANGGAL:'—')+'  |  ±120 hari termuat',ST.info)].concat(Array.from({length:nT-1},function(){return C('',ST.info);})),
+      eRow(nT),
+      ['Tanggal','Jenis','Project','Rekening','Kategori','Nominal','Keterangan','Tipe Log'].map(function(h,i){return C(h,i===5?ST.hdrR:ST.hdr);}),
     ];
-    const wsSaldo = XLSX.utils.aoa_to_sheet(saldoRows);
-    wsSaldo['!cols'] = [24,10,14,18,18].map(w=>({wch:w}));
-    XLSX.utils.book_append_sheet(wb, wsSaldo, 'Saldo');
+    txnData.forEach(function(t,i){
+      var e=i%2===0, nom=Number(t.NOMINAL)||0, j=t.JENIS||'';
+      txnRows.push([
+        C(t.TANGGAL||'',  e?ST.ce:ST.co),
+        C(j, j==='Pemasukan'?ST.lunas:j==='Pengeluaran'?ST.belum:(e?ST.ce:ST.co)),
+        C(t.PROJECT||'',  e?ST.le:ST.lo),
+        C(t.REKENING||'', e?ST.ce:ST.co),
+        C(t.KATEGORI||'', e?ST.le:ST.lo),
+        C(nom, nom>=0?ST.pos(e):ST.neg(e)),
+        C(t.NOTES||'',    e?ST.le:ST.lo),
+        C(t.TIPE_LOG||'', e?ST.ce:ST.co),
+      ]);
+    });
+    var wsTxn=makeWS(txnRows,[12,13,22,20,22,15,35,12],[{s:{r:0,c:0},e:{r:0,c:nT-1}},{s:{r:1,c:0},e:{r:1,c:nT-1}}]);
+    wsTxn['!rows']=[{hpt:24},{hpt:16},{hpt:6},{hpt:20}];
+    XLSX.utils.book_append_sheet(wb,wsTxn,'Transaksi');
 
-    XLSX.writeFile(wb, `FCC-Arthabumi-${today}.xlsx`);
-    showToast('Export berhasil! File tersimpan di Downloads.', 'ok');
-  } catch(e) {
-    console.error('exportToExcel error', e);
-    showToast('Export gagal: ' + e.message, 'error');
+    // ── SHEET 2: PROJECT ─────────────────────────────────────────────────────
+    var projData=state.projects.slice().sort(function(a,b){return (b.TGL_MULAI||'').localeCompare(a.TGL_MULAI||'');});
+    var nP=10;
+    var totM=0, totK=0;
+    projData.forEach(function(p){var cf=getProjCF(p.NAMA);totM+=cf.masuk||0;totK+=cf.keluar||0;});
+    var totL=totM-totK;
+    var projRows=[
+      [C('RINGKASAN PROJECT — Arthabumi',ST.title)].concat(Array.from({length:nP-1},function(){return C('',ST.title);})),
+      [C('Diekspor: '+today+'  |  '+projData.length+' project  |  Total Masuk: Rp '+totM.toLocaleString('id')+'  |  Laba Bersih: Rp '+totL.toLocaleString('id'),ST.info)].concat(Array.from({length:nP-1},function(){return C('',ST.info);})),
+      eRow(nP),
+      ['ID','Nama Project','Klien','Status','Nilai Kontrak','Masuk','Keluar','Laba Bersih','Margin %','Tgl Mulai'].map(function(h,i){return C(h,[4,5,6,7].indexOf(i)>=0?ST.hdrR:ST.hdr);}),
+    ];
+    projData.forEach(function(p,i){
+      var e=i%2===0, cf=getProjCF(p.NAMA);
+      var m=cf.masuk||0, k=cf.keluar||0, lb=m-k;
+      var mg=m?Math.round(lb/m*1000)/10:0;
+      var sts=p.STATUS||'';
+      var stsST=sts==='Selesai'?ST.lunas:sts==='Hold'?ST.hold:sts==='Abaikan'?ST.belum:ST.jalan;
+      projRows.push([
+        C(p.ID||'',                  e?ST.ce:ST.co),
+        C(p.NAMA||'',                e?ST.le:ST.lo),
+        C(p.KLIEN||'',               e?ST.le:ST.lo),
+        C(sts,                       stsST),
+        C(Number(p.NILAI_CONTRACT)||0, e?ST.ne:ST.no),
+        C(m,                         e?ST.ne:ST.no),
+        C(k,                         e?ST.ne:ST.no),
+        C(lb,                        lb>=0?ST.pos(e):ST.neg(e)),
+        C(mg,                        ST.pct(e)),
+        C(p.TGL_MULAI||'',          e?ST.ce:ST.co),
+      ]);
+    });
+    projRows.push(eRow(nP));
+    projRows.push([C('TOTAL',ST.lbl)].concat(Array.from({length:4},function(){return C('',ST.lbl);})).concat([C(totM,ST.val),C(totK,ST.val),C(totL,totL>=0?ST.netPos:ST.netNeg),C('',ST.lbl),C('',ST.lbl)]));
+    var wsProj=makeWS(projRows,[10,26,18,10,16,14,14,15,10,12],[{s:{r:0,c:0},e:{r:0,c:nP-1}},{s:{r:1,c:0},e:{r:1,c:nP-1}}]);
+    XLSX.utils.book_append_sheet(wb,wsProj,'Project');
+
+    // ── SHEET 3: PIUTANG ─────────────────────────────────────────────────────
+    var piuData=state.piutang.slice().sort(function(a,b){return (a.JATUH_TEMPO||'').localeCompare(b.JATUH_TEMPO||'');});
+    var nPi=10;
+    var totPiu=piuData.filter(function(p){return p.STATUS!=='Lunas';}).reduce(function(s,p){return s+Number(p.NOMINAL||0);},0);
+    var piuRows=[
+      [C('LAPORAN PIUTANG — Arthabumi',ST.title)].concat(Array.from({length:nPi-1},function(){return C('',ST.title);})),
+      [C('Diekspor: '+today+'  |  '+piuData.length+' termin  |  Piutang beredar: Rp '+totPiu.toLocaleString('id'),ST.info)].concat(Array.from({length:nPi-1},function(){return C('',ST.info);})),
+      eRow(nPi),
+      ['ID','Project','Klien','Nama Termin','Nominal','Jatuh Tempo','Status','Tgl Bayar','Rekening','Keterangan'].map(function(h,i){return C(h,i===4?ST.hdrR:ST.hdr);}),
+    ];
+    piuData.forEach(function(p,i){
+      var e=i%2===0, sts=p.STATUS||'';
+      var ovd=sts!=='Lunas'&&p.JATUH_TEMPO&&p.JATUH_TEMPO<today;
+      var stsST=sts==='Lunas'?ST.lunas:ovd?ST.overdue:ST.belum;
+      piuRows.push([
+        C(p.ID||'',         e?ST.ce:ST.co),
+        C(p.PROJECT||'',    e?ST.le:ST.lo),
+        C(p.KLIEN||'',      e?ST.le:ST.lo),
+        C(p.TERMIN||'',     e?ST.le:ST.lo),
+        C(Number(p.NOMINAL)||0, e?ST.ne:ST.no),
+        C(p.JATUH_TEMPO||'', ovd?{font:{color:{rgb:BG.redDk}},fill:{patternType:'solid',fgColor:{rgb:e?'FFCDD2':BG.red}},alignment:{horizontal:'center'}}:(e?ST.ce:ST.co)),
+        C(sts,              stsST),
+        C(p.TGL_BAYAR||'', e?ST.ce:ST.co),
+        C(p.REKENING||'',  e?ST.ce:ST.co),
+        C(p.NOTES||'',     e?ST.le:ST.lo),
+      ]);
+    });
+    var wsPiu=makeWS(piuRows,[10,22,16,20,15,12,8,12,18,28],[{s:{r:0,c:0},e:{r:0,c:nPi-1}},{s:{r:1,c:0},e:{r:1,c:nPi-1}}]);
+    XLSX.utils.book_append_sheet(wb,wsPiu,'Piutang');
+
+    // ── SHEET 4: KASBON ──────────────────────────────────────────────────────
+    var kbData=state.kasbon.slice().sort(function(a,b){return (a.KARYAWAN||'').localeCompare(b.KARYAWAN||'')||(a.TANGGAL||'').localeCompare(b.TANGGAL||'');});
+    var nK=8;
+    var kbAgg={};
+    kbData.forEach(function(k){var nm=k.KARYAWAN||'?';if(!kbAgg[nm])kbAgg[nm]={p:0,b:0};if(k.JENIS==='Pinjam')kbAgg[nm].p+=Number(k.NOMINAL||0);else kbAgg[nm].b+=Number(k.NOMINAL||0);});
+    var totBeredar=Object.values(kbAgg).reduce(function(s,v){return s+(v.p-v.b);},0);
+    var kbRows=[
+      [C('LAPORAN KASBON — Arthabumi',ST.title)].concat(Array.from({length:nK-1},function(){return C('',ST.title);})),
+      [C('Diekspor: '+today+'  |  '+Object.keys(kbAgg).length+' karyawan  |  Total beredar: Rp '+totBeredar.toLocaleString('id'),ST.info)].concat(Array.from({length:nK-1},function(){return C('',ST.info);})),
+      eRow(nK),
+      ['ID','Tanggal','Karyawan','Jenis','Nominal','Metode','Rekening','Keterangan'].map(function(h,i){return C(h,i===4?ST.hdrR:ST.hdr);}),
+    ];
+    kbData.forEach(function(k,i){
+      var e=i%2===0, isP=k.JENIS==='Pinjam';
+      kbRows.push([
+        C(k.ID||'',       e?ST.ce:ST.co),
+        C(k.TANGGAL||'',  e?ST.ce:ST.co),
+        C(k.KARYAWAN||'', e?ST.le:ST.lo),
+        C(k.JENIS||'',    isP?ST.belum:ST.lunas),
+        C(Number(k.NOMINAL)||0, isP?ST.neg(e):ST.pos(e)),
+        C(k.METODE||'',   e?ST.ce:ST.co),
+        C(k.REKENING||'', e?ST.ce:ST.co),
+        C(k.NOTES||'',    e?ST.le:ST.lo),
+      ]);
+    });
+    kbRows.push(eRow(nK));
+    kbRows.push([C('SALDO PER KARYAWAN',ST.title)].concat(Array.from({length:nK-1},function(){return C('',ST.title);})));
+    var kbRingR=kbRows.length;
+    kbRows.push(['Karyawan','Total Pinjam','Total Kembali','Sisa Kasbon'].map(function(h){return C(h,ST.hdr);}));
+    Object.entries(kbAgg).sort(function(a,b){return a[0].localeCompare(b[0]);}).forEach(function(entry,i){
+      var nm=entry[0], v=entry[1], e=i%2===0, sisa=v.p-v.b;
+      kbRows.push([C(nm,e?ST.le:ST.lo),C(v.p,e?ST.ne:ST.no),C(v.b,e?ST.ne:ST.no),C(sisa,sisa>0?ST.neg(e):ST.pos(e))]);
+    });
+    var wsKb=makeWS(kbRows,[10,12,18,10,15,12,18,28],[
+      {s:{r:0,c:0},e:{r:0,c:nK-1}},{s:{r:1,c:0},e:{r:1,c:nK-1}},
+      {s:{r:kbRingR-1,c:0},e:{r:kbRingR-1,c:nK-1}}
+    ]);
+    XLSX.utils.book_append_sheet(wb,wsKb,'Kasbon');
+
+    // ── SHEET 5: CICILAN ─────────────────────────────────────────────────────
+    var cicData=state.cicilan.slice().sort(function(a,b){return (b.TANGGAL_BELI||'').localeCompare(a.TANGGAL_BELI||'');});
+    var nC=13;
+    var totPok=cicData.reduce(function(s,c){return s+Number(c.NOMINAL_POKOK||0);},0);
+    var cicRows=[
+      [C('LAPORAN CICILAN CC — Arthabumi',ST.title)].concat(Array.from({length:nC-1},function(){return C('',ST.title);})),
+      [C('Diekspor: '+today+'  |  '+cicData.length+' cicilan  |  Total pokok: Rp '+totPok.toLocaleString('id'),ST.info)].concat(Array.from({length:nC-1},function(){return C('',ST.info);})),
+      eRow(nC),
+      ['ID','Tgl Beli','Kartu Kredit','Deskripsi','Pokok','Bunga','Tenor','Per Bulan','Tgl Mulai','Terbayar','Status','Project','Kategori'].map(function(h,i){return C(h,[4,5,7].indexOf(i)>=0?ST.hdrR:ST.hdr);}),
+    ];
+    cicData.forEach(function(c,i){
+      var e=i%2===0, sts=c.STATUS||'';
+      cicRows.push([
+        C(c.ID||'',                        e?ST.ce:ST.co),
+        C(c.TANGGAL_BELI||'',             e?ST.ce:ST.co),
+        C(c.CC||'',                        e?ST.ce:ST.co),
+        C(c.DESKRIPSI||'',               e?ST.le:ST.lo),
+        C(Number(c.NOMINAL_POKOK)||0,     e?ST.ne:ST.no),
+        C(Number(c.BUNGA_TOTAL)||0,       e?ST.ne:ST.no),
+        C(Number(c.TENOR)||0,             e?ST.ce:ST.co),
+        C(Number(c.NOMINAL_PER_BULAN)||0, e?ST.ne:ST.no),
+        C(c.TGL_MULAI||'',               e?ST.ce:ST.co),
+        C(Number(c.TENOR_TERBAYAR)||0,    e?ST.ce:ST.co),
+        C(sts, sts==='Lunas'?ST.lunas:ST.jalan),
+        C(c.PROJECT||'',                  e?ST.le:ST.lo),
+        C(c.KATEGORI||'',                 e?ST.le:ST.lo),
+      ]);
+    });
+    var wsCic=makeWS(cicRows,[10,12,20,26,14,12,8,14,12,10,8,20,16],[{s:{r:0,c:0},e:{r:0,c:nC-1}},{s:{r:1,c:0},e:{r:1,c:nC-1}}]);
+    XLSX.utils.book_append_sheet(wb,wsCic,'Cicilan');
+
+    // ── SHEET 6: SALDO ───────────────────────────────────────────────────────
+    var nSl=4;
+    var totBankV=state.banks.reduce(function(s,b){return s+getSaldo(b.NAMA);},0);
+    var totResV=Object.values(state.reserveFunds||{}).reduce(function(s,v){return s+v;},0);
+    var netCash=totBankV-totResV;
+    var sldRows=[
+      [C('POSISI SALDO — Arthabumi',ST.title)].concat(Array.from({length:nSl-1},function(){return C('',ST.title);})),
+      [C('Diekspor: '+today,ST.info)].concat(Array.from({length:nSl-1},function(){return C('',ST.info);})),
+      eRow(nSl),
+      ['Rekening Bank','Tipe','Bank','Saldo'].map(function(h,i){return C(h,i===3?ST.hdrR:ST.hdr);}),
+    ];
+    state.banks.forEach(function(b,i){
+      var e=i%2===0, sal=getSaldo(b.NAMA);
+      sldRows.push([C(b.NAMA||'',e?ST.le:ST.lo),C('Bank',e?ST.ce:ST.co),C(b.BANK||'',e?ST.ce:ST.co),C(sal,sal>=0?ST.pos(e):ST.neg(e))]);
+    });
+    sldRows.push(eRow(nSl));
+    sldRows.push(['Kartu Kredit','Bank','Limit','Tagihan'].map(function(h,i){return C(h,i>=2?ST.hdrR:ST.hdr);}));
+    state.ccs.forEach(function(c,i){
+      var e=i%2===0, tag=getCCOut(c.NAMA);
+      sldRows.push([C(c.NAMA||'',e?ST.le:ST.lo),C(c.BANK||'',e?ST.ce:ST.co),C(Number(c.LIMIT)||0,e?ST.ne:ST.no),C(tag,tag>0?ST.neg(e):(e?ST.ne:ST.no))]);
+    });
+    sldRows.push(eRow(nSl));
+    var ringSumRow=sldRows.length;
+    sldRows.push([C('RINGKASAN KAS',ST.title)].concat(Array.from({length:nSl-1},function(){return C('',ST.title);})));
+    sldRows.push([C('Total Saldo Bank',ST.lbl),C('',ST.lbl),C('',ST.lbl),C(totBankV,ST.val)]);
+    sldRows.push([C('Total Reserve CC',ST.lbl),C('',ST.lbl),C('',ST.lbl),C(totResV,ST.val)]);
+    sldRows.push([C('Net Cash (Kas Bebas)',ST.lbl),C('',ST.lbl),C('',ST.lbl),C(netCash,netCash>=0?ST.netPos:ST.netNeg)]);
+    var wsSld=makeWS(sldRows,[26,10,16,18],[
+      {s:{r:0,c:0},e:{r:0,c:nSl-1}},
+      {s:{r:1,c:0},e:{r:1,c:nSl-1}},
+      {s:{r:ringSumRow,c:0},e:{r:ringSumRow,c:nSl-1}}
+    ]);
+    wsSld['!rows']=[{hpt:24},{hpt:16}];
+    XLSX.utils.book_append_sheet(wb,wsSld,'Saldo');
+
+    XLSX.writeFile(wb,'FCC-Arthabumi-'+today+'.xlsx');
+    showToast('Export berhasil! File tersimpan di Downloads.','ok');
+  } catch(e){
+    console.error('exportToExcel error',e);
+    showToast('Export gagal: '+e.message,'error');
   }
 }
 // ─────────────────────────────────────────────────────────────────────────────
