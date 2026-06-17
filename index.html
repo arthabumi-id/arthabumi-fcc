@@ -2081,6 +2081,15 @@ async function doPayCicilanExec(id){
     if(res&&res.error){showToast('Gagal: '+res.error,'error');return;}
     await syncAll();
     showToast('Angsuran ke-'+(terbayar+1)+' dibayar dari '+hold+' ✓','success');
+    // Jika cicilan lunas, clear juga ccbill reminder
+    if(terbayar+1>=(+c.TENOR||0)){
+      var bill2=(state.ccbills||[]).find(function(b){return b.CC===c.CC&&String(b.STATUS||'Aktif')!=='Lunas';});
+      if(bill2){
+        state.ccbills=(state.ccbills||[]).filter(function(x){return x.ID!==bill2.ID;});
+        if(API_URL)bgPost({action:'deleteRow',data:{sheet:'CC_TAGIHAN',id:bill2.ID}},'Auto-hapus pengingat cicilan lunas');
+        saveLocal();
+      }
+    }
   } else {
     c.TENOR_TERBAYAR=terbayar+1; if(c.TENOR_TERBAYAR>=tenor)c.STATUS='Lunas';
     state.reserveFunds[c.CC]=Math.max(0,(state.reserveFunds[c.CC]||0)-amt);
@@ -3514,8 +3523,17 @@ async function saveDrawer() {
       if(API_URL)await apiPost({action:'addTransfer',data:{TANGGAL:tgl,DARI:bank,KE:ccName,NOMINAL:nominal,NOTES:notes||'Bayar CC',USER:state.user}});
       showToast('Bayar '+ccName+' '+fmt(nominal)+' dari '+bank+' ✓','success');
     }
+    // Auto-clear ccbill reminder untuk CC ini
+    (function(){
+      var bill=(state.ccbills||[]).find(function(b){return b.CC===ccName&&String(b.STATUS||'Aktif')!=='Lunas';});
+      if(bill){
+        state.ccbills=(state.ccbills||[]).filter(function(x){return x.ID!==bill.ID;});
+        if(API_URL)bgPost({action:'deleteRow',data:{sheet:'CC_TAGIHAN',id:bill.ID}},'Auto-hapus pengingat tagihan CC');
+        saveLocal();
+      }
+    })();
     closeDrawer();
-    if(API_URL)await syncAll(); else { renderMaster(); renderDashboard(); }
+    if(API_URL)await syncAll(); else { renderMaster(); renderDashboard(); renderCCBillReminder(); }
     return;
   }
   closeDrawer();
