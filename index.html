@@ -167,6 +167,35 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
 .detail-sum-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.3px}
 .detail-sum-val{font-size:14px;font-weight:700;margin-top:3px}
 </style>
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="FCC Arthabumi">
+<meta name="theme-color" content="#1F4E79">
+<script>
+(function(){
+  // Dynamic app icon
+  var cv=document.createElement('canvas'); cv.width=cv.height=180;
+  var c=cv.getContext('2d');
+  c.beginPath(); c.roundRect(0,0,180,180,28); c.fillStyle='#1F4E79'; c.fill();
+  c.fillStyle='#fff'; c.font='bold 52px sans-serif'; c.textAlign='center'; c.textBaseline='middle';
+  c.fillText('FCC',90,78);
+  c.font='bold 22px sans-serif'; c.fillStyle='#90CAF9';
+  c.fillText('Arthabumi',90,118);
+  var lnk=document.createElement('link'); lnk.rel='apple-touch-icon'; lnk.href=cv.toDataURL();
+  document.head.appendChild(lnk);
+  // Manifest blob for Android Chrome
+  try{
+    var mf={name:'FCC Arthabumi',short_name:'FCC',display:'standalone',
+      background_color:'#F5F6FA',theme_color:'#1F4E79',
+      start_url:location.href.split('?')[0],
+      icons:[{src:cv.toDataURL(),sizes:'180x180',type:'image/png'}]};
+    var blob=new Blob([JSON.stringify(mf)],{type:'application/manifest+json'});
+    var mlink=document.createElement('link'); mlink.rel='manifest';
+    mlink.href=URL.createObjectURL(blob); document.head.appendChild(mlink);
+  }catch(e){}
+})();
+</script>
 </head>
 <body>
 
@@ -4339,7 +4368,83 @@ function exportHTMLReport() {
     var cicMon=state.cicilan.filter(function(c){return c.STATUS!=='Lunas';}).reduce(function(s,c){return s+Number(c.NOMINAL_PER_BULAN||0);},0);
     var avgMonIn=mKeys.length>0?totIncomeAll/mKeys.length:0;
     if(cicMon>0&&avgMonIn>0){var cicPct=Math.round(cicMon/avgMonIn*100);if(cicPct>20){insights.push({l:'y',t:'Cicilan CC '+cicPct+'% dari Rata-rata Income Bulanan',b:'Total cicilan Rp '+fmtN(cicMon)+'/bulan. Jika >20% income rata-rata, pertimbangkan pelunasan lebih cepat untuk potong beban bunga CC 2-3%/bulan.'});}}
-    // Render insights panel
+    // ── Deep analysis computations ──────────────────────────────────────────
+    // Build kategori→kelompok map
+    var k2g={};state.kategori.forEach(function(k){k2g[k.NAMA]=k.KELOMPOK;});
+    // Burn rate & runway
+    var avgBurn=mKeys.length>0?mKeys.reduce(function(s,m){return s+(mAgg[m].keluar||0);},0)/mKeys.length:0;
+    var runway=avgBurn>0?Math.round(netCash/avgBurn*10)/10:999;
+    // DSO
+    var dso=avgMonIn>0?Math.round(totPiu/avgMonIn*30):0;
+    // Net margin across all months
+    var totAllOut=mKeys.reduce(function(s,m){return s+(mAgg[m].keluar||0);},0);
+    var netMarginPct=totIncomeAll>0?Math.round((totIncomeAll-totAllOut)/totIncomeAll*100):0;
+    // Working capital ratio
+    var hardLiab=(cicMon*6)+totKasbon;
+    var wcr=hardLiab>0?Math.round((netCash+totPiu)/hardLiab*10)/10:99;
+    // Revenue velocity: compare last 3 months avg vs prev 3 months avg
+    var rev3=0,rev3p=0;
+    if(mKeys.length>=6){
+      var last3=mKeys.slice(-3),prev3=mKeys.slice(-6,-3);
+      rev3=last3.reduce(function(s,m){return s+(mAgg[m].masuk||0);},0)/3;
+      rev3p=prev3.reduce(function(s,m){return s+(mAgg[m].masuk||0);},0)/3;
+    }
+    // Project type ROI
+    var typeRoi={};
+    state.txns.forEach(function(t){
+      if(!t.PROJECT) return;
+      var grp=k2g[t.KATEGORI]||'LAINNYA';
+      if(!typeRoi[grp]) typeRoi[grp]={m:0,k:0};
+      if(t.JENIS==='Pemasukan') typeRoi[grp].m+=Number(t.NOMINAL||0);
+      else typeRoi[grp].k+=Number(t.NOMINAL||0);
+    });
+    // Piutang >60 days
+    var veryOvd=state.piutang.filter(function(p){
+      if(p.STATUS==='Lunas'||!p.JATUH_TEMPO) return false;
+      var diff=(new Date(today)-new Date(p.JATUH_TEMPO))/(1000*60*60*24);
+      return diff>60;
+    });
+    // Projects with spending but zero income (cost sinkholes)
+    var sinkProj=projPerf2.filter(function(p){return p.m===0&&p.lb<0;});
+    // Best income month pattern
+    var bestMon=mKeys.length>0?mKeys.reduce(function(a,b){return (mAgg[a].masuk||0)>(mAgg[b].masuk||0)?a:b;}):null;
+    var worstMon=mKeys.length>1?mKeys.reduce(function(a,b){return (mAgg[a].masuk||0)<(mAgg[b].masuk||0)?a:b;}):null;
+    // ── Additional insight rules ──────────────────────────────────────────────
+    // DSO
+    if(dso>0&&dso>45){insights.push({l:'r',t:'DSO '+dso+' Hari — Piutang Lambat Dibayar',b:'Rata-rata piutang baru cair setelah '+dso+' hari (ideal <30 hari). Terapkan syarat pembayaran ketat: DP 50% + progress billing + pelunasan sebelum serah terima. Pertimbangkan diskon 1-2% untuk klien bayar cepat.'});}
+    else if(dso>30){insights.push({l:'y',t:'DSO '+dso+' Hari — Bisa Dipercepat',b:'Piutang rata-rata cair dalam '+dso+' hari. Target <30 hari. Kirim invoice segera setelah milestone, bukan di akhir project.'});}
+    // Revenue velocity
+    if(rev3>0&&rev3p>0){
+      var velPct=Math.round((rev3-rev3p)/rev3p*100);
+      if(velPct>20){insights.push({l:'g',t:'Revenue Tren Naik +'+velPct+'% (3 Bulan Terakhir)',b:'Rata-rata income 3 bulan terakhir Rp '+fmtN(Math.round(rev3))+' vs 3 bulan sebelumnya Rp '+fmtN(Math.round(rev3p))+'. Momentum bagus — jaga pipeline agar tidak putus.'});}
+      else if(velPct<-20){insights.push({l:'r',t:'Revenue Tren Turun '+velPct+'% (3 Bulan Terakhir)',b:'Rata-rata income 3 bulan terakhir Rp '+fmtN(Math.round(rev3))+' turun dari Rp '+fmtN(Math.round(rev3p))+'. Prioritaskan closing prospek atau tambah referral marketing sekarang.'});}
+    }
+    // Working capital
+    if(wcr!==99&&wcr<1){insights.push({l:'r',t:'Working Capital Ratio '+wcr+' (Di Bawah 1)',b:'Aset lancar (kas+piutang) < kewajiban jangka pendek. Risiko tidak bisa bayar cicilan/kasbon jika piutang macet. Segera tagih piutang dan tunda pembelian tidak mendesak.'});}
+    else if(wcr!==99&&wcr>=2){insights.push({l:'g',t:'Working Capital Ratio '+wcr+' — Sangat Sehat',b:'Aset lancar '+(wcr)+'× lebih besar dari kewajiban. Likuiditas kuat. Pertimbangkan investasi modal (tools, marketing) untuk percepat pertumbuhan.'});}
+    // Very overdue piutang
+    if(veryOvd.length>0){
+      var vAmt=veryOvd.reduce(function(s,p){return s+Number(p.NOMINAL||0);},0);
+      insights.push({l:'r',t:veryOvd.length+' Piutang >60 Hari — Risiko Gagal Bayar',b:'Total Rp '+fmtN(vAmt)+' sudah >60 hari lewat jatuh tempo. Eskalasi ke jalur hukum/mediasi jika negosiasi gagal. Ini kategori "bad debt risk" — provisi kerugian perlu disiapkan.'});
+    }
+    // Cost sinkholes
+    if(sinkProj.length>0){insights.push({l:'y',t:sinkProj.length+' Project Keluar Biaya Tanpa Pemasukan',b:'Project: '+sinkProj.slice(0,3).map(function(p){return p.nama;}).join(', ')+(sinkProj.length>3?'...':'')+'. Pastikan termin pembayaran sudah ditagih atau cek apakah progress billing tertunda.'});}
+    // Idle cash alert
+    if(avgBurn>0&&netCash>avgBurn*4){insights.push({l:'y',t:'Kas Idle Lebih dari 4× Burn Rate',b:'Kas bebas Rp '+fmtN(netCash)+' vs burn rate Rp '+fmtN(Math.round(avgBurn))+'/bulan. Kas idle terlalu besar tidak produktif. Pertimbangkan: modal kerja tambahan, beli tools, atau deposito untuk yield 4-5% p.a.'});}
+    // Net margin
+    if(netMarginPct<10&&totIncomeAll>0){insights.push({l:'r',t:'Net Margin Bisnis Hanya '+netMarginPct+'%',b:'Total pemasukan Rp '+fmtN(totIncomeAll)+' dengan net margin '+netMarginPct+'%. Bisnis konstruksi/interior sehat di 20-30% net. Review struktur biaya — overhead, material mark-up, dan harga jual.'});}
+    else if(netMarginPct>=20&&totIncomeAll>0){insights.push({l:'g',t:'Net Margin '+netMarginPct+'% — Di Atas Industri',b:'Net margin '+netMarginPct+'% di atas rata-rata industri konstruksi/interior (15-20%). Efisiensi cost control baik — pertahankan seleksi vendor dan negosiasi material.'});}
+    // Runway
+    if(runway<2){insights.push({l:'r',t:'Runway Hanya '+runway+' Bulan',b:'Kas bebas hanya cukup '+runway+' bulan burn rate. KRITIS — segera close project baru atau percepat penagihan piutang untuk menghindari krisis likuiditas.'});}
+    else if(runway>6){insights.push({l:'g',t:'Runway '+runway+' Bulan — Aman',b:'Kas cukup menutup '+runway+' bulan pengeluaran. Posisi likuiditas kuat untuk ambil project besar atau invest di kapasitas produksi.'});}
+    // Seasonality tip
+    if(bestMon&&worstMon&&bestMon!==worstMon){
+      var bp=bestMon.split('-'),wp=worstMon.split('-');
+      var mNm=['','Jan','Feb','Mar','Apr','Mei','Jun','Jul','Ags','Sep','Okt','Nov','Des'];
+      var bLabel=mNm[parseInt(bp[1])]+' '+bp[0],wLabel=mNm[parseInt(wp[1])]+' '+wp[0];
+      insights.push({l:'y',t:'Pola Musiman: Terbaik '+bLabel+', Terlemah '+wLabel,b:'Dari data yang ada, pemasukan tertinggi di '+bLabel+' (Rp '+fmtN(mAgg[bestMon].masuk||0)+') dan terendah di '+wLabel+' (Rp '+fmtN(mAgg[worstMon].masuk||0)+'). Mulai pipeline 2-3 bulan sebelum bulan lemah untuk smoothing cashflow.'});
+    }
+        // Render insights panel
     if(insights.length>0){
       H+='<div class="panel" style="border-top:4px solid #1F4E79;margin-top:4px">';
       H+='<h2 style="color:#1F4E79">💡 Analisis &amp; Saran Keuangan <span>dihitung otomatis dari data Anda</span></h2>';
@@ -4355,7 +4460,49 @@ function exportHTMLReport() {
       });
       H+='</div>';
     }
-    H+='<div style="text-align:center;color:#9AA5B4;font-size:11px;padding:8px 0">FCC Arthabumi · '+today+'</div>';
+    // ── KPI Metrics Grid ─────────────────────────────────────────────────────
+    H+='<div class="panel" style="border-top:4px solid #2E7D32;margin-top:4px">';
+    H+='<h2 style="color:#2E7D32">📊 Financial KPI Dashboard <span>metrik kunci bisnis Anda</span></h2>';
+    H+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:14px">';
+    // Helper for KPI card
+    function kpiCard(label, val, sub, col){
+      H+='<div style="background:'+col+'15;border:1px solid '+col+'40;border-radius:8px;padding:10px 12px">';
+      H+='<div style="font-size:10px;color:#6B7C93;font-weight:600;text-transform:uppercase;letter-spacing:.5px">'+label+'</div>';
+      H+='<div style="font-size:20px;font-weight:800;color:'+col+';margin:4px 0 2px">'+val+'</div>';
+      H+='<div style="font-size:10px;color:#9AA5B4;line-height:1.4">'+sub+'</div>';
+      H+='</div>';
+    }
+    kpiCard('Burn Rate',fmtN(Math.round(avgBurn)),'rata-rata pengeluaran/bulan','#E65100');
+    kpiCard('Runway',(runway>=99?'∞':runway+' bln'),'berapa lama kas bertahan','#1565C0');
+    kpiCard('DSO',(dso>0?dso+' hari':'—'),'rata-rata hari piutang cair','#6A1B9A');
+    kpiCard('Net Margin',(totIncomeAll>0?netMarginPct+'%':'—'),'(total income - total keluar)','#2E7D32');
+    kpiCard('Working Capital',(wcr>=99?'—':wcr+'×'),'aset lancar ÷ kewajiban jk pendek','#00695C');
+    kpiCard('Total Revenue',fmtN(totIncomeAll),'seluruh periode data','#1F4E79');
+    kpiCard('Total Piutang',fmtN(totPiu),'belum lunas','#C62828');
+    kpiCard('Avg Project',projPerf2.length>0?fmtN(Math.round(projPerf2.reduce(function(s,p){return s+p.m;},0)/projPerf2.length)):'—','rata-rata nilai per project','#F57F17');
+    H+='</div>';
+    // Project type ROI table
+    var typeKeys=Object.keys(typeRoi).filter(function(k){return typeRoi[k].m>0||typeRoi[k].k>0;});
+    if(typeKeys.length>0){
+      H+='<div style="font-weight:700;font-size:12px;color:#2E7D32;margin-bottom:6px">ROI per Kelompok Pekerjaan</div>';
+      H+='<table style="width:100%;border-collapse:collapse;font-size:11px">';
+      H+='<tr style="background:#E8F5E9"><th style="padding:6px 10px;text-align:left;color:#2E7D32">Kelompok</th><th class="r" style="padding:6px 10px;color:#2E7D32">Pemasukan</th><th class="r" style="padding:6px 10px;color:#2E7D32">Pengeluaran</th><th class="r" style="padding:6px 10px;color:#2E7D32">Laba</th><th class="r" style="padding:6px 10px;color:#2E7D32">Margin</th></tr>';
+      typeKeys.sort(function(a,b){return (typeRoi[b].m-typeRoi[b].k)-(typeRoi[a].m-typeRoi[a].k);}).forEach(function(k,i){
+        var r=typeRoi[k],lb=r.m-r.k,mg=r.m>0?Math.round(lb/r.m*100):0;
+        var bg=i%2===0?'#F9FBE7':'#FFF';
+        H+='<tr style="background:'+bg+'">';
+        H+='<td style="padding:5px 10px;font-weight:600">'+esc(k)+'</td>';
+        H+='<td class="r" style="padding:5px 10px;color:#1565C0">'+fmtN(r.m)+'</td>';
+        H+='<td class="r" style="padding:5px 10px;color:#C62828">'+fmtN(r.k)+'</td>';
+        H+='<td class="r" style="padding:5px 10px;font-weight:700;color:'+(lb>=0?'#2E7D32':'#C62828')+'">'+fmtN(lb)+'</td>';
+        H+='<td class="r" style="padding:5px 10px;color:'+(mg>=20?'#2E7D32':mg>=10?'#E65100':'#C62828')+';font-weight:700">'+mg+'%</td>';
+        H+='</tr>';
+      });
+      H+='</table>';
+    }
+    H+='</div>';
+    
+        H+='<div style="text-align:center;color:#9AA5B4;font-size:11px;padding:8px 0">FCC Arthabumi · '+today+'</div>';
     H+='</div>'; // .page
 
     // ── Scripts ───────────────────────────────────────────────────────────────
