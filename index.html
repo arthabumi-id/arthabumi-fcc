@@ -4194,7 +4194,7 @@ function exportHTMLReport() {
     H+='@media print{.topbar{display:none!important;}.page{padding-top:0!important;}.gr2{grid-template-columns:1fr 1fr;}.detail-row{display:table-row!important;}}';
     H+='.tbl-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;width:100%;}';
     H+='@media(max-width:640px){';
-    H+='.page{padding:10px 8px!important;max-width:100vw!important;}';
+    H+='.page{padding:84px 8px 20px!important;max-width:100vw!important;}';
     H+='.panel{padding:12px 10px!important;border-radius:6px!important;margin-bottom:10px!important;}';
     H+='h2{font-size:12px!important;}h2 span{font-size:10px!important;}';
     H+='.topbar h1{font-size:13px!important;}.topbar span{font-size:10px!important;}';
@@ -4562,6 +4562,10 @@ function exportHTMLReport() {
     H+='wrap.appendChild(tbl);';
     H+='}else{var em=document.createElement("div");em.style.cssText="padding:8px;color:#9AA5B4;font-size:11px";em.textContent="Tidak ada transaksi bulan ini.";wrap.appendChild(em);}';
     H+='body.appendChild(wrap);}';
+        H+='(function(){var tb=document.querySelector(".topbar"),pg=document.querySelector(".page");';
+    H+='function adj(){if(tb&&pg)pg.style.paddingTop=(tb.offsetHeight+8)+"px";}';
+    H+='adj();window.addEventListener("resize",adj);';
+    H+='})();';
         H+='document.querySelectorAll("table").forEach(function(t){';
     H+='if(!t.closest(".tbl-scroll")){var w=document.createElement("div");w.className="tbl-scroll";t.parentNode.insertBefore(w,t);w.appendChild(t);}';
     H+='});';
