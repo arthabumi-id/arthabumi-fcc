@@ -4208,7 +4208,10 @@ function exportHTMLReport() {
         H+='</style></head><body>';
 
     H+='<div class="topbar"><div><h1>Arthabumi — Laporan Keuangan</h1><span>'+today+' · '+state.txns.length+' transaksi</span></div>';
-    H+='<button onclick="window.print()">🖨 Print / PDF</button></div>';
+    H+='<div style="display:flex;gap:8px;align-items:center">';
+    H+='<button onclick="window.print()">🖨 Print / PDF</button>';
+    H+='<button onclick="try{window.close();}catch(e){history.back();}" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.4);padding:6px 12px;border-radius:6px;font-size:12px;cursor:pointer">✕ Tutup</button>';
+    H+='</div></div>';
     H+='<div class="page">';
 
     // ── Summary cards ─────────────────────────────────────────────────────────
