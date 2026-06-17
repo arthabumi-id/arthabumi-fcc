@@ -905,14 +905,30 @@ function updateRow(ss, data) {
 }
 
 function deleteRow(ss, data) {
-  const { sheet: sheetName, id } = data;
+  const { sheet: sheetName, id, cc } = data; // cc = fallback untuk CC_TAGIHAN
   const sheet = ss.getSheetByName(sheetName);
-  const all = sheet.getRange(1, 1, sheet.getLastRow(), sheet.getLastColumn()).getValues();
+  if (!sheet) return { ok: true }; // sheet tidak ada → anggap sudah terhapus
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return { ok: true }; // kosong / hanya header
+  const all = sheet.getRange(1, 1, lastRow, sheet.getLastColumn()).getValues();
   const idCol = all[0].indexOf('ID');
-  for (let i = 1; i < all.length; i++) {
-    if (String(all[i][idCol]) === String(id)) { sheet.deleteRow(i + 1); return { ok: true }; }
+  if (idCol === -1) return { error: 'Kolom ID tidak ditemukan di sheet ' + sheetName };
+  // Cari by ID dulu
+  if (id) {
+    for (let i = 1; i < all.length; i++) {
+      if (String(all[i][idCol]) === String(id)) { sheet.deleteRow(i + 1); return { ok: true }; }
+    }
   }
-  return { error: 'Row not found' };
+  // Fallback: untuk CC_TAGIHAN, cari by CC name kalau ID tidak ketemu (state stale)
+  if (cc && sheetName === S.CCBILL) {
+    const ccCol = all[0].indexOf('CC');
+    if (ccCol !== -1) {
+      for (let i = all.length - 1; i >= 1; i--) {
+        if (String(all[i][ccCol]) === String(cc)) { sheet.deleteRow(i + 1); return { ok: true }; }
+      }
+    }
+  }
+  return { ok: true }; // idempotent: row tidak ada = sudah terhapus
 }
 
 // ── v20: penanda manual reserve per transaksi + util kolom ──────────────────

@@ -1018,7 +1018,7 @@ function renderDashboard() {
           const lbl = dd===null?'':(dd<0?`<span style="color:var(--red)">lewat ${Math.abs(dd)} hr</span>`:dd===0?`<span style="color:var(--red)">hari ini</span>`:`<span style="color:var(--amber)">${dd} hr lagi</span>`);
           billStrip = `<div style="width:100%;margin-top:8px;padding:7px 9px;border-radius:8px;background:#1a1206;border:1px solid #f59e0b40;display:flex;align-items:center;justify-content:space-between;gap:8px">
             <div style="min-width:0"><div style="font-size:12px;font-weight:700;color:var(--amber)">Tagihan ${fmt(bill.NOMINAL)}</div><div style="font-size:10px;color:var(--text3)">jth tempo ${due||'—'} · ${lbl}</div></div>
-            <div style="display:flex;gap:5px;flex-shrink:0"><button class="btn-danger" style="background:#0a2a1e;color:var(--green);border-color:#2dd4a040" onclick="event.stopPropagation();payCCFromReminder('${esc(c.NAMA)}')">Bayar</button><button class="btn-danger" onclick="event.stopPropagation();clearCCBill('${bill.ID}')">Lunas</button></div>
+            <div style="display:flex;gap:5px;flex-shrink:0"><button class="btn-danger" style="background:#0a2a1e;color:var(--green);border-color:#2dd4a040" onclick="event.stopPropagation();payCCFromReminder('${esc(c.NAMA)}')">Bayar</button><button class="btn-danger" onclick="event.stopPropagation();clearCCBill('${bill.ID}','${esc(bill.CC||c.NAMA||'')}')">Lunas</button></div>
           </div>`;
         }
         return `<div class="list-item" style="flex-wrap:wrap;cursor:pointer" onclick="openAccountDetail('cc','${esc(c.NAMA)}')">
@@ -1477,7 +1477,7 @@ function renderCCBillReminder(){
         <div style="min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(b.CC)}</div><div style="font-size:10px;color:var(--text3)">${due||'—'} · ${lbl}</div></div>
         <div style="display:flex;align-items:center;gap:6px;flex-shrink:0"><span style="font-size:13px;font-weight:700;color:var(--red)">${fmt(b.NOMINAL)}</span>
           <button class="btn-danger" style="background:#0a2a1e;color:var(--green);border-color:#2dd4a040" onclick="payCCFromReminder('${esc(b.CC)}')">Bayar</button>
-          <button class="btn-danger" onclick="clearCCBill('${b.ID}')">Lunas</button></div>
+          <button class="btn-danger" onclick="clearCCBill('${b.ID}','${esc(b.CC||'')}')">Lunas</button></div>
       </div>`;}).join('')}
     </div></div>`;
 }
@@ -1485,10 +1485,10 @@ function payCCFromReminder(ccName){
   const cc=state.ccs.find(c=>c.NAMA===ccName);
   if(cc) openDrawer('paycc',cc.ID); else openDrawer('paycc');
 }
-function clearCCBill(id){
+function clearCCBill(id,ccName){
   if(!confirm('Tandai tagihan ini lunas & hapus pengingat dari dashboard?'))return;
   state.ccbills=(state.ccbills||[]).filter(x=>x.ID!==id);
-  if(API_URL)bgPost({action:'deleteRow',data:{sheet:'CC_TAGIHAN',id}},'Hapus pengingat tagihan');
+  if(API_URL)bgPost({action:'deleteRow',data:{sheet:'CC_TAGIHAN',id,cc:ccName||undefined}},'Hapus pengingat tagihan');
   saveLocal(); renderCCBillReminder();
   showToast('Pengingat tagihan dihapus','success');
 }
