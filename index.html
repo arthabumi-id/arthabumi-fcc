@@ -683,6 +683,11 @@ function lockedInBank(bankName){
 function unmarkedRegularCC(namaCC){
   return Math.max(0, getCCOut(namaCC) - cicilanDueAmt(namaCC) - markTotalCC(namaCC));
 }
+// v22/C (Cara A): berapa yg perlu DITRANSFER SEKARANG ke rekening reserve = yg dikunci − saldo
+// yg sudah ada. Saldo sudah memuat transfer-transfer sebelumnya → angka ini TIDAK mengakumulasi
+// yg lama, hanya kekurangannya. Gabungan semua kartu yg rekening reserve-nya = bank ini.
+function reserveGapBank(bankName){ return Math.max(0, lockedInBank(bankName) - getSaldo(bankName).saldo); }
+function cardsOnReserveBank(bankName){ return state.ccs.filter(c=>ccHoldingBank(c.NAMA)===bankName).length; }
 // Sub-baris dua-kantong utk daftar saldo (hanya rekening reserve, hanya bila ada dana terkunci).
 function bankReserveSubline(bankName, saldo){
   if(!isReserveBank(bankName)) return '';
@@ -727,8 +732,8 @@ function toggleMark(txnId, ccNama, nominal){
     if(API_URL) bgPost({action:'markTxn',data:{TXN_ID:txnId, CC:ccNama||'', NOMINAL:Math.abs(Number(nominal)||0), USER:state.user}},'Tandai reserve');
   }
   saveLocal();
-  // v22/C: kasih tahu total ditandai utk kartu ini → itu jumlah yg perlu ditransfer ke rekening reserve.
-  if(ccNama) showToast('Total ditandai '+ccNama+': '+fmt(markTotalCC(ccNama))+' → transfer ke '+ccHoldingBank(ccNama),'success');
+  // v22/C (Cara A): tampilkan kekurangan yg perlu ditransfer SEKARANG (bukan akumulasi).
+  if(ccNama){ const hold=ccHoldingBank(ccNama), gap=reserveGapBank(hold); showToast(gap>0?('Perlu transfer ke '+hold+': '+fmt(gap)):('Reserve di '+hold+' sudah cukup ✓'),'success'); }
   if(typeof window.acctFilter==='function') window.acctFilter();   // refresh drawer detail akun
   if(state.currentPage==='master' && state.currentMasterTab==='cc') renderMaster();  // refresh ringkasan kartu
 }
@@ -2887,7 +2892,7 @@ function openAccountDetail(type, nama) {
           </div>
         </div>
       </div>
-      ${isCC ? `<div style="padding:8px 10px;border-radius:8px;margin-bottom:10px;background:#0a1f14;border:1px solid #2dd4a030;font-size:11px;color:var(--text2)"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span><i class="ti ti-lock" style="font-size:11px;vertical-align:middle;color:var(--green)"></i> Ditandai (perlu di-reserve) · ${markCountCC(nama)} transaksi</span><strong style="color:var(--green);font-size:14px">${fmt(markTotalCC(nama))}</strong></div>${markTotalCC(nama)>0?`<div style="font-size:10px;color:var(--text3);margin-top:4px"><i class="ti ti-arrow-right" style="font-size:10px;vertical-align:middle"></i> Transfer total ini ke rekening reserve: <b style="color:var(--blue)">${esc(ccHoldingBank(nama))}</b></div>`:''}</div>
+      ${isCC ? `<div style="padding:8px 10px;border-radius:8px;margin-bottom:10px;background:#0a1f14;border:1px solid #2dd4a030;font-size:11px;color:var(--text2)"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span><i class="ti ti-lock" style="font-size:11px;vertical-align:middle;color:var(--green)"></i> Ditandai kartu ini · ${markCountCC(nama)} transaksi</span><strong style="color:var(--green);font-size:14px">${fmt(markTotalCC(nama))}</strong></div>${(()=>{const hold=ccHoldingBank(nama),gap=reserveGapBank(hold),n=cardsOnReserveBank(hold);return gap>0?`<div style="margin-top:5px;padding-top:5px;border-top:1px solid #ffffff12;font-size:11px;color:var(--amber)"><i class="ti ti-arrow-right" style="font-size:11px;vertical-align:middle"></i> Perlu transfer sekarang ke <b>${esc(hold)}</b>: <b>${fmt(gap)}</b>${n>1?` <span style="color:var(--text3)">(gabungan ${n} kartu di rekening ini)</span>`:''}</div>`:`<div style="margin-top:5px;padding-top:5px;border-top:1px solid #ffffff12;font-size:11px;color:var(--green)"><i class="ti ti-circle-check" style="font-size:11px;vertical-align:middle"></i> Reserve di <b>${esc(hold)}</b> sudah cukup</div>`;})()}</div>
       ${unmarkedRegularCC(nama)>0?`<div style="padding:6px 10px;border-radius:8px;margin-bottom:10px;background:#1a1206;border:1px solid #f59e0b40;font-size:11px;color:var(--amber)"><i class="ti ti-bell" style="font-size:11px;vertical-align:middle"></i> Belum dicentang: <b>${fmt(unmarkedRegularCC(nama))}</b> — tandai belanja yg dananya sudah disiapkan.</div>`:''}
       ${paidExpCount>0?`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px;border-radius:8px;margin-bottom:10px;background:#0a1424;border:1px solid var(--border2);font-size:11px;color:var(--text2)"><span><i class="ti ti-circle-check" style="font-size:12px;vertical-align:middle"></i> ${paidExpCount} belanja ditandai lunas</span><button onclick="window._acctHidePaid=!window._acctHidePaid;acctFilter()" style="font-size:10px;padding:3px 9px;border-radius:10px;cursor:pointer;border:1px solid ${window._acctHidePaid?'#2dd4a060':'var(--border2)'};background:${window._acctHidePaid?'#0a2a1e':'transparent'};color:${window._acctHidePaid?'var(--green)':'var(--text3)'}">${window._acctHidePaid?'✅ disembunyikan':'Sembunyikan'}</button></div>`:''}` : bankReserveCardHTML(nama)}
       ${donutCardHTML('acctKatDonut', katEntries)}
