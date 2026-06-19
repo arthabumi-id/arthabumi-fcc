@@ -666,6 +666,48 @@ function reserveHeldIn(bankName){
   return held;
 }
 
+// ── v22: Reserve CC = total centang + sisa cicilan; rekening reserve = dua kantong ──
+// Kebutuhan reserve satu kartu = belanja CC yang dicentang + SELURUH sisa cicilan kartu.
+function reserveNeedCC(namaCC){
+  return markTotalCC(namaCC) + cicilanRemaining(namaCC);
+}
+// Bank ini berfungsi sbg rekening reserve bila ada kartu yang menyimpan reserve di sini.
+function isReserveBank(bankName){
+  return state.ccs.some(c => ccHoldingBank(c.NAMA) === bankName);
+}
+// Total dana yg HARUS terkunci di sebuah rekening reserve = jumlah reserveNeedCC semua kartu
+// yang rekening reserve-nya (RESERVE_BANK) menunjuk ke bank ini.
+function lockedInBank(bankName){
+  let locked = 0;
+  state.ccs.forEach(c => { if(ccHoldingBank(c.NAMA) === bankName) locked += reserveNeedCC(c.NAMA); });
+  return locked;
+}
+// Belanja CC non-cicilan yg BELUM dicentang (aide-mémoire "lupa centang").
+function unmarkedRegularCC(namaCC){
+  return Math.max(0, getCCOut(namaCC) - cicilanDueAmt(namaCC) - markTotalCC(namaCC));
+}
+// Sub-baris dua-kantong utk daftar saldo (hanya rekening reserve, hanya bila ada dana terkunci).
+function bankReserveSubline(bankName, saldo){
+  if(!isReserveBank(bankName)) return '';
+  const locked = lockedInBank(bankName);
+  if(locked <= 0) return '';
+  const bebas = saldo - locked, kurang = bebas < 0;
+  return `<div class="list-sub" style="margin-top:2px;color:${kurang?'var(--red)':'var(--blue)'}"><i class="ti ti-${kurang?'alert-triangle':'shield-check'}" style="font-size:11px;vertical-align:middle"></i> Reserve CC ${fmtS(locked)} · ${kurang?`<b>kurang ${fmtS(-bebas)} — transfer lagi</b>`:`bisa dipakai ${fmtS(bebas)}`}</div>`;
+}
+// Kartu dua-kantong utk drawer Detail Akun rekening reserve.
+function bankReserveCardHTML(bankName){
+  if(!isReserveBank(bankName)) return '';
+  const locked = lockedInBank(bankName);
+  if(locked <= 0) return '';
+  const saldo = getSaldo(bankName).saldo;
+  const bebas = saldo - locked, kurang = bebas < 0;
+  return `<div style="padding:9px 11px;border-radius:8px;margin-bottom:10px;background:${kurang?'#2a0a0a':'#0a1a2a'};border:1px solid ${kurang?'#ef444440':'#3b82f640'}">
+    <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px"><span style="color:var(--text2)"><i class="ti ti-lock" style="font-size:11px;vertical-align:middle"></i> Reserve CC (terkunci)</span><b style="color:var(--blue)">${fmt(locked)}</b></div>
+    <div style="display:flex;justify-content:space-between;font-size:11px"><span style="color:var(--text2)"><i class="ti ti-wallet" style="font-size:11px;vertical-align:middle"></i> Bisa dipakai</span><b style="color:${kurang?'var(--red)':'var(--green)'}">${fmt(bebas)}</b></div>
+    ${kurang?`<div style="font-size:10px;color:var(--red);margin-top:5px">Saldo kurang ${fmtS(-bebas)} dari total yang dicentang — transfer lagi ke rekening ini.</div>`:''}
+  </div>`;
+}
+
 // ── v20: rekening penyimpan reserve PER KARTU + penanda manual centang ──────
 // Bank reserve default kartu ini (kolom RESERVE_BANK di MASTER_CC); fallback ke default global.
 function ccHoldingBank(ccNama){
@@ -989,7 +1031,7 @@ function renderDashboard() {
           <div class="list-body">
             <div class="list-title">${esc(b.NAMA)}</div>
             <div class="list-sub">${esc(b.BANK)} · ${b.TIPE}</div>
-            ${(()=>{ const rh=reserveHeldIn(b.NAMA); if(rh<=0) return ''; const bebas=r.saldo-rh; return `<div class="list-sub" style="color:var(--blue);margin-top:2px"><i class="ti ti-shield-check" style="font-size:11px;vertical-align:middle"></i> reserve CC ${fmtS(rh)} · bebas ${fmtS(bebas)}</div>`; })()}
+            ${bankReserveSubline(b.NAMA, r.saldo)}
           </div>
           <div class="list-right">
             <div style="font-size:14px;font-weight:700;color:${r.saldo>=0?'var(--green)':'var(--red)'}">${fmt(r.saldo)}</div>
@@ -2798,7 +2840,8 @@ function openAccountDetail(type, nama) {
           </div>
         </div>
       </div>
-      ${isCC ? `<div style="padding:7px 10px;border-radius:8px;margin-bottom:10px;background:#0a1f14;border:1px solid #2dd4a030;font-size:11px;color:var(--text2)">🏷️ Ditandai sudah di-reserve (manual): <strong style="color:var(--green)">${fmt(markTotalCC(nama))}</strong> · ${markCountCC(nama)} transaksi <span style="color:var(--text3)">— reserve app: ${fmtS(state.reserveFunds[nama]||0)}</span></div>` : ''}
+      ${isCC ? `<div style="padding:7px 10px;border-radius:8px;margin-bottom:10px;background:#0a1f14;border:1px solid #2dd4a030;font-size:11px;color:var(--text2)"><i class="ti ti-lock" style="font-size:11px;vertical-align:middle;color:var(--green)"></i> Reserve CC (dicentang): <strong style="color:var(--green)">${fmt(markTotalCC(nama))}</strong> · ${markCountCC(nama)} transaksi${(state.reserveFunds[nama]||0)>0?` <span style="color:var(--text3)">· reserve app lama: ${fmtS(state.reserveFunds[nama]||0)}</span>`:''}</div>
+      ${unmarkedRegularCC(nama)>0?`<div style="padding:6px 10px;border-radius:8px;margin-bottom:10px;background:#1a1206;border:1px solid #f59e0b40;font-size:11px;color:var(--amber)"><i class="ti ti-bell" style="font-size:11px;vertical-align:middle"></i> Belum dicentang: <b>${fmt(unmarkedRegularCC(nama))}</b> — tandai belanja yg dananya sudah disiapkan.</div>`:''}` : bankReserveCardHTML(nama)}
       ${donutCardHTML('acctKatDonut', katEntries)}
       <div style="font-size:11px;color:var(--text3);margin-bottom:8px">${data.length} transaksi ditampilkan</div>
       ${data.length ? data.map(t => {

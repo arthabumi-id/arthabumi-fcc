@@ -3,6 +3,16 @@
 
 ---
 
+## SESSION — 2026-06-19 (Fix kategori Cicilan + PRD v22 Reserve = Centang, Fase A)
+Client-only, tanpa redeploy Code.gs.
+- **FIX bug "Beli Cicilan CC" — kategori biaya:** dulu 1 input + datalist yg menampilkan KELOMPOK (rancu). Diganti cascade **Kelompok → Kategori** + opsi "➕ Tambah kategori baru…" (kategori baru tersimpan ke kelompok terpilih via `addKat`). Pola sama dgn form Transaksi. Fungsi baru: `ciKelompoks`/`ciFillKatGroup`/`ciFillKatList`/`ciOnKatSelChange`; `saveCicilan` baca kelompok+kategori, handle `__NEW__`.
+- **PRD v22 (`PRD-v22-reserve-centang-sumber-tunggal.md`)** signed-off (Q1 seluruh sisa cicilan, Q2-Q4 rekomendasi). ⚠️ Membalik keputusan PRD v20 (centang dari "penanda pasif" → jadi sumber tunggal reserve).
+- **Fase A (display only, reversible, TANPA migrasi/hapus):** fungsi baru `reserveNeedCC` (=centang+sisa cicilan), `isReserveBank`, `lockedInBank`, `unmarkedRegularCC`, `bankReserveSubline`, `bankReserveCardHTML`. Dashboard Saldo Rekening & drawer Detail Akun rekening reserve kini tampil dua kantong **Reserve CC (terkunci) vs Bisa dipakai** + peringatan under-funded. Detail Akun CC: label "Reserve CC (dicentang)" + nudge "Belum dicentang Rp X". `addReserve`/tab Reserve LAMA masih ada (untuk banding) — dibersihkan di Fase C.
+- Verifikasi: node vm.Script 3 blok script = 0 error. 6 fungsi baru terdefinisi @1x.
+**Pending:** push index.html (GitHub Desktop), bump sw.js. Fase B (migrasi konversi reserve lama→centang, preview dulu) & Fase C (sembunyikan tab Reserve + strip ganda) menunggu verifikasi Fase A oleh Eddy.
+
+---
+
 ## SESSION — 2026-06-09 (v22 Klik bank & CC Dashboard + tab cepat tanggal)
 Client-only, tanpa redeploy. sw.js → **v19**.
 - Baris bank di **Saldo Rekening Dashboard** kini bisa diklik → `openAccountDetail('bank',NAMA)` (reuse drawer detail akun yang sudah ada).
