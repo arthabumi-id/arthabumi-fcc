@@ -11,6 +11,13 @@ PRD: `PRD-v23-hide-tagihan-lunas-cc.md` (Q1 default OFF, Q2 Detail Akun CC saja,
 - **Verifikasi:** Code.gs node --check OK (potongan s/d sebelum addInvestFlow, semua editan tercakup — ⚠️ bash mount cap baca Code.gs di 55028 byte, pakai Read tool sbg sumber kebenaran). index.html vm.Script 3 blok = 0 error; 19 ref v23.
 **Pending:** push index.html + **REDEPLOY Apps Script** (sheet PAID_MARK + action baru), bump sw.js. Catatan: bisa digabung 1 push dgn Fase A reserve bila belum di-push.
 
+### v23.1 (sesi sama) — Rekonsiliasi tagihan: baris dikunci tak muncul lagi (Cara 1)
+Eddy: "yg pernah dicentang jgn muncul lagi di tagihan berikutnya." Keputusan **Cara 1** = sambung ke centang lunas (PAID_MARK), tidak nambah konsep. **Client-only** (pakai `markPaidBatch` yg sudah ada di v23).
+- `lockCCBillUI`: kumpulkan TXN_ID dari baris `.ccb-chk:checked` (data-id) → tandai LUNAS (state.paidMarks + bgPost markPaidBatch). Cicilan tak punya TXN_ID → dilewati.
+- `renderCCBill`: charges & pays di-filter `!isPaid(t.ID)` → baris yg sudah masuk tagihan terkunci tidak muncul lagi. `row()` + checkbox dapat `data-id`.
+- Catatan: "Total tagihan berjalan (kumulatif)" di atas tetap dari `getCCOut` (tak terpengaruh paid mark) — by design.
+- Verifikasi: vm.Script 3 blok = 0 error.
+
 ---
 
 ## SESSION — 2026-06-19 (Fix kategori Cicilan + PRD v22 Reserve = Centang, Fase A)
