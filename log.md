@@ -3,6 +3,16 @@
 
 ---
 
+## SESSION — 2026-06-19 (v23 Centang "Lunas" + Sembunyikan tagihan lunas di rincian CC) — ⚠️ REDEPLOY
+PRD: `PRD-v23-hide-tagihan-lunas-cc.md` (Q1 default OFF, Q2 Detail Akun CC saja, Q3 tombol massal per-baris). **WAJIB REDEPLOY Code.gs.**
+- **Konsep:** tagihan = saldo berjalan, tak ada status lunas per-txn → ditambah penanda manual `PAID_MARK`. Centang lunas = MURNI filter tampilan, lepas dari tagihan/saldo/reserve, independen dari centang reserve.
+- **Code.gs:** `S.PAIDMARK='PAID_MARK'` + HEADERS `[ID,TXN_ID,CREATED_BY,CREATED_AT]`; action `markPaid`/`unmarkPaid`/`markPaidBatch` + `getPaidMarks`; `paidMarks` di getBundle & getAllData; helper `_ensurePaidSheet` (auto-create pola markTxn).
+- **index.html:** `state.paidMarks` (init + saveLocal + sync-load + Object.assign offline). Helper `isPaid`/`togglePaid`/`markPaidUntil`. Drawer Detail Akun CC: pil "☐ lunas/✅ lunas" + tombol "s/d sini" (massal `markPaidBatch`) per baris belanja; toggle "Sembunyikan yang lunas" (default OFF, reset tiap buka via `window._acctHidePaid`); baris pembayaran/reserve tetap tampil; totals tetap dari `data` penuh (tagihan akurat).
+- **Verifikasi:** Code.gs node --check OK (potongan s/d sebelum addInvestFlow, semua editan tercakup — ⚠️ bash mount cap baca Code.gs di 55028 byte, pakai Read tool sbg sumber kebenaran). index.html vm.Script 3 blok = 0 error; 19 ref v23.
+**Pending:** push index.html + **REDEPLOY Apps Script** (sheet PAID_MARK + action baru), bump sw.js. Catatan: bisa digabung 1 push dgn Fase A reserve bila belum di-push.
+
+---
+
 ## SESSION — 2026-06-19 (Fix kategori Cicilan + PRD v22 Reserve = Centang, Fase A)
 Client-only, tanpa redeploy Code.gs.
 - **FIX bug "Beli Cicilan CC" — kategori biaya:** dulu 1 input + datalist yg menampilkan KELOMPOK (rancu). Diganti cascade **Kelompok → Kategori** + opsi "➕ Tambah kategori baru…" (kategori baru tersimpan ke kelompok terpilih via `addKat`). Pola sama dgn form Transaksi. Fungsi baru: `ciKelompoks`/`ciFillKatGroup`/`ciFillKatList`/`ciOnKatSelChange`; `saveCicilan` baca kelompok+kategori, handle `__NEW__`.

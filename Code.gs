@@ -17,6 +17,7 @@ const S = {
   KAT: 'MASTER_KATEGORI', TRANSFER: 'TRANSFER_LOG', RESERVE: 'RESERVE_LOG', KASBON: 'KASBON',
   JADWAL: 'JADWAL', PIUTANG: 'PIUTANG', CICILAN: 'CICILAN', CCBILL: 'CC_TAGIHAN',
   MARK: 'RESERVE_MARK',
+  PAIDMARK: 'PAID_MARK',   // v23: penanda manual "tagihan sudah dibayar/lunas" per transaksi CC
   INVEST: 'MASTER_INVEST', INVESTLOG: 'INVEST_LOG', INVESTVAL: 'INVEST_VALUE',  // v21 investasi (terpisah dari bisnis)
 };
 
@@ -51,6 +52,9 @@ const HEADERS = {
   // (dia transfer reserve secara akumulasi). Lepas dari pot reserve (RESERVE_LOG) — murni penanda
   // ingat-ingatan. 1 baris = 1 TXN dicentang. Lepas centang = hapus baris (by TXN_ID).
   [S.MARK]:     ['ID','TXN_ID','CC','NOMINAL','CREATED_BY','CREATED_AT'],
+  // PAID_MARK (v23) = penanda manual "lunas" per transaksi CC. Murni filter tampilan rincian CC,
+  // LEPAS dari perhitungan tagihan/saldo/reserve. 1 baris = 1 TXN ditandai lunas. Lepas = hapus baris.
+  [S.PAIDMARK]: ['ID','TXN_ID','CREATED_BY','CREATED_AT'],
   // ── v21 INVESTASI (pribadi, DIPISAH TOTAL dari metrik bisnis) ──
   // MASTER_INVEST = daftar akun investasi (Stockbit/Pluang/Indo Premier/dll).
   //   MODAL_AWAL = modal yg sudah tertanam sebelum mulai catat di FCC.
@@ -159,6 +163,7 @@ function doGet(e) {
       case 'getCicilan':   return json(getSheet(ss, S.CICILAN));
       case 'getCCBills':   return json(getSheet(ss, S.CCBILL));
       case 'getMarks':     return json(getSheet(ss, S.MARK));
+      case 'getPaidMarks': return json(getSheet(ss, S.PAIDMARK));
       case 'getInvest':    return json({ investAkun: getSheet(ss, S.INVEST), investLog: getSheet(ss, S.INVESTLOG), investValue: getSheet(ss, S.INVESTVAL) });
       default:             return json({ error: 'Unknown action' });
     }
@@ -196,6 +201,9 @@ function doPost(e) {
       case 'changeReserveBank': res = changeReserveBank(ss, data); break;
       case 'markTxn':     res = markTxn(ss, data); break;
       case 'unmarkTxn':   res = unmarkTxn(ss, data); break;
+      case 'markPaid':      res = markPaid(ss, data); break;
+      case 'unmarkPaid':    res = unmarkPaid(ss, data); break;
+      case 'markPaidBatch': res = markPaidBatch(ss, data); break;
       case 'addInvestAkun':   res = addInvestAkun(ss, data); break;
       case 'addInvestFlow':   res = addInvestFlow(ss, data); break;
       case 'addInvestValue':  res = addInvestValue(ss, data); break;
@@ -228,6 +236,7 @@ function getBundle(ss, params) {
     cicilan:   getSheet(ss, S.CICILAN),
     ccbills:   getSheet(ss, S.CCBILL),
     marks:     getSheet(ss, S.MARK),
+    paidMarks: getSheet(ss, S.PAIDMARK),
     investAkun:  getSheet(ss, S.INVEST),
     investLog:   getSheet(ss, S.INVESTLOG),
     investValue: getSheet(ss, S.INVESTVAL),
@@ -300,7 +309,7 @@ function getAllData(ss) {
     transfers: getSheet(ss, S.TRANSFER), reserves: getSheet(ss, S.RESERVE),
     kasbon: getSheet(ss, S.KASBON), jadwal: getSheet(ss, S.JADWAL),
     piutang: getSheet(ss, S.PIUTANG), cicilan: getSheet(ss, S.CICILAN),
-    ccbills: getSheet(ss, S.CCBILL), marks: getSheet(ss, S.MARK),
+    ccbills: getSheet(ss, S.CCBILL), marks: getSheet(ss, S.MARK), paidMarks: getSheet(ss, S.PAIDMARK),
     investAkun: getSheet(ss, S.INVEST), investLog: getSheet(ss, S.INVESTLOG), investValue: getSheet(ss, S.INVESTVAL),
   };
 }
@@ -953,6 +962,51 @@ function markTxn(ss, data) {
 // Lepas centang: hapus baris RESERVE_MARK by TXN_ID.
 function unmarkTxn(ss, data) {
   const sh = ss.getSheetByName(S.MARK);
+  if (!sh || sh.getLastRow() <= 1) return { ok: true };
+  const all = sh.getRange(1, 1, sh.getLastRow(), sh.getLastColumn()).getValues();
+  const iTxn = all[0].indexOf('TXN_ID');
+  for (let i = 1; i < all.length; i++) {
+    if (String(all[i][iTxn]) === String(data.TXN_ID)) { sh.deleteRow(i + 1); return { ok: true }; }
+  }
+  return { ok: true };
+}
+
+// ── v23: penanda "lunas" per transaksi CC (murni filter tampilan, lepas dari tagihan) ──
+function _ensurePaidSheet(ss) {
+  let sh = ss.getSheetByName(S.PAIDMARK);
+  if (!sh) {
+    sh = ss.insertSheet(S.PAIDMARK);
+    sh.appendRow(HEADERS[S.PAIDMARK]);
+    sh.getRange(1,1,1,HEADERS[S.PAIDMARK].length).setFontWeight('bold').setBackground('#1a1a2e').setFontColor('#ffffff');
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+// Tandai lunas (idempotent: skip bila sudah ada).
+function markPaid(ss, data) {
+  const sh = _ensurePaidSheet(ss);
+  if (sh.getLastRow() > 1) {
+    const ids = sh.getRange(2, 2, sh.getLastRow()-1, 1).getValues().map(r => String(r[0]));
+    if (ids.indexOf(String(data.TXN_ID)) >= 0) return { ok: true, dup: true };
+  }
+  sh.appendRow(['ID'+Date.now(), data.TXN_ID, data.USER || '', new Date().toISOString()]);
+  return { ok: true };
+}
+// Tandai lunas banyak sekaligus (tombol massal "s/d transaksi ini"). 1 request.
+function markPaidBatch(ss, data) {
+  const sh = _ensurePaidSheet(ss);
+  let existing = [];
+  if (sh.getLastRow() > 1) existing = sh.getRange(2, 2, sh.getLastRow()-1, 1).getValues().map(r => String(r[0]));
+  const ids = (data.TXN_IDS || []).map(String).filter(id => existing.indexOf(id) < 0);
+  if (!ids.length) return { ok: true, added: 0 };
+  const now = new Date().toISOString(), user = data.USER || '';
+  const rows = ids.map(id => ['ID'+Date.now()+'_'+id, id, user, now]);
+  sh.getRange(sh.getLastRow()+1, 1, rows.length, HEADERS[S.PAIDMARK].length).setValues(rows);
+  return { ok: true, added: rows.length };
+}
+// Lepas tanda lunas by TXN_ID.
+function unmarkPaid(ss, data) {
+  const sh = ss.getSheetByName(S.PAIDMARK);
   if (!sh || sh.getLastRow() <= 1) return { ok: true };
   const all = sh.getRange(1, 1, sh.getLastRow(), sh.getLastColumn()).getValues();
   const iTxn = all[0].indexOf('TXN_ID');

@@ -430,6 +430,8 @@ let state = {
   investAkun: [], // v21: akun investasi (MASTER_INVEST) — pribadi, terpisah dari bisnis
   investLog: [],  // v21: arus kas modal (INVEST_LOG) setor/tarik
   investValue: [],// v21: snapshot nilai portofolio (INVEST_VALUE)
+  marks: [],      // v20: centang "sudah di-reserve" per txn CC (RESERVE_MARK)
+  paidMarks: [],  // v23: centang "lunas" per txn CC (PAID_MARK) — murni filter tampilan rincian CC
   pending: [],    // antrian operasi optimistic save yg belum/ gagal terkirim ke server
 };
 
@@ -467,7 +469,7 @@ function saveLocal() {
   localStorage.setItem('fcc_data', JSON.stringify({
     banks: state.banks, ccs: state.ccs, projects: state.projects,
     kategori: state.kategori, txns: state.txns, transfers: state.transfers,
-    reserves: state.reserves, kasbon: state.kasbon, jadwal: state.jadwal, piutang: state.piutang, cicilan: state.cicilan, ccbills: state.ccbills, marks: state.marks, investAkun: state.investAkun, investLog: state.investLog, investValue: state.investValue, summary: state.summary, txnsSince: state.txnsSince
+    reserves: state.reserves, kasbon: state.kasbon, jadwal: state.jadwal, piutang: state.piutang, cicilan: state.cicilan, ccbills: state.ccbills, marks: state.marks, paidMarks: state.paidMarks, investAkun: state.investAkun, investLog: state.investLog, investValue: state.investValue, summary: state.summary, txnsSince: state.txnsSince
   }));
 }
 
@@ -734,6 +736,39 @@ function toggleMark(txnId, ccNama, nominal){
   if(state.currentPage==='master' && state.currentMasterTab==='cc') renderMaster();  // refresh ringkasan kartu
 }
 
+// ── v23: penanda "lunas" per txn CC. Murni filter tampilan rincian CC — TIDAK menyentuh
+// tagihan/saldo/reserve. Independen dari centang reserve (toggleMark). ──
+function isPaid(txnId){ return (state.paidMarks||[]).some(m=>String(m.TXN_ID)===String(txnId)); }
+function togglePaid(txnId){
+  state.paidMarks = state.paidMarks || [];
+  if(isPaid(txnId)){
+    state.paidMarks = state.paidMarks.filter(m=>String(m.TXN_ID)!==String(txnId));
+    if(API_URL) bgPost({action:'unmarkPaid',data:{TXN_ID:txnId}},'Lepas tanda lunas');
+  } else {
+    state.paidMarks.push({TXN_ID:txnId});
+    if(API_URL) bgPost({action:'markPaid',data:{TXN_ID:txnId, USER:state.user}},'Tandai lunas');
+  }
+  saveLocal();
+  if(typeof window.acctFilter==='function') window.acctFilter();
+}
+// Tandai lunas SEMUA belanja CC kartu ini dgn tanggal ≤ transaksi target (1 aksi massal).
+function markPaidUntil(txnId, ccNama){
+  const target=state.txns.find(x=>String(x.ID)===String(txnId)); if(!target) return;
+  const cutoff=String(target.TANGGAL).slice(0,10);
+  const ids=state.txns.filter(t=>t.REKENING===ccNama && t.JENIS==='Pengeluaran'
+      && t.TIPE_LOG!=='Transfer' && t.TIPE_LOG!=='Reserve'
+      && String(t.TANGGAL).slice(0,10)<=cutoff && !isPaid(t.ID))
+    .map(t=>t.ID);
+  if(!ids.length){ showToast('Tidak ada belanja yang perlu ditandai','success'); return; }
+  if(!confirm('Tandai LUNAS '+ids.length+' belanja (s/d '+cutoff+')? Hanya menyembunyikan dari rincian, tidak mengubah tagihan.')) return;
+  state.paidMarks=state.paidMarks||[];
+  ids.forEach(id=>state.paidMarks.push({TXN_ID:id}));
+  if(API_URL) bgPost({action:'markPaidBatch',data:{TXN_IDS:ids, USER:state.user}},'Tandai lunas '+ids.length+' belanja');
+  saveLocal();
+  showToast(ids.length+' belanja ditandai lunas ✓','success');
+  if(typeof window.acctFilter==='function') window.acctFilter();
+}
+
 function getProjCF(nama) {
   const p = state.summary && state.summary.proj && state.summary.proj[nama];
   if (p) return { masuk: p.masuk || 0, keluar: p.keluar || 0, sisa: (p.masuk||0) - (p.keluar||0) };
@@ -941,6 +976,7 @@ async function syncAll() {
     state.cicilan = data.cicilan || state.cicilan || [];
     state.ccbills = data.ccbills || state.ccbills || [];
     state.marks = data.marks || state.marks || [];
+    state.paidMarks = data.paidMarks || state.paidMarks || [];
     state.investAkun = data.investAkun || state.investAkun || [];
     state.investLog = data.investLog || state.investLog || [];
     state.investValue = data.investValue || state.investValue || [];
@@ -2796,6 +2832,7 @@ function renderMaster() {
 // ── ACCOUNT DETAIL ────────────────────────────────────
 function openAccountDetail(type, nama) {
   const isCC = type === 'cc';
+  window._acctHidePaid = false;   // v23: toggle "sembunyikan yg lunas" default OFF tiap buka
   document.getElementById('drawerTitle').textContent = nama;
 
   // Tampil cepat dari cache txn terbaru; riwayat penuh di-fetch on-demand
@@ -2822,6 +2859,11 @@ function openAccountDetail(type, nama) {
     const totKeluar = data.filter(t=>t.JENIS==='Pengeluaran').reduce((s,t)=>s+Number(t.NOMINAL),0);
     const saldo     = totMasuk - totKeluar;
     const katEntries = katComposition(data);
+    // v23: sembunyikan belanja yg ditandai LUNAS (hanya tampilan; tagihan/saldo tetap dari `data` penuh).
+    // Baris pembayaran (Pemasukan) & reserve TETAP tampil (keputusan Eddy).
+    const paidExpCount = isCC ? data.filter(t=>t.JENIS==='Pengeluaran' && isPaid(t.ID)).length : 0;
+    const hidePaid = isCC && window._acctHidePaid;
+    const rows = hidePaid ? data.filter(t=> !(t.JENIS==='Pengeluaran' && isPaid(t.ID))) : data;
 
     document.getElementById('acctDetailBody').innerHTML = `
       <div class="detail-summary">
@@ -2841,10 +2883,11 @@ function openAccountDetail(type, nama) {
         </div>
       </div>
       ${isCC ? `<div style="padding:7px 10px;border-radius:8px;margin-bottom:10px;background:#0a1f14;border:1px solid #2dd4a030;font-size:11px;color:var(--text2)"><i class="ti ti-lock" style="font-size:11px;vertical-align:middle;color:var(--green)"></i> Reserve CC (dicentang): <strong style="color:var(--green)">${fmt(markTotalCC(nama))}</strong> · ${markCountCC(nama)} transaksi${(state.reserveFunds[nama]||0)>0?` <span style="color:var(--text3)">· reserve app lama: ${fmtS(state.reserveFunds[nama]||0)}</span>`:''}</div>
-      ${unmarkedRegularCC(nama)>0?`<div style="padding:6px 10px;border-radius:8px;margin-bottom:10px;background:#1a1206;border:1px solid #f59e0b40;font-size:11px;color:var(--amber)"><i class="ti ti-bell" style="font-size:11px;vertical-align:middle"></i> Belum dicentang: <b>${fmt(unmarkedRegularCC(nama))}</b> — tandai belanja yg dananya sudah disiapkan.</div>`:''}` : bankReserveCardHTML(nama)}
+      ${unmarkedRegularCC(nama)>0?`<div style="padding:6px 10px;border-radius:8px;margin-bottom:10px;background:#1a1206;border:1px solid #f59e0b40;font-size:11px;color:var(--amber)"><i class="ti ti-bell" style="font-size:11px;vertical-align:middle"></i> Belum dicentang: <b>${fmt(unmarkedRegularCC(nama))}</b> — tandai belanja yg dananya sudah disiapkan.</div>`:''}
+      ${paidExpCount>0?`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px;border-radius:8px;margin-bottom:10px;background:#0a1424;border:1px solid var(--border2);font-size:11px;color:var(--text2)"><span><i class="ti ti-circle-check" style="font-size:12px;vertical-align:middle"></i> ${paidExpCount} belanja ditandai lunas</span><button onclick="window._acctHidePaid=!window._acctHidePaid;acctFilter()" style="font-size:10px;padding:3px 9px;border-radius:10px;cursor:pointer;border:1px solid ${window._acctHidePaid?'#2dd4a060':'var(--border2)'};background:${window._acctHidePaid?'#0a2a1e':'transparent'};color:${window._acctHidePaid?'var(--green)':'var(--text3)'}">${window._acctHidePaid?'✅ disembunyikan':'Sembunyikan'}</button></div>`:''}` : bankReserveCardHTML(nama)}
       ${donutCardHTML('acctKatDonut', katEntries)}
-      <div style="font-size:11px;color:var(--text3);margin-bottom:8px">${data.length} transaksi ditampilkan</div>
-      ${data.length ? data.map(t => {
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px">${rows.length} transaksi ditampilkan${hidePaid&&paidExpCount>0?` · ${paidExpCount} lunas disembunyikan`:''}</div>
+      ${rows.length ? rows.map(t => {
         const isTr = t.TIPE_LOG==='Transfer', isRes = t.TIPE_LOG==='Reserve';
         return `<div class="card" style="padding:9px 11px;margin-bottom:6px">
           <div style="display:flex;align-items:center;gap:9px">
@@ -2859,7 +2902,8 @@ function openAccountDetail(type, nama) {
             <div style="text-align:right;flex-shrink:0">
               <div style="font-size:13px;font-weight:700;color:${t.JENIS==='Pemasukan'?'var(--green)':'var(--red)'}">${t.JENIS==='Pemasukan'?'+':'-'}${fmt(Number(t.NOMINAL))}</div>
               ${(!isTr&&!isRes)?`<button style="font-size:10px;background:transparent;border:none;color:var(--text3);cursor:pointer;padding:0" onclick="closeDrawer();setTimeout(()=>editTxn('${t.ID}'),200)">edit</button>`:''}
-              ${(isCC && t.JENIS==='Pengeluaran' && !isTr && !isRes)?`<div><button onclick="toggleMark('${t.ID}','${esc(nama)}',${Number(t.NOMINAL)})" style="font-size:10px;margin-top:4px;padding:2px 8px;border-radius:10px;cursor:pointer;border:1px solid ${isMarked(t.ID)?'#2dd4a060':'var(--border2)'};background:${isMarked(t.ID)?'#0a2a1e':'transparent'};color:${isMarked(t.ID)?'var(--green)':'var(--text3)'}">${isMarked(t.ID)?'✅ reserved':'☐ tandai'}</button></div>`:''}
+              ${(isCC && t.JENIS==='Pengeluaran' && !isTr && !isRes)?`<div><button onclick="toggleMark('${t.ID}','${esc(nama)}',${Number(t.NOMINAL)})" style="font-size:10px;margin-top:4px;padding:2px 8px;border-radius:10px;cursor:pointer;border:1px solid ${isMarked(t.ID)?'#2dd4a060':'var(--border2)'};background:${isMarked(t.ID)?'#0a2a1e':'transparent'};color:${isMarked(t.ID)?'var(--green)':'var(--text3)'}">${isMarked(t.ID)?'✅ reserved':'☐ tandai'}</button></div>
+              <div style="display:flex;gap:4px;justify-content:flex-end;margin-top:4px"><button onclick="togglePaid('${t.ID}')" style="font-size:10px;padding:2px 8px;border-radius:10px;cursor:pointer;border:1px solid ${isPaid(t.ID)?'#3b82f660':'var(--border2)'};background:${isPaid(t.ID)?'#0a1a3a':'transparent'};color:${isPaid(t.ID)?'var(--blue)':'var(--text3)'}">${isPaid(t.ID)?'✅ lunas':'☐ lunas'}</button><button title="Tandai lunas s/d transaksi ini" onclick="markPaidUntil('${t.ID}','${esc(nama)}')" style="font-size:10px;padding:2px 6px;border-radius:10px;cursor:pointer;border:1px solid var(--border2);background:transparent;color:var(--text3)">s/d sini</button></div>`:''}
             </div>
           </div>
         </div>`;
