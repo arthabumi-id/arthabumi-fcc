@@ -2357,6 +2357,8 @@ function ccbTick(){
   document.querySelectorAll('.ccb-chk:checked').forEach(el=>{ sum+=Number(el.dataset.amt||0); cnt++; });
   const cs=document.getElementById('ccb_checkedSum'); if(cs) cs.textContent=(sum<0?'−':'')+fmt(sum);
   const cc=document.getElementById('ccb_cnt'); if(cc) cc.textContent=cnt;
+  const ts=document.getElementById('ccb_topSum'); if(ts) ts.textContent=(sum<0?'−':'')+fmt(sum);
+  const tc=document.getElementById('ccb_topCnt'); if(tc) tc.textContent=cnt;
   const stmtEl=document.getElementById('ccb_stmt'), diffEl=document.getElementById('ccb_diff');
   if(stmtEl && diffEl){
     const stmt=unfmtNum(stmtEl.value);
@@ -2395,6 +2397,10 @@ function renderCCBill(from,to){
   const sumCic=cics.reduce((s,c)=>s+c.amt,0);
   const row=(tgl,label,amt,color,chkAmt,txnId)=>{const ca=(chkAmt===undefined?amt:chkAmt);return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid #ffffff10"><input type="checkbox" class="ccb-chk" data-amt="${ca}" data-id="${txnId||''}" onchange="ccbTick(this)" style="width:18px;height:18px;flex-shrink:0;accent-color:#7c5cff"><div style="flex:1;min-width:0"><div style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(label)}</div><div style="font-size:10px;color:var(--text3)">${tgl}</div></div><div style="font-size:13px;font-weight:600;color:${color};flex-shrink:0">${ca<0?'−':''}${fmt(amt)}</div></div>`;};
   document.getElementById('drawerBody').innerHTML=`
+    <div id="ccb_topbar" style="position:sticky;top:0;z-index:6;background:#12121c;padding:8px 10px;margin-bottom:10px;border-radius:8px;border:1px solid #7c5cff55;display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <span style="font-size:11px;color:var(--text2)"><i class="ti ti-checkbox" style="font-size:13px;vertical-align:middle;color:#b9a3ff"></i> Dicentang sekarang · <span id="ccb_topCnt">0</span> baris</span>
+      <b id="ccb_topSum" style="font-size:15px;color:#b9a3ff">${fmt(0)}</b>
+    </div>
     <div style="display:flex;gap:8px;margin-bottom:10px">
       <div class="form-group" style="flex:1;margin:0"><label class="form-label">Dari</label><input type="date" class="form-input" id="ccb_from" value="${from}" onchange="ccbApply()"></div>
       <div class="form-group" style="flex:1;margin:0"><label class="form-label">Sampai</label><input type="date" class="form-input" id="ccb_to" value="${to}" onchange="ccbApply()"></div>

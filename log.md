@@ -11,6 +11,7 @@ Client-only, tanpa redeploy.
 - Verifikasi: vm.Script 3 blok = 0 error; "reserve app lama" 0 ref.
 - **Tambahan UX (sesi sama):** baris "Ditandai kartu ini" di Detail Akun CC tampilkan total ditandai; `toggleMark` munculkan toast tiap tandai.
 - **Cara A — "perlu transfer sekarang" (non-akumulasi):** helper `reserveGapBank(bank)=max(0, lockedInBank − getSaldo.saldo)` + `cardsOnReserveBank`. Detail CC & toast tampilkan GAP (kekurangan utk menutup rekening reserve), bukan total kumulatif — krn saldo sudah memuat transfer sebelumnya. Bila 1 rekening dipakai >1 kartu, gap = gabungan (ditandai di UI). vm.Script 0 error.
+- **Rincian Tagihan (ccbill): bar total sticky di ATAS** — `#ccb_topbar` (sticky top) "Dicentang sekarang · N baris · Rp X", di-update live oleh `ccbTick` (set `ccb_topSum`/`ccb_topCnt`). Total bawah + selisih statement tetap. vm.Script 0 error.
 **Pending push:** index.html (gabung dgn Fase A + v23 + v23.1). Reserve Fase A/C client-only; v23 perlu redeploy (sheet PAID_MARK). Catatan: ⚠️ bash mount cap Code.gs 55028 byte — pakai Read tool.
 
 ---
