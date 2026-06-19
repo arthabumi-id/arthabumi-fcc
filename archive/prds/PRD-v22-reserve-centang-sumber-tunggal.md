@@ -1,6 +1,9 @@
 # PRD v22 — Reserve CC = Centang (Sumber Tunggal) + Rekening Reserve Nyata
 
-Status: **DRAFT — menunggu sign-off Eddy. Belum ada kode.**
+Status: **IMPLEMENTED (2026-06-19).** Fase A ✅ & Fase C ✅ dikerjakan (client-only).
+Fase B ❌ DILEWATI — cek data Sheet membuktikan tak ada reserve manual yg perlu dikonversi
+(CIMB-ACCOR 1,7jt & MAYBANK-BMW 6,3jt sudah ditutup centang; BCA-KRIS/BNI-JCB = cicilan auto).
+Pending: push index.html + bump sw.js. (Tidak perlu redeploy Code.gs untuk PRD ini.)
 Tanggal: 2026-06-19
 
 ---

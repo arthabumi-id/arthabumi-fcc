@@ -9,6 +9,7 @@ Client-only, tanpa redeploy.
 - Keputusan: **batalkan hapus baris RESERVE_LOG** (terhubung TXN Reserve CC/Masuk → riskan saldo). Cukup berhenti menampilkan (aman/reversible).
 - **Fase C (client-only):** (1) buang label "reserve app lama" di Detail Akun CC; (2) sembunyikan tab manual "Reserve Fund CC" (`switchTTab('reserve')` button display:none) — setor reserve manual dipensiunkan; (3) `ccReserveStrip` diganti ke model CENTANG (Reserve CC = dicentang + sisa cicilan, di rekening reserve; tanpa tombol "Reserve" manual). `unreservedCC`/`reserveNow` masih ada tapi tak terpakai (harmless).
 - Verifikasi: vm.Script 3 blok = 0 error; "reserve app lama" 0 ref.
+- **Tambahan UX (sesi sama):** baris "Ditandai (perlu di-reserve)" di Detail Akun CC tampilkan total + "Transfer total ini ke rekening reserve: <bank>"; `toggleMark` munculkan toast total terbaru tiap tandai (biar terlihat walau scroll). vm.Script 0 error.
 **Pending push:** index.html (gabung dgn Fase A + v23 + v23.1). Reserve Fase A/C client-only; v23 perlu redeploy (sheet PAID_MARK). Catatan: ⚠️ bash mount cap Code.gs 55028 byte — pakai Read tool.
 
 ---

@@ -1,6 +1,8 @@
 # PRD v23 — Centang "Lunas" per Transaksi CC + Sembunyikan yang Lunas
 
-Status: **DRAFT — menunggu sign-off Eddy. Belum ada kode.**
+Status: **IMPLEMENTED (2026-06-19).** v23 ✅ (centang lunas + sembunyikan) & v23.1 ✅
+(rekonsiliasi tagihan: baris dikunci → auto-lunas, tak muncul lagi — Cara 1).
+Pending: push index.html + Code.gs + **REDEPLOY Apps Script** (sheet PAID_MARK + markPaid/unmarkPaid/markPaidBatch) + bump sw.js.
 Tanggal: 2026-06-19
 ⚠️ **WAJIB REDEPLOY Code.gs** (sheet + action baru).
 
