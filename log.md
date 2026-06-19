@@ -3,6 +3,16 @@
 
 ---
 
+## SESSION — 2026-06-19 (Cek data reserve via Google Drive + Reserve Fase C bersih-bersih)
+Client-only, tanpa redeploy.
+- **Cek data Sheet** (Google Drive connector, baca spreadsheet 1BYXyk...): reserve manual lama (non-cicilan) HANYA di 2 kartu — CC-CIMB-ACCOR 1,725,100 & CC-MAYBANK-BMW 6,308,449. **Keduanya sudah ditutup centang** (CIMB pas 1,7jt; MAYBANK malah 31,4jt). BCA-KRIS & BNI-JCB reserve-nya 100% cicilan (auto). → **Migrasi Fase B TIDAK PERLU.**
+- Keputusan: **batalkan hapus baris RESERVE_LOG** (terhubung TXN Reserve CC/Masuk → riskan saldo). Cukup berhenti menampilkan (aman/reversible).
+- **Fase C (client-only):** (1) buang label "reserve app lama" di Detail Akun CC; (2) sembunyikan tab manual "Reserve Fund CC" (`switchTTab('reserve')` button display:none) — setor reserve manual dipensiunkan; (3) `ccReserveStrip` diganti ke model CENTANG (Reserve CC = dicentang + sisa cicilan, di rekening reserve; tanpa tombol "Reserve" manual). `unreservedCC`/`reserveNow` masih ada tapi tak terpakai (harmless).
+- Verifikasi: vm.Script 3 blok = 0 error; "reserve app lama" 0 ref.
+**Pending push:** index.html (gabung dgn Fase A + v23 + v23.1). Reserve Fase A/C client-only; v23 perlu redeploy (sheet PAID_MARK). Catatan: ⚠️ bash mount cap Code.gs 55028 byte — pakai Read tool.
+
+---
+
 ## SESSION — 2026-06-19 (v23 Centang "Lunas" + Sembunyikan tagihan lunas di rincian CC) — ⚠️ REDEPLOY
 PRD: `PRD-v23-hide-tagihan-lunas-cc.md` (Q1 default OFF, Q2 Detail Akun CC saja, Q3 tombol massal per-baris). **WAJIB REDEPLOY Code.gs.**
 - **Konsep:** tagihan = saldo berjalan, tak ada status lunas per-txn → ditambah penanda manual `PAID_MARK`. Centang lunas = MURNI filter tampilan, lepas dari tagihan/saldo/reserve, independen dari centang reserve.

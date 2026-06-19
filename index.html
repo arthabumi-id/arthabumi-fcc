@@ -268,7 +268,7 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
     <div class="page" id="page-transfer">
       <div class="transfer-tabs">
         <button class="ttab active" onclick="switchTTab('antar')">Antar Rekening</button>
-        <button class="ttab" onclick="switchTTab('reserve')">Reserve Fund CC</button>
+        <button class="ttab" onclick="switchTTab('reserve')" style="display:none" title="Reserve manual dipensiunkan — reserve sekarang lewat centang transaksi CC">Reserve Fund CC</button>
       </div>
       <div id="tab-antar">
         <div class="card">
@@ -626,21 +626,16 @@ function unreservedCC(namaCC) {
   const regBelum = Math.max(0, regNeed - regRes);
   return { cicNeed, regNeed, cicBelum, regBelum, belum: cicBelum + regBelum };
 }
-// Strip status reserve utk kartu CC — sampai 2 baris (Cicilan, Belanja lain).
+// v22/C: Strip reserve kartu CC — model CENTANG. Reserve = belanja dicentang + sisa cicilan,
+// disimpan di rekening reserve kartu. Tanpa tombol "Reserve" manual (model lama dipensiunkan).
 function ccReserveStrip(namaCC) {
-  const u = unreservedCC(namaCC);
-  const _mTot = markTotalCC(namaCC), _mCnt = markCountCC(namaCC);
-  if (u.cicNeed <= 0 && u.regNeed <= 0 && _mCnt <= 0) return '';
-  const line = (label, need, belum, icon) => {
-    if (need <= 0) return '';
-    const ok = belum <= 0;
-    return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 9px;border-radius:7px;margin-top:6px;background:${ok?'#0a2a1e':'#2a0a0a'};border:1px solid ${ok?'#2dd4a040':'#ef444440'}">
-      <div style="font-size:11px;min-width:0;color:${ok?'var(--green)':'var(--red)'}"><i class="ti ${icon}" style="font-size:12px;vertical-align:middle"></i> ${label} ${fmtS(need)} — ${ok?'ter-reserve ✓':'belum '+fmtS(belum)}</div>
-      ${ok?'':`<button class="btn-danger" style="background:#0a2040;color:var(--blue);border-color:#3b82f640;flex-shrink:0" onclick="reserveNow('${esc(namaCC)}')">Reserve</button>`}
-    </div>`;
-  };
-  const _mLine = _mCnt>0 ? `<div style="padding:5px 9px;border-radius:7px;margin-top:6px;background:#0a1f14;border:1px solid #2dd4a030;font-size:10px;color:var(--text2)">🏷️ Ditandai manual: <strong style="color:var(--green)">${fmtS(_mTot)}</strong> · ${_mCnt} transaksi</div>` : '';
-  return `<div onclick="event.stopPropagation()">${line('Cicilan', u.cicNeed, u.cicBelum, 'ti-calendar-repeat')}${line('Belanja lain', u.regNeed, u.regBelum, 'ti-shopping-cart')}${_mLine}</div>`;
+  const need = reserveNeedCC(namaCC);
+  if (need <= 0) return '';
+  const cic = cicilanRemaining(namaCC), mark = markTotalCC(namaCC), hold = ccHoldingBank(namaCC);
+  const detail = [mark>0?`dicentang ${fmtS(mark)}`:'', cic>0?`cicilan ${fmtS(cic)}`:''].filter(Boolean).join(' · ');
+  return `<div onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:8px;padding:6px 9px;border-radius:7px;margin-top:6px;background:#0a1a2a;border:1px solid #3b82f640">
+    <div style="font-size:11px;min-width:0;color:var(--blue)"><i class="ti ti-lock" style="font-size:12px;vertical-align:middle"></i> Reserve CC ${fmtS(need)}${detail?` <span style="color:var(--text3)">(${detail})</span>`:''}${hold?` <span style="color:var(--text3)">di ${esc(hold)}</span>`:''}</div>
+  </div>`;
 }
 // Buka form Reserve dgn kartu & nominal (selisih belum di-reserve) sudah ke-prefill.
 function reserveNow(namaCC) {
@@ -2890,7 +2885,7 @@ function openAccountDetail(type, nama) {
           </div>
         </div>
       </div>
-      ${isCC ? `<div style="padding:7px 10px;border-radius:8px;margin-bottom:10px;background:#0a1f14;border:1px solid #2dd4a030;font-size:11px;color:var(--text2)"><i class="ti ti-lock" style="font-size:11px;vertical-align:middle;color:var(--green)"></i> Reserve CC (dicentang): <strong style="color:var(--green)">${fmt(markTotalCC(nama))}</strong> · ${markCountCC(nama)} transaksi${(state.reserveFunds[nama]||0)>0?` <span style="color:var(--text3)">· reserve app lama: ${fmtS(state.reserveFunds[nama]||0)}</span>`:''}</div>
+      ${isCC ? `<div style="padding:7px 10px;border-radius:8px;margin-bottom:10px;background:#0a1f14;border:1px solid #2dd4a030;font-size:11px;color:var(--text2)"><i class="ti ti-lock" style="font-size:11px;vertical-align:middle;color:var(--green)"></i> Reserve CC (dicentang): <strong style="color:var(--green)">${fmt(markTotalCC(nama))}</strong> · ${markCountCC(nama)} transaksi</div>
       ${unmarkedRegularCC(nama)>0?`<div style="padding:6px 10px;border-radius:8px;margin-bottom:10px;background:#1a1206;border:1px solid #f59e0b40;font-size:11px;color:var(--amber)"><i class="ti ti-bell" style="font-size:11px;vertical-align:middle"></i> Belum dicentang: <b>${fmt(unmarkedRegularCC(nama))}</b> — tandai belanja yg dananya sudah disiapkan.</div>`:''}
       ${paidExpCount>0?`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px;border-radius:8px;margin-bottom:10px;background:#0a1424;border:1px solid var(--border2);font-size:11px;color:var(--text2)"><span><i class="ti ti-circle-check" style="font-size:12px;vertical-align:middle"></i> ${paidExpCount} belanja ditandai lunas</span><button onclick="window._acctHidePaid=!window._acctHidePaid;acctFilter()" style="font-size:10px;padding:3px 9px;border-radius:10px;cursor:pointer;border:1px solid ${window._acctHidePaid?'#2dd4a060':'var(--border2)'};background:${window._acctHidePaid?'#0a2a1e':'transparent'};color:${window._acctHidePaid?'var(--green)':'var(--text3)'}">${window._acctHidePaid?'✅ disembunyikan':'Sembunyikan'}</button></div>`:''}` : bankReserveCardHTML(nama)}
       ${donutCardHTML('acctKatDonut', katEntries)}
