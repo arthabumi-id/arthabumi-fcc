@@ -1993,7 +1993,6 @@ function openCicilan(){
   const ccOpts=state.ccs.map(c=>`<option>${esc(c.NAMA)}</option>`).join('');
   const bankOpts=state.banks.map(b=>`<option>${esc(b.NAMA)}</option>`).join('');
   const projOpts=`<option value="">— Tidak ada —</option>`+state.projects.map(p=>`<option>${esc(p.NAMA)}</option>`).join('');
-  const katOpts=[...state.kategori].filter(k=>k.TIPE==='Pengeluaran').sort((a,b)=>String(a.NAMA).localeCompare(String(b.NAMA),'id')).map(k=>`<option value="${esc(k.NAMA)}">${esc(k.KELOMPOK)}</option>`).join('');
   document.getElementById('drawerTitle').textContent='Beli Cicilan CC';
   document.getElementById('drawerBody').innerHTML=`
     <div class="form-group"><label class="form-label">Kartu Kredit (yg dipakai)</label><select class="form-input" id="ci_cc" onchange="var h=document.getElementById('ci_holding');if(h)h.value=ccHoldingBank(this.value)">${ccOpts}</select></div>
@@ -2008,7 +2007,11 @@ function openCicilan(){
     </div>
     <div class="card" style="padding:8px 10px;margin:0 0 12px;background:#140d24;border:1px solid #7c5cff40"><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Angsuran per bulan</div><div id="ci_per" style="font-size:16px;font-weight:700;color:#b9a3ff">Rp 0</div><div id="ci_perSub" style="font-size:10px;color:var(--text3)"></div></div>
     <div class="form-group"><label class="form-label">Project (biaya masuk ke sini)</label><select class="form-input" id="ci_proj">${projOpts}</select></div>
-    <div class="form-group"><label class="form-label">Kategori biaya</label><input class="form-input" id="ci_kat" list="ci_kat_list" placeholder="Material / Alat…" value="Material"><datalist id="ci_kat_list">${katOpts}</datalist></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Kelompok</label><select class="form-input" id="ci_kat_grp" onchange="ciFillKatList()"></select></div>
+      <div class="form-group"><label class="form-label">Kategori biaya</label><select class="form-input" id="ci_kat_sel" onchange="ciOnKatSelChange()"></select></div>
+    </div>
+    <div class="form-group" id="ci_kat_new_wrap" style="display:none"><label class="form-label" style="color:var(--amber)"><i class="ti ti-plus"></i> Nama kategori baru</label><input class="form-input" id="ci_kat_new_name" placeholder="ketik nama kategori baru…"></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Dana reserve dari (sumber)</label><select class="form-input" id="ci_bank">${bankOpts}</select></div>
       <div class="form-group"><label class="form-label">Simpan di rekening</label><select class="form-input" id="ci_holding">${state.banks.map(b=>`<option ${b.NAMA===ccHoldingBank(state.ccs[0]&&state.ccs[0].NAMA)?'selected':''}>${esc(b.NAMA)}</option>`).join('')}</select></div>
@@ -2017,8 +2020,35 @@ function openCicilan(){
     <button class="btn-primary" onclick="saveCicilan()"><i class="ti ti-calendar-repeat"></i> Simpan Cicilan</button>
     <div class="settings-sub" style="margin-top:8px">Saat simpan: biaya penuh (pokok+bunga) langsung masuk pengeluaran project terpilih, dan dana sejumlah itu otomatis di-<b>reserve</b> dari bank ke kartu. Tiap bulan tekan <b>Bayar angsuran</b> (di sini atau di Bayar CC) untuk melepas reserve.</div>`;
   drawerMode='cicilan'; drawerEditId=null;
+  ciFillKatGroup('PROJECT','Material');
   ciPreview();
   document.getElementById('drawerBg').classList.add('open');
+}
+// Cascade Kelompok → Kategori utk form Cicilan (jenis selalu Pengeluaran). Pola sama dgn form Transaksi.
+function ciKelompoks(){
+  let set=[...new Set(state.kategori.filter(k=>k.TIPE==='Pengeluaran').map(k=>k.KELOMPOK))];
+  if(!set.length) set=['PROJECT'];
+  return set.sort((a,b)=>String(a).localeCompare(String(b),'id'));
+}
+function ciFillKatGroup(presetGrp,presetKat){
+  const grpSel=document.getElementById('ci_kat_grp'); if(!grpSel)return;
+  const grps=ciKelompoks();
+  const useGrp=(presetGrp&&grps.includes(presetGrp))?presetGrp:grps[0];
+  grpSel.innerHTML=grps.map(g=>`<option ${g===useGrp?'selected':''}>${esc(g)}</option>`).join('');
+  ciFillKatList(presetKat);
+}
+function ciFillKatList(presetKat){
+  const grp=document.getElementById('ci_kat_grp').value;
+  const sel=document.getElementById('ci_kat_sel'); if(!sel)return;
+  const cats=state.kategori.filter(k=>k.TIPE==='Pengeluaran' && k.KELOMPOK===grp)
+    .sort((a,b)=>String(a.NAMA).localeCompare(String(b.NAMA),'id'));
+  sel.innerHTML=cats.map(k=>`<option ${k.NAMA===presetKat?'selected':''}>${esc(k.NAMA)}</option>`).join('')
+    +`<option value="__NEW__">➕ Tambah kategori baru…</option>`;
+  ciOnKatSelChange();
+}
+function ciOnKatSelChange(){
+  const sel=document.getElementById('ci_kat_sel'), wrap=document.getElementById('ci_kat_new_wrap');
+  if(sel&&wrap) wrap.style.display=(sel.value==='__NEW__')?'block':'none';
 }
 function ciPreview(){
   const pokok=unfmtNum(document.getElementById('ci_pokok').value)||0;
@@ -2036,13 +2066,25 @@ async function saveCicilan(){
   const tenor=Math.max(1,Math.floor(Number(document.getElementById('ci_tenor').value)||1));
   const tgl=document.getElementById('ci_tgl').value||today();
   const proj=document.getElementById('ci_proj').value;
-  const kat=(document.getElementById('ci_kat').value||'Material').trim();
+  // Kategori: pilih Kelompok → Kategori. Opsi "__NEW__" = buat kategori baru di kelompok terpilih.
+  const grpSel=document.getElementById('ci_kat_grp').value;
+  const katVal=document.getElementById('ci_kat_sel').value;
+  let kat='', newKatObj=null;
+  if(katVal==='__NEW__'){
+    kat=(document.getElementById('ci_kat_new_name').value||'').trim();
+    if(kat){
+      const exist=state.kategori.find(k=>String(k.NAMA).toLowerCase()===kat.toLowerCase());
+      if(exist){kat=exist.NAMA;}
+      else newKatObj={ID:uid(),NAMA:kat,KELOMPOK:grpSel,TIPE:'Pengeluaran',CREATED_AT:new Date().toISOString()};
+    }
+  } else { kat=katVal; }
   const bank=document.getElementById('ci_bank').value;
   const holding=document.getElementById('ci_holding').value||bank;
   const notes=document.getElementById('ci_notes').value||'';
-  if(!cc||!desk||!pokok||!bank){showToast('Kartu, deskripsi, harga pokok, bank reserve wajib diisi','error');return;}
+  if(!cc||!desk||!pokok||!bank||!kat){showToast('Kartu, deskripsi, harga pokok, bank reserve, kategori wajib diisi','error');return;}
   if(!proj && !confirm('Tanpa project — biaya tidak masuk cashflow project mana pun. Lanjut?'))return;
   const per=Math.round((pokok+bunga)/tenor);
+  if(newKatObj){state.kategori.push(newKatObj);if(API_URL)bgPost({action:'addKat',data:newKatObj},'Kategori '+newKatObj.NAMA);showToast('Kategori baru "'+newKatObj.NAMA+'" ditambahkan','success');}
   closeDrawer();
   showToast('Menyimpan cicilan…','success');
   const res=await apiPost({action:'addCicilan',data:{CC:cc,BANK:bank,HOLDING:holding,DESKRIPSI:desk,NOMINAL_POKOK:pokok,BUNGA_TOTAL:bunga,TENOR:tenor,TGL_BELI:tgl,TGL_MULAI:tgl,PROJECT:proj,KATEGORI:kat,NOTES:notes,USER:state.user}});
