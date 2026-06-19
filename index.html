@@ -2849,6 +2849,8 @@ function renderMaster() {
 function openAccountDetail(type, nama) {
   const isCC = type === 'cc';
   window._acctHidePaid = false;   // v23: toggle "sembunyikan yg lunas" default OFF tiap buka
+  // v22/C: snapshot centang reserve saat buka → "Ditandai sekarang" = yg ditandai SESUDAH ini saja (sesi ini).
+  if(isCC){ window._markBaselineCard = nama; window._markBaseline = new Set((state.marks||[]).filter(m=>m.CC===nama).map(m=>String(m.TXN_ID))); }
   document.getElementById('drawerTitle').textContent = nama;
 
   // Tampil cepat dari cache txn terbaru; riwayat penuh di-fetch on-demand
@@ -2878,6 +2880,10 @@ function openAccountDetail(type, nama) {
     // v23: sembunyikan belanja yg ditandai LUNAS (hanya tampilan; tagihan/saldo tetap dari `data` penuh).
     // Baris pembayaran (Pemasukan) & reserve TETAP tampil (keputusan Eddy).
     const paidExpCount = isCC ? data.filter(t=>t.JENIS==='Pengeluaran' && isPaid(t.ID)).length : 0;
+    // v22/C: "Ditandai sekarang" = centang reserve yg ditambahkan SETELAH layar dibuka (sesi ini saja).
+    const _mBase = (isCC && window._markBaselineCard===nama && window._markBaseline) ? window._markBaseline : new Set();
+    const _sesMarks = isCC ? (state.marks||[]).filter(m=>m.CC===nama && !_mBase.has(String(m.TXN_ID))) : [];
+    const sesSum = _sesMarks.reduce((s,m)=>s+Number(m.NOMINAL||0),0), sesCnt = _sesMarks.length;
     const hidePaid = isCC && window._acctHidePaid;
     const rows = hidePaid ? data.filter(t=> !(t.JENIS==='Pengeluaran' && isPaid(t.ID))) : data;
 
@@ -2898,7 +2904,7 @@ function openAccountDetail(type, nama) {
           </div>
         </div>
       </div>
-      ${isCC ? `<div style="position:sticky;top:0;z-index:5;padding:8px 10px;border-radius:8px;margin-bottom:10px;background:#0a1f14;border:1px solid #2dd4a030;font-size:11px;color:var(--text2)"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span><i class="ti ti-lock" style="font-size:11px;vertical-align:middle;color:var(--green)"></i> Ditandai kartu ini · ${markCountCC(nama)} transaksi</span><strong style="color:var(--green);font-size:14px">${fmt(markTotalCC(nama))}</strong></div>${(()=>{const hold=ccHoldingBank(nama),gap=reserveGapBank(hold),n=cardsOnReserveBank(hold);return gap>0?`<div style="margin-top:5px;padding-top:5px;border-top:1px solid #ffffff12;font-size:11px;color:var(--amber)"><i class="ti ti-arrow-right" style="font-size:11px;vertical-align:middle"></i> Perlu transfer sekarang ke <b>${esc(hold)}</b>: <b>${fmt(gap)}</b>${n>1?` <span style="color:var(--text3)">(gabungan ${n} kartu di rekening ini)</span>`:''}</div>`:`<div style="margin-top:5px;padding-top:5px;border-top:1px solid #ffffff12;font-size:11px;color:var(--green)"><i class="ti ti-circle-check" style="font-size:11px;vertical-align:middle"></i> Reserve di <b>${esc(hold)}</b> sudah cukup</div>`;})()}</div>
+      ${isCC ? `<div style="position:sticky;top:0;z-index:5;padding:8px 10px;border-radius:8px;margin-bottom:10px;background:#0a1f14;border:1px solid #2dd4a030;font-size:11px;color:var(--text2)">${sesCnt>0?`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding-bottom:5px;margin-bottom:5px;border-bottom:1px solid #ffffff14"><span style="color:#b9a3ff"><i class="ti ti-checkbox" style="font-size:12px;vertical-align:middle"></i> Ditandai sekarang · ${sesCnt} baris</span><strong style="color:#b9a3ff;font-size:15px">${fmt(sesSum)}</strong></div>`:''}<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span><i class="ti ti-lock" style="font-size:11px;vertical-align:middle;color:var(--green)"></i> Total ditandai kartu ini · ${markCountCC(nama)} transaksi</span><strong style="color:var(--green);font-size:14px">${fmt(markTotalCC(nama))}</strong></div>${(()=>{const hold=ccHoldingBank(nama),gap=reserveGapBank(hold),n=cardsOnReserveBank(hold);return gap>0?`<div style="margin-top:5px;padding-top:5px;border-top:1px solid #ffffff12;font-size:11px;color:var(--amber)"><i class="ti ti-arrow-right" style="font-size:11px;vertical-align:middle"></i> Perlu transfer sekarang ke <b>${esc(hold)}</b>: <b>${fmt(gap)}</b>${n>1?` <span style="color:var(--text3)">(gabungan ${n} kartu di rekening ini)</span>`:''}</div>`:`<div style="margin-top:5px;padding-top:5px;border-top:1px solid #ffffff12;font-size:11px;color:var(--green)"><i class="ti ti-circle-check" style="font-size:11px;vertical-align:middle"></i> Reserve di <b>${esc(hold)}</b> sudah cukup</div>`;})()}</div>
       ${unmarkedRegularCC(nama)>0?`<div style="padding:6px 10px;border-radius:8px;margin-bottom:10px;background:#1a1206;border:1px solid #f59e0b40;font-size:11px;color:var(--amber)"><i class="ti ti-bell" style="font-size:11px;vertical-align:middle"></i> Belum dicentang: <b>${fmt(unmarkedRegularCC(nama))}</b> — tandai belanja yg dananya sudah disiapkan.</div>`:''}
       ${paidExpCount>0?`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px;border-radius:8px;margin-bottom:10px;background:#0a1424;border:1px solid var(--border2);font-size:11px;color:var(--text2)"><span><i class="ti ti-circle-check" style="font-size:12px;vertical-align:middle"></i> ${paidExpCount} belanja ditandai lunas</span><button onclick="window._acctHidePaid=!window._acctHidePaid;acctFilter()" style="font-size:10px;padding:3px 9px;border-radius:10px;cursor:pointer;border:1px solid ${window._acctHidePaid?'#2dd4a060':'var(--border2)'};background:${window._acctHidePaid?'#0a2a1e':'transparent'};color:${window._acctHidePaid?'var(--green)':'var(--text3)'}">${window._acctHidePaid?'✅ disembunyikan':'Sembunyikan'}</button></div>`:''}` : bankReserveCardHTML(nama)}
       ${donutCardHTML('acctKatDonut', katEntries)}

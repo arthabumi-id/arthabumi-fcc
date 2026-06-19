@@ -13,6 +13,7 @@ Client-only, tanpa redeploy.
 - **Cara A — "perlu transfer sekarang" (non-akumulasi):** helper `reserveGapBank(bank)=max(0, lockedInBank − getSaldo.saldo)` + `cardsOnReserveBank`. Detail CC & toast tampilkan GAP (kekurangan utk menutup rekening reserve), bukan total kumulatif — krn saldo sudah memuat transfer sebelumnya. Bila 1 rekening dipakai >1 kartu, gap = gabungan (ditandai di UI). vm.Script 0 error.
 - **Rincian Tagihan (ccbill): bar total sticky di ATAS** — `#ccb_topbar` (sticky top) "Dicentang sekarang · N baris · Rp X", di-update live oleh `ccbTick` (set `ccb_topSum`/`ccb_topCnt`). Total bawah + selisih statement tetap. vm.Script 0 error.
 - **Detail Akun CC: kotak "Ditandai kartu ini" dibuat STICKY** (position:sticky;top:0) → total tetap kelihatan saat scroll/tandai. Toast `toggleMark` kembali tampilkan total ditandai + (gap bila kurang). vm.Script 0 error.
+- **"Ditandai sekarang" (sesi ini saja):** `openAccountDetail` snapshot `window._markBaseline` (set TXN_ID marked saat buka). `renderDetail` hitung `_sesMarks` = marks kartu ini yg TIDAK ada di baseline → `sesSum`/`sesCnt`. Tampil baris ungu "Ditandai sekarang · N baris · Rp Z" di kotak sticky (hanya bila >0), terpisah dari total kumulatif. Reset saat layar ditutup-buka. vm.Script 0 error.
 **Pending push:** index.html (gabung dgn Fase A + v23 + v23.1). Reserve Fase A/C client-only; v23 perlu redeploy (sheet PAID_MARK). Catatan: ⚠️ bash mount cap Code.gs 55028 byte — pakai Read tool.
 
 ---
