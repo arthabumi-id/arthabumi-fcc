@@ -19,7 +19,6 @@ const S = {
   MARK: 'RESERVE_MARK',
   PAIDMARK: 'PAID_MARK',   // v23: penanda manual "tagihan sudah dibayar/lunas" per transaksi CC
   INVEST: 'MASTER_INVEST', INVESTLOG: 'INVEST_LOG', INVESTVAL: 'INVEST_VALUE',  // v21 investasi (terpisah dari bisnis)
-  ADD: 'ADDENDUM',  // v24: kerja tambah/kurang (addendum) per project — ubah nilai kontrak efektif
 };
 
 const HEADERS = {
@@ -65,10 +64,6 @@ const HEADERS = {
   [S.INVESTLOG]:['ID','TANGGAL','AKUN','JENIS','REKENING','NOMINAL','NOTES','REF_ID','CREATED_BY','CREATED_AT'],
   // INVEST_VALUE = snapshot nilai portofolio (input manual berkala). Termuda per akun = nilai kini.
   [S.INVESTVAL]:['ID','TANGGAL','AKUN','NILAI','NOTES','CREATED_BY','CREATED_AT'],
-  // ── v24 ADDENDUM (kerja tambah/kurang per project) ──
-  // JENIS: 'Tambah' / 'Kurang'. NOMINAL selalu positif; arah dari JENIS. Nilai kontrak efektif
-  // = NILAI_CONTRACT + Σ(Tambah) − Σ(Kurang). TIDAK menyentuh laba/kas (laba tetap basis transaksi).
-  [S.ADD]:      ['ID','PROJECT_ID','PROJECT_NAMA','TANGGAL','JENIS','DESKRIPSI','NOMINAL','CREATED_BY','CREATED_AT'],
 };
 
 // ── INIT ─────────────────────────────────────────────────────
@@ -188,7 +183,6 @@ function doPost(e) {
       case 'addBank':     res = addRow(ss, S.BANK, data); break;
       case 'addCC':       res = addRow(ss, S.CC, data); break;
       case 'addProj':     res = addRow(ss, S.PROJ, data); break;
-      case 'addAddendum': res = addAddendum(ss, data); break;
       case 'addKat':      res = addRow(ss, S.KAT, data); break;
       case 'addTransfer': res = addTransfer(ss, data); break;
       case 'deleteTransfer': res = deleteTransfer(ss, data); break;
@@ -246,7 +240,6 @@ function getBundle(ss, params) {
     investAkun:  getSheet(ss, S.INVEST),
     investLog:   getSheet(ss, S.INVESTLOG),
     investValue: getSheet(ss, S.INVESTVAL),
-    addendums:   getSheet(ss, S.ADD),
     summary:   getSummary(ss),
     txns:      getTxns(ss, { since: since }),
     since:     since,
@@ -350,29 +343,6 @@ function addRow(ss, sheetName, data) {
   if (iCreated >= 0 && !data['CREATED_AT']) row[iCreated] = new Date().toISOString();
   sheet.appendRow(row);
   return { ok: true, id: row[0] };
-}
-
-// ── v24 ADDENDUM: kerja tambah/kurang per project ──
-// Murni ubah nilai kontrak EFEKTIF (dihitung client). TIDAK menulis TXN, TIDAK buat Piutang,
-// TIDAK menyentuh laba/kas. Hapus pakai deleteRow generik (sheet=S.ADD, id). Auto-create sheet.
-function addAddendum(ss, data) {
-  const sh = ensureSheet(ss, S.ADD);
-  const now = new Date().toISOString();
-  const id = data.ID || ('ADD' + Date.now());
-  const jenis = (data.JENIS === 'Kurang') ? 'Kurang' : 'Tambah';
-  const o = {
-    ID: id,
-    PROJECT_ID: data.PROJECT_ID || '',
-    PROJECT_NAMA: data.PROJECT_NAMA || '',
-    TANGGAL: data.TANGGAL || now.slice(0, 10),
-    JENIS: jenis,
-    DESKRIPSI: data.DESKRIPSI || '',
-    NOMINAL: Math.abs(Number(data.NOMINAL) || 0),
-    CREATED_BY: data.USER || data.CREATED_BY || '',
-    CREATED_AT: now,
-  };
-  sh.appendRow(HEADERS[S.ADD].map(h => o[h] !== undefined ? o[h] : ''));
-  return { ok: true, id: id };
 }
 
 // ── IMPORT BATCH: banyak txn + master baru (proj/kat) sekali jalan ──
@@ -1079,67 +1049,4 @@ function addInvestAkun(ss, data) {
 function addInvestFlow(ss, data) {
   const sh = ensureSheet(ss, S.INVESTLOG);
   const now = new Date().toISOString();
-  const ref = data.REF_ID || ('IVF' + Date.now());
-  const amt = Math.abs(Number(data.NOMINAL)||0);
-  const jenis = (data.JENIS === 'Tarik') ? 'Tarik' : 'Setor';
-  const akun = data.AKUN || '';
-  const rek = data.REKENING || '';
-  const tgl = data.TANGGAL || now.slice(0,10);
-  const realBank = rek && rek !== '(luar)';
-  sh.appendRow(['ID'+Date.now(), tgl, akun, jenis, rek, amt, data.NOTES||'', ref, data.USER||'', now]);
-  if (realBank) {
-    const tx = ss.getSheetByName(S.TXN);
-    if (jenis === 'Setor') {
-      tx.appendRow(['ID'+Date.now()+'I', tgl, 'Pengeluaran', '', rek, 'Setor Investasi', amt,
-        '[INVEST '+ref+'] setor ke '+akun+' '+(data.NOTES||''), 'Investasi', data.USER||'', now]);
-    } else {
-      tx.appendRow(['ID'+Date.now()+'I', tgl, 'Pemasukan', '', rek, 'Tarik Investasi', amt,
-        '[INVEST '+ref+'] tarik dari '+akun+' '+(data.NOTES||''), 'Investasi', data.USER||'', now]);
-    }
-  }
-  return { ok:true, ref:ref };
-}
-
-// Simpan snapshot nilai portofolio sebuah akun pada tanggal tertentu (input manual).
-// Snapshot termuda per akun = nilai kini (dihitung client). Hapus pakai deleteRow generik.
-function addInvestValue(ss, data) {
-  const sh = ensureSheet(ss, S.INVESTVAL);
-  const now = new Date().toISOString();
-  const id = data.ID || ('IVV' + Date.now());
-  const o = { ID:id, TANGGAL:data.TANGGAL||now.slice(0,10), AKUN:data.AKUN||'',
-              NILAI:Math.abs(Number(data.NILAI)||0), NOTES:data.NOTES||'',
-              CREATED_BY:data.USER||'', CREATED_AT:now };
-  sh.appendRow(HEADERS[S.INVESTVAL].map(h => o[h] !== undefined ? o[h] : ''));
-  return { ok:true, id:id };
-}
-
-// Hapus 1 arus kas investasi (by REF_ID) + TXN terkait (NOTES memuat ref). Dari bawah.
-function deleteInvestFlow(ss, data) {
-  const ref = String(data.refId || data.REF_ID || '');
-  if (!ref) return { error:'refId required' };
-  const sh = ss.getSheetByName(S.INVESTLOG);
-  if (sh && sh.getLastRow() > 1) {
-    const all = sh.getRange(1,1,sh.getLastRow(),sh.getLastColumn()).getValues();
-    const c = all[0].indexOf('REF_ID');
-    for (let i=all.length-1;i>=1;i--) if (String(all[i][c])===ref) sh.deleteRow(i+1);
-  }
-  const tx = ss.getSheetByName(S.TXN);
-  if (tx && tx.getLastRow() > 1) {
-    const all = tx.getRange(1,1,tx.getLastRow(),tx.getLastColumn()).getValues();
-    const c = all[0].indexOf('NOTES');
-    for (let i=all.length-1;i>=1;i--) if (String(all[i][c]).indexOf(ref)>=0) tx.deleteRow(i+1);
-  }
-  return { ok:true };
-}
-
-function daysAgoISO(days) {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return d.toISOString().slice(0, 10);
-}
-
-function json(obj) {
-  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
-}
-// v3 scalable backend
-
+  const ref = data.REF_ID ||

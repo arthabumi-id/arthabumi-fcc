@@ -430,7 +430,6 @@ let state = {
   investAkun: [], // v21: akun investasi (MASTER_INVEST) — pribadi, terpisah dari bisnis
   investLog: [],  // v21: arus kas modal (INVEST_LOG) setor/tarik
   investValue: [],// v21: snapshot nilai portofolio (INVEST_VALUE)
-  addendums: [],  // v24: kerja tambah/kurang per project (ADDENDUM) — ubah nilai kontrak efektif
   marks: [],      // v20: centang "sudah di-reserve" per txn CC (RESERVE_MARK)
   paidMarks: [],  // v23: centang "lunas" per txn CC (PAID_MARK) — murni filter tampilan rincian CC
   pending: [],    // antrian operasi optimistic save yg belum/ gagal terkirim ke server
@@ -470,7 +469,7 @@ function saveLocal() {
   localStorage.setItem('fcc_data', JSON.stringify({
     banks: state.banks, ccs: state.ccs, projects: state.projects,
     kategori: state.kategori, txns: state.txns, transfers: state.transfers,
-    reserves: state.reserves, kasbon: state.kasbon, jadwal: state.jadwal, piutang: state.piutang, cicilan: state.cicilan, ccbills: state.ccbills, marks: state.marks, paidMarks: state.paidMarks, investAkun: state.investAkun, investLog: state.investLog, investValue: state.investValue, addendums: state.addendums, summary: state.summary, txnsSince: state.txnsSince
+    reserves: state.reserves, kasbon: state.kasbon, jadwal: state.jadwal, piutang: state.piutang, cicilan: state.cicilan, ccbills: state.ccbills, marks: state.marks, paidMarks: state.paidMarks, investAkun: state.investAkun, investLog: state.investLog, investValue: state.investValue, summary: state.summary, txnsSince: state.txnsSince
   }));
 }
 
@@ -786,26 +785,6 @@ function projProfit(nama){
   const laba = cf.masuk - cf.keluar;
   return { masuk: cf.masuk, keluar: cf.keluar, laba, margin: cf.masuk>0 ? laba/cf.masuk*100 : 0 };
 }
-// ── v24 ADDENDUM (kerja tambah/kurang) ──
-// Cocokkan addendum ke project by ID (utama) atau NAMA (fallback bila ID kosong/nama berubah).
-function projAddendums(p){
-  if(!p) return [];
-  return (state.addendums||[]).filter(a =>
-    (p.ID && a.PROJECT_ID && String(a.PROJECT_ID)===String(p.ID)) ||
-    (a.PROJECT_NAMA && p.NAMA && String(a.PROJECT_NAMA)===String(p.NAMA))
-  );
-}
-// Total perubahan kontrak: +Tambah −Kurang.
-function addendumDelta(p){
-  return projAddendums(p).reduce((s,a)=>{
-    const n = Math.abs(Number(a.NOMINAL)||0);
-    return s + (a.JENIS==='Kurang' ? -n : n);
-  }, 0);
-}
-// Nilai kontrak efektif = kontrak awal + delta addendum.
-function effectiveContract(p){
-  return (Number(p&&p.NILAI_CONTRACT)||0) + addendumDelta(p);
-}
 // Agregat laba bersih SELURUH project berstatus Selesai
 function doneProjectsProfit(){
   let masuk=0, keluar=0, n=0;
@@ -1003,7 +982,6 @@ async function syncAll() {
     state.investAkun = data.investAkun || state.investAkun || [];
     state.investLog = data.investLog || state.investLog || [];
     state.investValue = data.investValue || state.investValue || [];
-    state.addendums = data.addendums || state.addendums || [];
     state.summary = data.summary || null; // null bila pakai getAll lama → accessor fallback ke txns
     state.txnsSince = data.since || state.txnsSince;
     computeReserve();
@@ -2568,9 +2546,7 @@ function filterTxn() {
 function projCard(p){
     const cf = getProjCF(p.NAMA);
     const pr = projProfit(p.NAMA);
-    const eff = effectiveContract(p);
-    const delta = addendumDelta(p);
-    const pct = eff > 0 ? Math.min(100, Math.round(cf.masuk/eff*100)) : 0;
+    const pct = p.NILAI_CONTRACT > 0 ? Math.min(100, Math.round(cf.masuk/p.NILAI_CONTRACT*100)) : 0;
     return `<div class="card" style="cursor:pointer" onclick="openProjectDetail('${p.ID}')">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
         <div style="flex:1;min-width:0">
@@ -2580,7 +2556,7 @@ function projCard(p){
         <span class="badge ${p.STATUS==='Jalan'?'badge-amber':p.STATUS==='Selesai'?'badge-green':''}" style="margin-left:10px;flex-shrink:0;${p.STATUS==='Hold'?'background:#3a3a1a;color:#e0c000;border:1px solid #e0c00040':''}${p.STATUS==='Abaikan'?'background:#2a2a2a;color:var(--text3);border:1px solid #ffffff20':''}">${p.STATUS}</span>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-        <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Nilai${delta?' efektif':''}</div><div style="font-size:12px;font-weight:600">${eff?fmt(eff):'—'}${delta?`<span style="font-size:9px;font-weight:500;color:${delta>0?'var(--green)':'var(--red)'}"> (${delta>0?'+':'-'}${fmt(Math.abs(delta))})</span>`:''}</div></div>
+        <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Nilai</div><div style="font-size:12px;font-weight:600">${p.NILAI_CONTRACT?fmt(p.NILAI_CONTRACT):'—'}</div></div>
         <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Masuk</div><div style="font-size:12px;font-weight:600;color:var(--green)">+${fmt(cf.masuk)}</div></div>
         <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Keluar</div><div style="font-size:12px;font-weight:600;color:var(--red)">-${fmt(cf.keluar)}</div></div>
         <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Sisa CF</div><div style="font-size:12px;font-weight:600;color:${cf.sisa>=0?'var(--green)':'var(--red)'}">${cf.sisa>=0?'+':'-'}${fmt(Math.abs(cf.sisa))}</div></div>
@@ -3231,7 +3207,6 @@ function detailTxnCard(t) {
 function openProjectDetail(id) {
   const p = state.projects.find(x => x.ID === id);
   if (!p) return;
-  currentProjDetailId = id;
   const nama = p.NAMA;
   document.getElementById('drawerTitle').textContent = nama;
   let projTxns = state.txns.filter(t => t.PROJECT === nama);
@@ -3250,7 +3225,7 @@ function openProjectDetail(id) {
         <span style="font-size:11px;color:var(--text2);text-transform:uppercase">Laba Bersih (Margin)</span>
         <span style="font-size:16px;font-weight:700;color:${pr.laba>=0?'var(--green)':'var(--red)'}">${pr.laba>=0?'+':'-'}${fmt(Math.abs(pr.laba))} <span style="font-size:13px;color:var(--text2)">(${pr.margin.toFixed(1)}%)</span></span>
       </div>
-      ${addendumSectionHTML(p)}
+      ${p.NILAI_CONTRACT?`<div style="font-size:11px;color:var(--text3);margin-bottom:10px">Nilai kontrak: ${fmt(p.NILAI_CONTRACT)}${p.KLIEN?' · '+esc(p.KLIEN):''}</div>`:''}
       ${donutCardHTML('projKatDonut', entries)}
       <div style="font-size:11px;color:var(--text3);margin-bottom:8px">${sorted.length} transaksi</div>
       ${sorted.length ? sorted.map(t => detailTxnCard(t)).join('') : '<div class="empty">Belum ada transaksi</div>'}
@@ -3264,108 +3239,6 @@ function openProjectDetail(id) {
       if (Array.isArray(res)) { projTxns = res.filter(t => t.PROJECT === nama); render(); }
     });
   }
-}
-
-// ── v24 ADDENDUM UI (kerja tambah/kurang di drawer detail project) ──
-var currentProjDetailId = null;
-// Ringkasan kontrak efektif + daftar addendum + tombol tambah/kurang.
-function addendumSectionHTML(p){
-  const adds = projAddendums(p).slice().sort((a,b)=>String(b.TANGGAL||'').localeCompare(String(a.TANGGAL||'')));
-  const base = Number(p.NILAI_CONTRACT)||0;
-  const tambah = adds.filter(a=>a.JENIS!=='Kurang').reduce((s,a)=>s+Math.abs(Number(a.NOMINAL)||0),0);
-  const kurang = adds.filter(a=>a.JENIS==='Kurang').reduce((s,a)=>s+Math.abs(Number(a.NOMINAL)||0),0);
-  const eff = base + tambah - kurang;
-  const row = (lbl,val,col)=>`<div style="display:flex;justify-content:space-between;font-size:11px;margin:2px 0"><span style="color:var(--text3)">${lbl}</span><span style="font-weight:600;${col?'color:'+col:''}">${val}</span></div>`;
-  let h = `<div style="background:#12121a;border:1px solid var(--border2);border-radius:10px;padding:12px 14px;margin-bottom:12px">
-    <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Nilai Kontrak${p.KLIEN?' · '+esc(p.KLIEN):''}</div>`;
-  h += row('Kontrak awal', fmt(base));
-  if(tambah) h += row('+ Kerja tambah', '+'+fmt(tambah), 'var(--green)');
-  if(kurang) h += row('− Kerja kurang', '-'+fmt(kurang), 'var(--red)');
-  if(tambah||kurang){
-    h += `<div style="border-top:1px solid var(--border2);margin:6px 0 4px"></div>`;
-    h += `<div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700"><span>Kontrak efektif</span><span>${fmt(eff)}</span></div>`;
-  }
-  if(adds.length){
-    h += `<div style="margin-top:10px;display:flex;flex-direction:column;gap:6px">`;
-    h += adds.map(a=>{
-      const t = a.JENIS==='Kurang';
-      const n = Math.abs(Number(a.NOMINAL)||0);
-      return `<div style="display:flex;align-items:center;gap:8px;background:var(--bg2,#0d1f2d);border:1px solid var(--border);border-radius:8px;padding:6px 9px">
-        <span class="badge ${t?'':'badge-green'}" style="flex-shrink:0;font-size:9px;${t?'background:#3a1a1a;color:#ff6b6b;border:1px solid #ff6b6b40':''}">${t?'Kurang':'Tambah'}</span>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(a.DESKRIPSI||'(tanpa deskripsi)')}</div>
-          <div style="font-size:9px;color:var(--text3)">${String(a.TANGGAL||'').slice(0,10)}</div>
-        </div>
-        <span style="font-size:12px;font-weight:700;color:${t?'var(--red)':'var(--green)'};flex-shrink:0">${t?'-':'+'}${fmt(n)}</span>
-        <button onclick="delAddendum('${a.ID}')" style="background:transparent;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:0 2px;flex-shrink:0" title="Hapus">×</button>
-      </div>`;
-    }).join('');
-    h += `</div>`;
-  }
-  h += `<div style="display:flex;gap:8px;margin-top:10px">
-    <button onclick="openAddendumForm('${p.ID}','Tambah')" style="flex:1;background:#0a2a1e;border:1px solid #2dd4a040;color:var(--green);border-radius:8px;padding:8px;font-size:11px;font-weight:600;cursor:pointer">+ Kerja Tambah</button>
-    <button onclick="openAddendumForm('${p.ID}','Kurang')" style="flex:1;background:#2a1414;border:1px solid #ff6b6b40;color:#ff6b6b;border-radius:8px;padding:8px;font-size:11px;font-weight:600;cursor:pointer">− Kerja Kurang</button>
-  </div>`;
-  h += `</div>`;
-  return h;
-}
-// Modal form input addendum (overlay terpisah supaya tahan re-render drawer).
-function openAddendumForm(projId, jenis){
-  const p = state.projects.find(x=>x.ID===projId);
-  if(!p) return;
-  closeAddendumForm();
-  const kurang = jenis==='Kurang';
-  const div = document.createElement('div');
-  div.id = 'addendumModal';
-  div.style.cssText = 'position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:18px';
-  div.onclick = (e)=>{ if(e.target===div) closeAddendumForm(); };
-  div.innerHTML = `<div style="background:var(--bg2,#12121a);border:1px solid var(--border2);border-radius:14px;padding:18px;width:100%;max-width:380px;box-shadow:0 8px 30px rgba(0,0,0,.5)">
-    <div style="font-size:14px;font-weight:700;margin-bottom:2px;color:${kurang?'#ff6b6b':'var(--green)'}">${kurang?'− Kerja Kurang':'+ Kerja Tambah'}</div>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.NAMA)}</div>
-    <div class="form-group"><label class="form-label">Tanggal</label><input class="form-input" type="date" id="adn_tgl" value="${today()}"></div>
-    <div class="form-group"><label class="form-label">Deskripsi pekerjaan</label><input class="form-input" type="text" id="adn_desc" placeholder="${kurang?'cth: batal plafon kamar' : 'cth: tambah railing tangga'}"></div>
-    <div class="form-group"><label class="form-label">Nominal (Rp)</label><input class="form-input" type="text" inputmode="numeric" id="adn_nom" placeholder="0" oninput="fmtMoneyInput(this)"></div>
-    <div style="display:flex;gap:8px;margin-top:6px">
-      <button onclick="closeAddendumForm()" style="flex:1;background:var(--bg3,#1a1a2e);border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:10px;font-size:12px;cursor:pointer">Batal</button>
-      <button onclick="saveAddendum('${projId}','${jenis}')" style="flex:1;background:${kurang?'#ff6b6b':'var(--green)'};border:none;color:#0f0f13;border-radius:8px;padding:10px;font-size:12px;font-weight:700;cursor:pointer">Simpan</button>
-    </div>
-  </div>`;
-  document.body.appendChild(div);
-  setTimeout(()=>{ const el=document.getElementById('adn_desc'); if(el) el.focus(); }, 50);
-}
-function closeAddendumForm(){
-  const m = document.getElementById('addendumModal');
-  if(m) m.remove();
-}
-function saveAddendum(projId, jenis){
-  const p = state.projects.find(x=>x.ID===projId);
-  if(!p) return;
-  const tgl = document.getElementById('adn_tgl').value || today();
-  const desc = document.getElementById('adn_desc').value.trim();
-  const nom = unfmtNum(document.getElementById('adn_nom').value);
-  if(!nom || nom<=0){ showToast('Nominal wajib diisi','error'); return; }
-  const j = jenis==='Kurang' ? 'Kurang' : 'Tambah';
-  const obj = { ID:uid(), PROJECT_ID:p.ID, PROJECT_NAMA:p.NAMA, TANGGAL:tgl, JENIS:j,
-                DESKRIPSI:desc, NOMINAL:nom, CREATED_BY:state.user||'', CREATED_AT:new Date().toISOString() };
-  state.addendums = state.addendums || [];
-  state.addendums.push(obj);
-  if(API_URL) bgPost({action:'addAddendum', data:obj}, 'Kerja '+j+' '+fmt(nom));
-  saveLocal();
-  closeAddendumForm();
-  renderProject(); renderDashboard();
-  if(currentProjDetailId===projId) openProjectDetail(projId);
-  showToast('Kerja '+j.toLowerCase()+' tersimpan','success');
-}
-function delAddendum(id){
-  const a = (state.addendums||[]).find(x=>x.ID===id);
-  if(!a) return;
-  if(!confirm('Hapus '+(a.JENIS==='Kurang'?'kerja kurang':'kerja tambah')+' "'+(a.DESKRIPSI||'')+'" ('+fmt(Math.abs(Number(a.NOMINAL)||0))+')?')) return;
-  state.addendums = (state.addendums||[]).filter(x=>x.ID!==id);
-  if(API_URL) bgPost({action:'deleteRow', data:{sheet:'ADDENDUM', id:id}}, 'Hapus addendum');
-  saveLocal();
-  renderProject(); renderDashboard();
-  if(currentProjDetailId) openProjectDetail(currentProjDetailId);
-  showToast('Addendum dihapus','success');
 }
 
 function switchMasterTab(tab) {
@@ -3884,7 +3757,7 @@ async function forceRefresh(){
   if(data&&!data.error){
     state.banks=data.banks||state.banks;state.ccs=data.ccs||state.ccs;state.projects=data.projects||state.projects;
     state.kategori=data.kategori||state.kategori;state.txns=data.txns||state.txns;state.transfers=data.transfers||state.transfers;
-    state.reserves=data.reserves||state.reserves;state.kasbon=data.kasbon||state.kasbon;state.jadwal=data.jadwal||state.jadwal;state.piutang=data.piutang||state.piutang||[];state.cicilan=data.cicilan||state.cicilan||[];state.ccbills=data.ccbills||state.ccbills||[];state.investAkun=data.investAkun||state.investAkun||[];state.investLog=data.investLog||state.investLog||[];state.investValue=data.investValue||state.investValue||[];state.addendums=data.addendums||state.addendums||[];state.summary=data.summary||null;state.txnsSince=data.since||state.txnsSince;
+    state.reserves=data.reserves||state.reserves;state.kasbon=data.kasbon||state.kasbon;state.jadwal=data.jadwal||state.jadwal;state.piutang=data.piutang||state.piutang||[];state.cicilan=data.cicilan||state.cicilan||[];state.ccbills=data.ccbills||state.ccbills||[];state.investAkun=data.investAkun||state.investAkun||[];state.investLog=data.investLog||state.investLog||[];state.investValue=data.investValue||state.investValue||[];state.summary=data.summary||null;state.txnsSince=data.since||state.txnsSince;
     computeReserve();saveLocal();renderAll();closeDrawer();showToast('Total dihitung ulang ✓','success');
   } else { showToast('Gagal refresh','error'); }
 }
@@ -3997,7 +3870,7 @@ function exportToExcel() {
       [C('RINGKASAN PROJECT — Arthabumi',ST.title)].concat(Array.from({length:nP-1},function(){return C('',ST.title);})),
       [C('Diekspor: '+today+'  |  '+projData.length+' project  |  Total Masuk: Rp '+totM.toLocaleString('id')+'  |  Laba Bersih: Rp '+totL.toLocaleString('id'),ST.info)].concat(Array.from({length:nP-1},function(){return C('',ST.info);})),
       eRow(nP),
-      ['ID','Nama Project','Klien','Status','Kontrak Efektif','Masuk','Keluar','Laba Bersih','Margin %','Tgl Mulai'].map(function(h,i){return C(h,[4,5,6,7].indexOf(i)>=0?ST.hdrR:ST.hdr);}),
+      ['ID','Nama Project','Klien','Status','Nilai Kontrak','Masuk','Keluar','Laba Bersih','Margin %','Tgl Mulai'].map(function(h,i){return C(h,[4,5,6,7].indexOf(i)>=0?ST.hdrR:ST.hdr);}),
     ];
     projData.forEach(function(p,i){
       var e=i%2===0, cf=getProjCF(p.NAMA);
@@ -4010,7 +3883,7 @@ function exportToExcel() {
         C(p.NAMA||'',                e?ST.le:ST.lo),
         C(p.KLIEN||'',               e?ST.le:ST.lo),
         C(sts,                       stsST),
-        C(effectiveContract(p),      e?ST.ne:ST.no),
+        C(Number(p.NILAI_CONTRACT)||0, e?ST.ne:ST.no),
         C(m,                         e?ST.ne:ST.no),
         C(k,                         e?ST.ne:ST.no),
         C(lb,                        lb>=0?ST.pos(e):ST.neg(e)),
@@ -4022,39 +3895,6 @@ function exportToExcel() {
     projRows.push([C('TOTAL',ST.lbl)].concat(Array.from({length:4},function(){return C('',ST.lbl);})).concat([C(totM,ST.val),C(totK,ST.val),C(totL,totL>=0?ST.netPos:ST.netNeg),C('',ST.lbl),C('',ST.lbl)]));
     var wsProj=makeWS(projRows,[10,26,18,10,16,14,14,15,10,12],[{s:{r:0,c:0},e:{r:0,c:nP-1}},{s:{r:1,c:0},e:{r:1,c:nP-1}}]);
     XLSX.utils.book_append_sheet(wb,wsProj,'Project');
-
-    // ── SHEET: ADDENDUM (kerja tambah/kurang) — hanya bila ada ───────────────
-    if((state.addendums||[]).length){
-      var addData=state.addendums.slice().sort(function(a,b){
-        return String(a.PROJECT_NAMA||'').localeCompare(String(b.PROJECT_NAMA||''))
-            || String(a.TANGGAL||'').localeCompare(String(b.TANGGAL||''));
-      });
-      var nAd=6;
-      var totTbh=addData.filter(function(a){return a.JENIS!=='Kurang';}).reduce(function(s,a){return s+Math.abs(Number(a.NOMINAL)||0);},0);
-      var totKrg=addData.filter(function(a){return a.JENIS==='Kurang';}).reduce(function(s,a){return s+Math.abs(Number(a.NOMINAL)||0);},0);
-      var addRows=[
-        [C('ADDENDUM PROYEK (KERJA TAMBAH / KURANG)',ST.title)].concat(Array.from({length:nAd-1},function(){return C('',ST.title);})),
-        [C('Diekspor: '+today+'  |  Total Tambah: Rp '+totTbh.toLocaleString('id')+'  |  Total Kurang: Rp '+totKrg.toLocaleString('id')+'  |  Net: Rp '+(totTbh-totKrg).toLocaleString('id'),ST.info)].concat(Array.from({length:nAd-1},function(){return C('',ST.info);})),
-        eRow(nAd),
-        ['Project','Klien','Tanggal','Jenis','Deskripsi','Nominal'].map(function(h,i){return C(h,i===5?ST.hdrR:ST.hdr);}),
-      ];
-      addData.forEach(function(a,i){
-        var e=i%2===0, krg=a.JENIS==='Kurang', n=Math.abs(Number(a.NOMINAL)||0);
-        var pj=state.projects.find(function(x){return (a.PROJECT_ID&&String(x.ID)===String(a.PROJECT_ID))||String(x.NAMA)===String(a.PROJECT_NAMA);});
-        addRows.push([
-          C(a.PROJECT_NAMA||'',       e?ST.le:ST.lo),
-          C((pj&&pj.KLIEN)||'',        e?ST.le:ST.lo),
-          C(String(a.TANGGAL||'').slice(0,10), e?ST.ce:ST.co),
-          C(krg?'Kurang':'Tambah',     krg?ST.belum:ST.jalan),
-          C(a.DESKRIPSI||'',           e?ST.le:ST.lo),
-          C(krg?-n:n,                  krg?ST.neg(e):ST.pos(e)),
-        ]);
-      });
-      addRows.push(eRow(nAd));
-      addRows.push([C('NET ADDENDUM',ST.lbl),C('',ST.lbl),C('',ST.lbl),C('',ST.lbl),C('',ST.lbl),C(totTbh-totKrg,(totTbh-totKrg)>=0?ST.netPos:ST.netNeg)]);
-      var wsAdd=makeWS(addRows,[26,16,12,10,34,16],[{s:{r:0,c:0},e:{r:0,c:nAd-1}},{s:{r:1,c:0},e:{r:1,c:nAd-1}}]);
-      XLSX.utils.book_append_sheet(wb,wsAdd,'Addendum');
-    }
 
     // ── SHEET 3: PIUTANG ─────────────────────────────────────────────────────
     var piuData=state.piutang.slice().sort(function(a,b){return (a.JATUH_TEMPO||'').localeCompare(b.JATUH_TEMPO||'');});
@@ -4209,9 +4049,7 @@ function exportToExcel() {
       var hdr1R=dpRows.length;
       dpRows.push([C(p.NAMA||'',{font:{bold:true,sz:11,color:{rgb:BG.white}},fill:{patternType:'solid',fgColor:{rgb:BG.navy}},alignment:{horizontal:'left',vertical:'center'}}),C('',{fill:{patternType:'solid',fgColor:{rgb:BG.navy}}}),C('',{fill:{patternType:'solid',fgColor:{rgb:BG.navy}}}),C('',{fill:{patternType:'solid',fgColor:{rgb:BG.navy}}}),C('',{fill:{patternType:'solid',fgColor:{rgb:BG.navy}}}),C('',{fill:{patternType:'solid',fgColor:{rgb:BG.navy}}})]);
       dpMerges.push({s:{r:hdr1R,c:0},e:{r:hdr1R,c:dpCols-1}});
-      var dlt=addendumDelta(p), effK=effectiveContract(p);
-      var kontrakTxt='Kontrak: Rp '+effK.toLocaleString('id')+(dlt?' (awal Rp '+(Number(p.NILAI_CONTRACT)||0).toLocaleString('id')+', addendum '+(dlt>0?'+':'-')+'Rp '+Math.abs(dlt).toLocaleString('id')+')':'');
-      dpRows.push([C('Klien: '+(p.KLIEN||'—'),ST.info),C('',ST.info),C(kontrakTxt,ST.info),C('',ST.info),C('',ST.info),C('',ST.info)]);
+      dpRows.push([C('Klien: '+(p.KLIEN||'—'),ST.info),C('',ST.info),C('Kontrak: Rp '+(Number(p.NILAI_CONTRACT)||0).toLocaleString('id'),ST.info),C('',ST.info),C('',ST.info),C('',ST.info)]);
       dpMerges.push({s:{r:dpRows.length-1,c:0},e:{r:dpRows.length-1,c:1}});
       dpMerges.push({s:{r:dpRows.length-1,c:2},e:{r:dpRows.length-1,c:dpCols-1}});
       dpRows.push([C('Status',ST.hdr),C(sts,stsST),C('Masuk',ST.hdrR),C(dp.m,ST.pos(false)),C('Keluar',ST.hdrR),C(dp.k,ST.neg(false))]);
@@ -4419,7 +4257,7 @@ function exportHTMLReport() {
         var cf=getProjCF(p.NAMA), m=cf.masuk||0, k=cf.keluar||0;
         var tx=state.txns.filter(function(t){return t.PROJECT===p.NAMA;})
                          .sort(function(a,b){return String(a.TANGGAL).localeCompare(String(b.TANGGAL));});
-        var valKon=effectiveContract(p);
+        var valKon=Number(p.NILAI_CONTRACT||0);
         return {nama:p.NAMA,klien:p.KLIEN||'',sts:p.STATUS||'',m:m,k:k,lb:m-k,tx:tx,valKon:valKon};
       })
       .sort(function(a,b){return b.lb-a.lb;}).slice(0,15);
@@ -4852,168 +4690,4 @@ function exportHTMLReport() {
         H+='<div style="text-align:center;color:#9AA5B4;font-size:11px;padding:8px 0">FCC Arthabumi · '+today+'</div>';
     H+='</div>'; // .page
 
-    // ── Scripts ───────────────────────────────────────────────────────────────
-    H+='<script>';
-    H+='function tog(id){var r=document.getElementById(id),t=r.previousElementSibling;r.classList.toggle("open");t.classList.toggle("open");}';
-    // Chart cashflow
-    H+='var cfD='+JSON.stringify({l:mLabels,m:mMasuk,k:mKeluar})+';';
-    H+='new Chart(document.getElementById("cfC"),{type:"bar",data:{labels:cfD.l,datasets:[';
-    H+='{label:"Pemasukan",data:cfD.m,backgroundColor:"rgba(46,117,182,.85)",borderRadius:4},';
-    H+='{label:"Pengeluaran",data:cfD.k,backgroundColor:"rgba(198,40,40,.75)",borderRadius:4}]},';
-    H+='options:{responsive:true,plugins:{legend:{position:"top"}},scales:{y:{beginAtZero:true,ticks:{callback:function(v){return v+" jt";}},grid:{color:"rgba(0,0,0,.05)"}},x:{grid:{display:false}}}}});';
-    // Donut kategori
-    H+='var kD='+JSON.stringify({l:katLabels,v:katVals,c:katColors})+';';
-    H+='new Chart(document.getElementById("katC"),{type:"doughnut",data:{labels:kD.l,datasets:[{data:kD.v,backgroundColor:kD.c,borderWidth:2,borderColor:"#fff",hoverOffset:6}]},';
-    H+='options:{responsive:true,cutout:"60%",plugins:{legend:{position:"bottom",labels:{font:{size:10},boxWidth:12,padding:8}}}}});';
-    // Bar pribadi
-    if(pribCats.length>0){
-      H+='var pD='+JSON.stringify({l:pribMLabels,v:pribMVals})+';';
-      H+='new Chart(document.getElementById("pribC"),{type:"bar",data:{labels:pD.l,datasets:[{label:"Total Pribadi (jt)",data:pD.v,backgroundColor:"rgba(106,27,154,.75)",borderRadius:4}]},';
-      H+='options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{callback:function(v){return v+" jt";}},grid:{color:"rgba(0,0,0,.05)"}},x:{grid:{display:false}}}}});';
-    }
-    H+='var PDATA='+JSON.stringify(pribDataObj)+';';
-    H+='function pmClick(c){';
-    H+='var b=c.dataset.base,k=c.dataset.cat,m=c.dataset.month,r=document.getElementById(b),body=r.querySelector(".prib-detail-body");';
-    H+='if(r.classList.contains("open")&&r.dataset.m===m){r.classList.remove("open");r.dataset.m="";document.querySelectorAll(".pm-on").forEach(function(x){x.classList.remove("pm-on");});return;}';
-    H+='r.classList.add("open");r.dataset.m=m;';
-    H+='document.querySelectorAll(".pm-on").forEach(function(x){x.classList.remove("pm-on");});c.classList.add("pm-on");';
-    H+='var tx=(PDATA[k]&&PDATA[k][m])||[],ml=m.slice(5)+"/"+m.slice(2,4),tot=tx.reduce(function(s,t){return s+t.n;},0);';
-    H+='var fm=function(n){return Math.round(n||0).toLocaleString("id");};';
-    H+='var ex=function(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");};';
-    H+='body.innerHTML="";';
-    H+='var wrap=document.createElement("div");';
-    H+='wrap.style.cssText="border-left:3px solid #6A1B9A;background:#F3E5F5;padding:8px 0 8px 8px";';
-    H+='var hdr=document.createElement("div");';
-    H+='hdr.style.cssText="padding:0 8px 8px;font-weight:700;color:#6A1B9A;font-size:12px";';
-    H+='hdr.textContent=ex(k)+" · "+ml+" · "+tx.length+" transaksi · Rp "+fm(tot);';
-    H+='wrap.appendChild(hdr);';
-    H+='if(tx.length>0){';
-    H+='var tbl=document.createElement("table");tbl.style.cssText="width:100%;border-collapse:collapse;font-size:11px";';
-    H+='var hrow=tbl.createTHead().insertRow();';
-    H+='["Tgl","Rekening","Project / Notes","Nominal"].forEach(function(h,i){var th=document.createElement("th");th.textContent=h;th.style.cssText="background:#6A1B9A;color:#fff;padding:5px 8px;text-align:"+(i===3?"right":"left");hrow.appendChild(th);});';
-    H+='tx.forEach(function(t,ti){var bg=ti%2===0?"#F5F0FF":"#FFF",row=tbl.insertRow();[t.d,t.r,(t.p||t.x||"—")+(t.p&&t.x?" · "+t.x:""),fm(t.n)].forEach(function(v,i){var td=row.insertCell();td.textContent=v;td.style.cssText="background:"+bg+";padding:5px 8px;border-bottom:1px solid #E1BEE7;"+(i===3?"text-align:right;color:#C62828;font-weight:600":"");});});';
-    H+='var fr=tbl.insertRow();["TOTAL "+ml,"","",fm(tot)].forEach(function(v,i){var td=fr.insertCell();td.textContent=v;td.style.cssText="background:#EDE7F6;padding:5px 8px;font-weight:700;color:#6A1B9A;"+(i===3?"text-align:right":"");});';
-    H+='wrap.appendChild(tbl);';
-    H+='}else{var em=document.createElement("div");em.style.cssText="padding:8px;color:#9AA5B4;font-size:11px";em.textContent="Tidak ada transaksi bulan ini.";wrap.appendChild(em);}';
-    H+='body.appendChild(wrap);}';
-        H+='(function(){var tb=document.querySelector(".topbar"),pg=document.querySelector(".page");';
-    H+='function adj(){if(tb&&pg)pg.style.paddingTop=(tb.offsetHeight+8)+"px";}';
-    H+='adj();window.addEventListener("resize",adj);';
-    H+='})();';
-        H+='document.querySelectorAll("table").forEach(function(t){';
-    H+='if(!t.closest(".tbl-scroll")){var w=document.createElement("div");w.className="tbl-scroll";t.parentNode.insertBefore(w,t);w.appendChild(t);}';
-    H+='});';
-        H+='<\/script></body></html>';
-
-    var w=window.open('','_blank');
-    if(!w){showToast('Pop-up diblokir. Izinkan pop-up untuk FCC.','error');return;}
-    w.document.write(H);
-    w.document.close();
-    showToast('Laporan siap! Klik "Print / PDF" di halaman baru.','ok');
-  } catch(e){
-    console.error('exportHTMLReport error',e);
-    showToast('Gagal buat laporan: '+e.message,'error');
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-
-function handleImportFile(ev){
-  const file=ev.target.files[0]; ev.target.value=''; if(!file)return;
-  if(!API_URL){showToast('API URL belum diset','error');return;}
-  const rd=new FileReader();
-  rd.onload=e=>{
-    try{
-      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true});
-      const shName=wb.SheetNames.find(n=>/transaksi/i.test(n))||wb.SheetNames[0];
-      const rows=XLSX.utils.sheet_to_json(wb.Sheets[shName],{header:1,raw:true,defval:''});
-      parseImport(rows);
-    }catch(err){showToast('Gagal baca file: '+err.message,'error');}
-  };
-  rd.readAsArrayBuffer(file);
-}
-function parseImport(rows){
-  if(!rows||rows.length<2){showToast('File kosong / tidak ada data','error');return;}
-  const hdr=rows[0].map(h=>String(h||'').trim().toUpperCase());
-  const ix=name=>hdr.indexOf(name);
-  const iT=ix('TANGGAL'),iJ=ix('JENIS'),iP=ix('PROJECT'),iR=ix('REKENING'),iK=ix('KATEGORI'),iKel=ix('KELOMPOK'),iN=ix('NOMINAL'),iNo=ix('NOTES');
-  if(iT<0||iJ<0||iR<0||iK<0||iN<0){showToast('Header tidak lengkap. Pakai template (TANGGAL,JENIS,REKENING,KATEGORI,NOMINAL).','error');return;}
-  const acctNames=new Set([...state.banks.map(b=>b.NAMA),...state.ccs.map(c=>c.NAMA)]);
-  const projNames=new Set(state.projects.map(p=>p.NAMA));
-  const katNames=new Set(state.kategori.map(k=>k.NAMA));
-  const valid=[],errors=[],newProjMap={},newKatMap={};
-  for(let r=1;r<rows.length;r++){
-    const row=rows[r]; if(!row||row.every(c=>String(c||'').trim()===''))continue;
-    const excelRow=r+1;
-    const tgl=impDateISO(row[iT]);
-    const jenis=String(row[iJ]||'').trim();
-    const proj=String(iP>=0?row[iP]:'').trim();
-    const rek=String(row[iR]||'').trim();
-    const kat=String(row[iK]||'').trim();
-    const kel=String(iKel>=0?row[iKel]:'').trim().toUpperCase();
-    const nominal=unfmtNum(row[iN]);
-    const notes=String(iNo>=0?row[iNo]:'').trim();
-    const errs=[];
-    if(!tgl)errs.push('tanggal tidak valid');
-    if(jenis!=='Pemasukan'&&jenis!=='Pengeluaran')errs.push('JENIS harus Pemasukan/Pengeluaran');
-    if(!rek)errs.push('rekening kosong'); else if(!acctNames.has(rek))errs.push('rekening "'+rek+'" tidak ada di master');
-    if(!kat)errs.push('kategori kosong');
-    if(!nominal||nominal<=0)errs.push('nominal kosong/0');
-    if(errs.length){errors.push({row:excelRow,msg:errs.join(', ')});continue;}
-    if(proj&&!projNames.has(proj)&&!newProjMap[proj])newProjMap[proj]={NAMA:proj,KLIEN:'',STATUS:'Jalan'};
-    if(!katNames.has(kat)&&!newKatMap[kat])newKatMap[kat]={NAMA:kat,KELOMPOK:(kel||(jenis==='Pemasukan'?'PEMASUKAN':'OPERASIONAL')),TIPE:jenis};
-    valid.push({TANGGAL:tgl,JENIS:jenis,PROJECT:proj,REKENING:rek,KATEGORI:kat,NOMINAL:nominal,NOTES:notes});
-  }
-  const newProjs=Object.values(newProjMap),newKats=Object.values(newKatMap);
-  importPayload={txns:valid,newProjs,newKats};
-  showImportPreview(valid,errors,newProjs,newKats);
-}
-function showImportPreview(valid,errors,newProjs,newKats){
-  const totMasuk=valid.filter(t=>t.JENIS==='Pemasukan').reduce((s,t)=>s+t.NOMINAL,0);
-  const totKeluar=valid.filter(t=>t.JENIS==='Pengeluaran').reduce((s,t)=>s+t.NOMINAL,0);
-  document.getElementById('drawerTitle').textContent='Preview Import';
-  let html=`
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
-      <div class="metric"><div class="metric-label">Baris valid</div><div class="metric-value" style="color:var(--green)">${valid.length}</div></div>
-      <div class="metric"><div class="metric-label">Baris error</div><div class="metric-value" style="color:${errors.length?'var(--red)':'inherit'}">${errors.length}</div></div>
-    </div>
-    <div class="settings-row"><div class="settings-label">Total Pemasukan</div><div style="color:var(--green);font-weight:600">${fmt(totMasuk)}</div></div>
-    <div class="settings-row"><div class="settings-label">Total Pengeluaran</div><div style="color:var(--red);font-weight:600">${fmt(totKeluar)}</div></div>`;
-  if(newProjs.length)html+=`<div style="margin-top:10px"><b>Project baru (${newProjs.length}) akan dibuat:</b><div class="settings-sub">${newProjs.map(p=>esc(p.NAMA)).join(', ')}</div></div>`;
-  if(newKats.length)html+=`<div style="margin-top:10px"><b>Kategori baru (${newKats.length}) akan dibuat:</b><div class="settings-sub">${newKats.map(k=>esc(k.NAMA)+' ['+k.KELOMPOK+']').join(', ')}</div></div>`;
-  if(errors.length){
-    html+=`<div style="margin-top:12px;color:var(--red)"><b>Baris ditolak — perbaiki di Excel lalu import ulang:</b></div>
-      <div style="max-height:180px;overflow:auto;font-size:13px;margin-top:6px">${errors.map(e=>`<div style="padding:4px 0;border-bottom:1px solid #2a2a2a">Baris ${e.row}: ${esc(e.msg)}</div>`).join('')}</div>`;
-  }
-  html+=`<div style="margin-top:16px;display:flex;gap:8px">
-      <button class="btn-primary" style="flex:1" onclick="confirmImport()" ${valid.length?'':'disabled'}><i class="ti ti-database-import"></i> Konfirmasi Import (${valid.length})</button>
-      <button class="btn-secondary" onclick="closeDrawer()">Batal</button></div>`;
-  if(!valid.length)html+=`<div class="settings-sub" style="margin-top:8px;color:var(--red)">Tidak ada baris valid untuk diimport.</div>`;
-  document.getElementById('drawerBody').innerHTML=html;
-  drawerMode='import';
-  document.getElementById('drawerBg').classList.add('open');
-}
-async function confirmImport(){
-  if(!importPayload||!importPayload.txns.length){showToast('Tidak ada data','error');return;}
-  const n=importPayload.txns.length;
-  document.getElementById('drawerBody').innerHTML='<div style="text-align:center;padding:30px"><div class="spin" style="margin:0 auto 12px"></div>Mengimport '+n+' transaksi...</div>';
-  const res=await apiPost({action:'addTxnBatch',data:{...importPayload,USER:state.user}});
-  if(res&&!res.error){
-    importPayload=null;closeDrawer();
-    showToast('Import berhasil: '+(res.txn||n)+' transaksi ✓','success');
-    await syncAll();
-  }else{
-    showToast('Gagal import: '+((res&&res.error)||'koneksi'),'error');
-    closeDrawer();
-  }
-}
-function showToast(msg,type){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(type||'success');setTimeout(()=>t.classList.add('show'),10);setTimeout(()=>t.classList.remove('show'),2800);}
-function goPage(page){closeFabMenu();closeLainnyaMenu();state.currentPage=page;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+page).classList.add('active');document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));const navKey=({kasbon:'lainnya',forecast:'lainnya',piutang:'lainnya',invest:'lainnya'})[page]||page;const _ab=document.querySelector('.nav-item[data-nav="'+navKey+'"]');if(_ab)_ab.classList.add('active');document.getElementById('content').scrollTop=0;if(page==='master')renderMaster();if(page==='transfer')renderTransferPage();if(page==='kasbon')renderKasbon();if(page==='forecast')renderForecast();if(page==='piutang')renderPiutang();if(page==='invest')renderInvest();}
-function renderAll(){renderDashboard();renderTxnMonthTabs();filterTxn();renderProject();renderCCBillReminder();renderPiutangReminder();updatePiutangBadge();if(state.currentPage==='master')renderMaster();if(state.currentPage==='transfer')renderTransferPage();if(state.currentPage==='kasbon')renderKasbon();if(state.currentPage==='forecast')renderForecast();if(state.currentPage==='piutang')renderPiutang();if(state.currentPage==='invest')renderInvest();}
-if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{});}
-let logoTimer;
-document.querySelector('.topbar-title').addEventListener('touchstart',()=>{logoTimer=setTimeout(()=>openDrawer('settings'),800);});
-document.querySelector('.topbar-title').addEventListener('touchend',()=>clearTimeout(logoTimer));
-document.querySelector('.topbar-title').addEventListener('click',()=>openDrawer('settings'));
-</script>
-</body>
+    // ── Scripts ──────────────────────────────────────�

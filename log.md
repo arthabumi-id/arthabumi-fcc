@@ -3,6 +3,19 @@
 
 ---
 
+## SESSION — 2026-06-21 (v24: Kerja Tambah / Kurang per Project — Addendum)
+**PERLU REDEPLOY Code.gs** (ada action baru `addAddendum`).
+- **Tujuan:** catat pekerjaan tambah/kurang (variation order) per project yang sudah dibuat, dengan histori.
+- **Keputusan PRD (sign-off Eddy):** (1) bentuk = histori addendum (bukan ubah angka cepat); (2) TIDAK auto-buat Piutang (manual); (3) UI di drawer detail project; (4) export Excel & HTML report ikut tampilkan kontrak efektif.
+- **Data model:** sheet baru `ADDENDUM` `['ID','PROJECT_ID','PROJECT_NAMA','TANGGAL','JENIS(Tambah/Kurang)','DESKRIPSI','NOMINAL','CREATED_BY','CREATED_AT']`. NOMINAL selalu positif; arah dari JENIS.
+- **Logika:** `Nilai kontrak efektif = NILAI_CONTRACT + Σ(Tambah) − Σ(Kurang)`. Laba/margin TIDAK berubah (tetap basis kas).
+- **Code.gs:** `S.ADD`, HEADERS[S.ADD], `getBundle.addendums`, case `addAddendum` → fungsi `addAddendum` (pakai `ensureSheet`, tak nulis TXN/Piutang). Hapus pakai `deleteRow` generik (sheet='ADDENDUM').
+- **index.html (v24):** `state.addendums` (load bundle + offline cache + clearCache apply); helper `projAddendums/addendumDelta/effectiveContract`; `projCard` % terbayar & "Nilai efektif" pakai kontrak efektif; drawer `addendumSectionHTML` (ringkasan awal/+tambah/−kurang/efektif + daftar item + tombol). Form via modal overlay `openAddendumForm/saveAddendum/closeAddendumForm` (overlay terpisah supaya tahan re-render drawer) + `delAddendum`. `currentProjDetailId` utk refresh drawer.
+- **Export:** sheet "Project" kolom "Nilai Kontrak"→"Kontrak Efektif" (nilai efektif); "Detail Project" baris Kontrak tampilkan awal+addendum; sheet baru "Addendum" (bila ada). HTML report `valKon`→efektif.
+- **Verifikasi:** vm.Script inline JS = 0 error; addAddendum block parse OK; 4 sisipan Code.gs terkonfirmasi (grep). Backup: `archive/backups/index-pre-addendum-20260621.html`, `Code-pre-addendum-20260621.gs`.
+
+---
+
 ## SESSION — 2026-06-19 (Cek data reserve via Google Drive + Reserve Fase C bersih-bersih)
 Client-only, tanpa redeploy.
 - **Cek data Sheet** (Google Drive connector, baca spreadsheet 1BYXyk...): reserve manual lama (non-cicilan) HANYA di 2 kartu — CC-CIMB-ACCOR 1,725,100 & CC-MAYBANK-BMW 6,308,449. **Keduanya sudah ditutup centang** (CIMB pas 1,7jt; MAYBANK malah 31,4jt). BCA-KRIS & BNI-JCB reserve-nya 100% cicilan (auto). → **Migrasi Fase B TIDAK PERLU.**
