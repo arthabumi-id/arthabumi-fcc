@@ -189,7 +189,6 @@ function doPost(e) {
       case 'addCC':       res = addRow(ss, S.CC, data); break;
       case 'addProj':     res = addRow(ss, S.PROJ, data); break;
       case 'addAddendum': res = addAddendum(ss, data); break;
-      case 'reassignProject': res = reassignProject(ss, data); break;
       case 'addKat':      res = addRow(ss, S.KAT, data); break;
       case 'addTransfer': res = addTransfer(ss, data); break;
       case 'deleteTransfer': res = deleteTransfer(ss, data); break;
@@ -971,44 +970,6 @@ function deleteRow(ss, data) {
   return { ok: true }; // idempotent: row tidak ada = sudah terhapus
 }
 
-// ── v24: Pindahkan label PROJECT saat project dihapus (hapus project aman) ──
-// Ganti kolom PROJECT dari `from` → `to` ('' = tanpa project) di TRANSAKSI/PIUTANG/CICILAN/JADWAL.
-// HANYA mengubah label — TIDAK menyentuh nominal/saldo. ADDENDUM milik `from` DIHAPUS (spesifik
-// project & bebas-uang; dipindah ke project lain malah merusak nilai kontrak project tujuan).
-function reassignProject(ss, data) {
-  const from = String(data.from || '');
-  const to = String(data.to || '');
-  if (!from) return { error: 'from kosong' };
-  const out = { ok: true, from: from, to: to, txn: 0, piutang: 0, cicilan: 0, jadwal: 0, addendumDeleted: 0 };
-  [['txn', S.TXN], ['piutang', S.PIUTANG], ['cicilan', S.CICILAN], ['jadwal', S.JADWAL]].forEach(function (pair) {
-    const key = pair[0], name = pair[1];
-    const sh = ss.getSheetByName(name);
-    if (!sh || sh.getLastRow() <= 1) return;
-    const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
-    const pcol = headers.indexOf('PROJECT');
-    if (pcol < 0) return;
-    const rng = sh.getRange(2, pcol + 1, sh.getLastRow() - 1, 1);
-    const vals = rng.getValues();
-    let changed = 0;
-    for (let i = 0; i < vals.length; i++) {
-      if (String(vals[i][0]) === from) { vals[i][0] = to; changed++; }
-    }
-    if (changed) { rng.setValues(vals); out[key] = changed; }
-  });
-  // ADDENDUM milik project ini → hapus (dari bawah)
-  const sa = ss.getSheetByName(S.ADD);
-  if (sa && sa.getLastRow() > 1) {
-    const all = sa.getRange(1, 1, sa.getLastRow(), sa.getLastColumn()).getValues();
-    const ncol = all[0].indexOf('PROJECT_NAMA');
-    if (ncol >= 0) {
-      for (let i = all.length - 1; i >= 1; i--) {
-        if (String(all[i][ncol]) === from) { sa.deleteRow(i + 1); out.addendumDeleted++; }
-      }
-    }
-  }
-  return out;
-}
-
 // ── v20: penanda manual reserve per transaksi + util kolom ──────────────────
 // Tambah header kolom `col` di akhir sheet bila belum ada (migrasi ringan, idempotent).
 function ensureCol(ss, name, col) {
@@ -1086,99 +1047,4 @@ function unmarkPaid(ss, data) {
 }
 
 // ── v21 INVESTASI (pribadi, terpisah total dari metrik bisnis) ───────────────
-// Buat sheet bila belum ada (pola header bold + frozen, idempotent).
-function ensureSheet(ss, name) {
-  let sh = ss.getSheetByName(name);
-  if (!sh) {
-    sh = ss.insertSheet(name);
-    sh.appendRow(HEADERS[name]);
-    sh.getRange(1,1,1,HEADERS[name].length).setFontWeight('bold').setBackground('#1a1a2e').setFontColor('#ffffff');
-    sh.setFrozenRows(1);
-  }
-  return sh;
-}
-
-// Tambah akun investasi (Stockbit/Pluang/Indo Premier/dll). MODAL_AWAL = modal yg sudah
-// tertanam sebelum mulai catat di FCC (opsional). Edit/hapus pakai updateRow/deleteRow generik.
-function addInvestAkun(ss, data) {
-  const sh = ensureSheet(ss, S.INVEST);
-  const now = new Date().toISOString();
-  const id = data.ID || ('INV' + Date.now());
-  const o = { ID:id, NAMA:data.NAMA||'', PLATFORM:data.PLATFORM||'', JENIS:data.JENIS||'',
-              MODAL_AWAL:Math.abs(Number(data.MODAL_AWAL)||0), CREATED_AT:now };
-  sh.appendRow(HEADERS[S.INVEST].map(h => o[h] !== undefined ? o[h] : ''));
-  return { ok:true, id:id };
-}
-
-// Catat setor/tarik modal. Bila REKENING = bank FCC (bukan '(luar)') → tulis 1 TXN
-// TIPE_LOG 'Investasi' (saldo bank turun/naik nyata, TAPI dikecualikan dari laba & komposisi
-// karena katExp hanya menghitung 'Pengeluaran'/'Cicilan-Beli'). Bila '(luar)' → hanya log,
-// tak menyentuh bank (modal dari kas pribadi di luar FCC). Nilai portofolio TIDAK pernah
-// dihitung sbg kas — itu murni snapshot di INVEST_VALUE.
-function addInvestFlow(ss, data) {
-  const sh = ensureSheet(ss, S.INVESTLOG);
-  const now = new Date().toISOString();
-  const ref = data.REF_ID || ('IVF' + Date.now());
-  const amt = Math.abs(Number(data.NOMINAL)||0);
-  const jenis = (data.JENIS === 'Tarik') ? 'Tarik' : 'Setor';
-  const akun = data.AKUN || '';
-  const rek = data.REKENING || '';
-  const tgl = data.TANGGAL || now.slice(0,10);
-  const realBank = rek && rek !== '(luar)';
-  sh.appendRow(['ID'+Date.now(), tgl, akun, jenis, rek, amt, data.NOTES||'', ref, data.USER||'', now]);
-  if (realBank) {
-    const tx = ss.getSheetByName(S.TXN);
-    if (jenis === 'Setor') {
-      tx.appendRow(['ID'+Date.now()+'I', tgl, 'Pengeluaran', '', rek, 'Setor Investasi', amt,
-        '[INVEST '+ref+'] setor ke '+akun+' '+(data.NOTES||''), 'Investasi', data.USER||'', now]);
-    } else {
-      tx.appendRow(['ID'+Date.now()+'I', tgl, 'Pemasukan', '', rek, 'Tarik Investasi', amt,
-        '[INVEST '+ref+'] tarik dari '+akun+' '+(data.NOTES||''), 'Investasi', data.USER||'', now]);
-    }
-  }
-  return { ok:true, ref:ref };
-}
-
-// Simpan snapshot nilai portofolio sebuah akun pada tanggal tertentu (input manual).
-// Snapshot termuda per akun = nilai kini (dihitung client). Hapus pakai deleteRow generik.
-function addInvestValue(ss, data) {
-  const sh = ensureSheet(ss, S.INVESTVAL);
-  const now = new Date().toISOString();
-  const id = data.ID || ('IVV' + Date.now());
-  const o = { ID:id, TANGGAL:data.TANGGAL||now.slice(0,10), AKUN:data.AKUN||'',
-              NILAI:Math.abs(Number(data.NILAI)||0), NOTES:data.NOTES||'',
-              CREATED_BY:data.USER||'', CREATED_AT:now };
-  sh.appendRow(HEADERS[S.INVESTVAL].map(h => o[h] !== undefined ? o[h] : ''));
-  return { ok:true, id:id };
-}
-
-// Hapus 1 arus kas investasi (by REF_ID) + TXN terkait (NOTES memuat ref). Dari bawah.
-function deleteInvestFlow(ss, data) {
-  const ref = String(data.refId || data.REF_ID || '');
-  if (!ref) return { error:'refId required' };
-  const sh = ss.getSheetByName(S.INVESTLOG);
-  if (sh && sh.getLastRow() > 1) {
-    const all = sh.getRange(1,1,sh.getLastRow(),sh.getLastColumn()).getValues();
-    const c = all[0].indexOf('REF_ID');
-    for (let i=all.length-1;i>=1;i--) if (String(all[i][c])===ref) sh.deleteRow(i+1);
-  }
-  const tx = ss.getSheetByName(S.TXN);
-  if (tx && tx.getLastRow() > 1) {
-    const all = tx.getRange(1,1,tx.getLastRow(),tx.getLastColumn()).getValues();
-    const c = all[0].indexOf('NOTES');
-    for (let i=all.length-1;i>=1;i--) if (String(all[i][c]).indexOf(ref)>=0) tx.deleteRow(i+1);
-  }
-  return { ok:true };
-}
-
-function daysAgoISO(days) {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return d.toISOString().slice(0, 10);
-}
-
-function json(obj) {
-  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
-}
-// v3 scalable backend
-
+// Buat sheet bila belum ada (pola header bold + frozen, idempoten

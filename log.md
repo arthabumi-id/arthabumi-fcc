@@ -14,6 +14,15 @@
 - **Export:** sheet "Project" kolom "Nilai Kontrak"→"Kontrak Efektif" (nilai efektif); "Detail Project" baris Kontrak tampilkan awal+addendum; sheet baru "Addendum" (bila ada). HTML report `valKon`→efektif.
 - **Verifikasi:** vm.Script inline JS = 0 error; addAddendum block parse OK; 4 sisipan Code.gs terkonfirmasi (grep). Backup: `archive/backups/index-pre-addendum-20260621.html`, `Code-pre-addendum-20260621.gs`.
 
+### Lanjutan sesi sama — Hapus Project AMAN (peringatan + pindahkan transaksi)
+**PERLU REDEPLOY Code.gs** (action baru `reassignProject`).
+- **Bug report Eddy:** hapus project tidak menghapus transaksi DP-nya. **Klarifikasi:** itu BUKAN data hilang — `deleteItem` hanya hapus baris MASTER_PROJECT; transaksi (PROJECT by nama) jadi orphan tapi **uang & saldo tetap benar** (DP tetap dihitung). Cascade-delete naif berbahaya (hapus DP = saldo understated).
+- **PRD sign-off:** peringatkan sebelum hapus + fitur pindahkan transaksi ke project lain / tanpa project. DP orphan sekarang = dibiarkan.
+- **Code.gs `reassignProject({from,to})`:** ganti kolom PROJECT `from`→`to` ('' = tanpa project) di TRANSAKSI/PIUTANG/CICILAN/JADWAL (label saja, nominal/saldo tak disentuh). **ADDENDUM milik project itu DIHAPUS** (spesifik project & bebas-uang; dipindah malah merusak kontrak project tujuan) — keputusan saya, di luar daftar awal PRD, sudah diflag ke Eddy.
+- **index.html:** tombol "Hapus Project" → `deleteProjectFlow(id)`. Helper `projLinkedCounts`. Bila tak ada record terkait → confirm biasa. Bila ada → modal `openProjDeleteModal` (ringkasan terkait + dropdown tujuan urut Jalan→Hold→Selesai→Abaikan). `confirmProjDelete`→`doDeleteProject`: relabel state lokal (txns/piutang/cicilan/jadwal), cascade-hapus addendum lokal, perbaiki `summary.proj` (pindah/gabung total), 2 bgPost (reassignProject + deleteRow MASTER_PROJECT).
+- **⚠️ Insiden tooling:** satu Edit index.html (blok deleteProjectFlow) sempat **ter-revert diam-diam** (E:\Mirror folder ada sync; muncul EPERM rename sekali). Diterapkan ulang & diverifikasi via Grep tool. **wc -c via bash kasih ukuran stale (342749), tapi grep/baca konten bash AKURAT.** Read/Edit/Grep tool = sumber kebenaran utk file di E:\.
+- **Verifikasi:** vm.Script inline = 0 error; reassignProject parse OK; semua fungsi (addendum + projdel) terkonfirmasi via Grep di kedua file. Backup: `archive/backups/index-pre-projdel-20260621-0559.html`, `Code-pre-projdel-*.gs`.
+
 ---
 
 ## SESSION — 2026-06-19 (Cek data reserve via Google Drive + Reserve Fase C bersih-bersih)
