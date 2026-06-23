@@ -355,15 +355,6 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
       <button class="btn-primary" style="margin-bottom:12px" onclick="openInvestAkun()"><i class="ti ti-plus"></i> Tambah Akun Investasi</button>
       <div id="investList"></div>
     </div>
-
-    <!-- KURS BCA (v25, e-Rate, otomatis harian) -->
-    <div class="page" id="page-kurs">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px">
-        <div style="font-size:15px;font-weight:700">Kurs Valas BCA <span style="font-size:11px;font-weight:500;color:var(--text3)">e-Rate</span></div>
-        <button onclick="refreshKurs(this)" style="font-size:12px;padding:7px 12px;border-radius:10px;border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer"><i class="ti ti-refresh"></i> Perbarui</button>
-      </div>
-      <div id="kursList"></div>
-    </div>
   </div>
 
   <!-- PENDING / OPTIMISTIC SAVE BAR -->
@@ -386,7 +377,6 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
     <button onclick="goPage('forecast')" style="display:flex;align-items:center;gap:11px;padding:12px 12px;border:none;background:transparent;color:var(--text);font-family:var(--font);font-size:15px;text-align:left;border-radius:9px;cursor:pointer;width:100%"><i class="ti ti-chart-line" style="font-size:20px;color:var(--text2)"></i> Forecast</button>
     <button onclick="goPage('piutang')" style="display:flex;align-items:center;gap:11px;padding:12px 12px;border:none;background:transparent;color:var(--text);font-family:var(--font);font-size:15px;text-align:left;border-radius:9px;cursor:pointer;width:100%"><i class="ti ti-cash" style="font-size:20px;color:var(--text2)"></i> Piutang</button>
     <button onclick="goPage('invest')" style="display:flex;align-items:center;gap:11px;padding:12px 12px;border:none;background:transparent;color:var(--text);font-family:var(--font);font-size:15px;text-align:left;border-radius:9px;cursor:pointer;width:100%"><i class="ti ti-trending-up" style="font-size:20px;color:var(--text2)"></i> Investasi</button>
-    <button onclick="goPage('kurs')" style="display:flex;align-items:center;gap:11px;padding:12px 12px;border:none;background:transparent;color:var(--text);font-family:var(--font);font-size:15px;text-align:left;border-radius:9px;cursor:pointer;width:100%"><i class="ti ti-currency-dollar" style="font-size:20px;color:var(--text2)"></i> Kurs BCA</button>
   </div>
 
   <!-- FAB -->
@@ -441,7 +431,6 @@ let state = {
   investLog: [],  // v21: arus kas modal (INVEST_LOG) setor/tarik
   investValue: [],// v21: snapshot nilai portofolio (INVEST_VALUE)
   addendums: [],  // v24: kerja tambah/kurang per project (ADDENDUM) — ubah nilai kontrak efektif
-  kurs: [],       // v25: kurs valas BCA e-Rate (KURS) — referensi, di-fetch otomatis harian
   marks: [],      // v20: centang "sudah di-reserve" per txn CC (RESERVE_MARK)
   paidMarks: [],  // v23: centang "lunas" per txn CC (PAID_MARK) — murni filter tampilan rincian CC
   pending: [],    // antrian operasi optimistic save yg belum/ gagal terkirim ke server
@@ -481,7 +470,7 @@ function saveLocal() {
   localStorage.setItem('fcc_data', JSON.stringify({
     banks: state.banks, ccs: state.ccs, projects: state.projects,
     kategori: state.kategori, txns: state.txns, transfers: state.transfers,
-    reserves: state.reserves, kasbon: state.kasbon, jadwal: state.jadwal, piutang: state.piutang, cicilan: state.cicilan, ccbills: state.ccbills, marks: state.marks, paidMarks: state.paidMarks, investAkun: state.investAkun, investLog: state.investLog, investValue: state.investValue, addendums: state.addendums, kurs: state.kurs, summary: state.summary, txnsSince: state.txnsSince
+    reserves: state.reserves, kasbon: state.kasbon, jadwal: state.jadwal, piutang: state.piutang, cicilan: state.cicilan, ccbills: state.ccbills, marks: state.marks, paidMarks: state.paidMarks, investAkun: state.investAkun, investLog: state.investLog, investValue: state.investValue, addendums: state.addendums, summary: state.summary, txnsSince: state.txnsSince
   }));
 }
 
@@ -1015,7 +1004,6 @@ async function syncAll() {
     state.investLog = data.investLog || state.investLog || [];
     state.investValue = data.investValue || state.investValue || [];
     state.addendums = data.addendums || state.addendums || [];
-    state.kurs = data.kurs || state.kurs || [];
     state.summary = data.summary || null; // null bila pakai getAll lama → accessor fallback ke txns
     state.txnsSince = data.since || state.txnsSince;
     computeReserve();
@@ -1817,40 +1805,6 @@ function buildInvestTotalChart(){
       plugins:{legend:{display:true,labels:{font:{size:10},boxWidth:12}},tooltip:{callbacks:{label:ctx=>' '+ctx.dataset.label+' '+ctx.raw.toFixed(1)+'jt'}}},
       scales:{x:{grid:{color:'#2e2e3e'},ticks:{maxTicksLimit:8,font:{size:9}}},y:{grid:{color:'#2e2e3e'},ticks:{callback:v=>v+'jt'}}}}
   });
-}
-
-// ── v25 KURS BCA (e-Rate) ──────────────────────────────
-const KURS_NAMA={USD:'Dollar AS',SGD:'Dollar Singapura',AUD:'Dollar Australia',EUR:'Euro'};
-const kursFmt=n=>(n===''||n==null||isNaN(n))?'—':Number(n).toLocaleString('id-ID',{minimumFractionDigits:2,maximumFractionDigits:2});
-function renderKurs(){
-  const el=document.getElementById('kursList'); if(!el) return;
-  const list=(state.kurs||[]);
-  if(!list.length){ el.innerHTML='<div class="empty">Belum ada data kurs. Tekan "Perbarui" untuk ambil dari BCA.</div>'; return; }
-  const upd=(list.find(k=>k.UPDATE_BCA)||{}).UPDATE_BCA||'—';
-  let html='<div style="font-size:11px;color:var(--text3);margin-bottom:10px"><i class="ti ti-clock"></i> Diperbarui BCA: '+esc(String(upd))+'</div>';
-  html+='<div class="card" style="padding:0;overflow:hidden">';
-  html+='<div style="display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:8px;padding:9px 12px;background:#12121a;font-size:10px;color:var(--text3);text-transform:uppercase;font-weight:600"><span>Mata Uang</span><span style="text-align:right">Beli</span><span style="text-align:right">Jual</span></div>';
-  html+=list.map(k=>{
-    const nm=KURS_NAMA[k.MATA_UANG]||'';
-    return '<div style="display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:8px;padding:11px 12px;border-top:1px solid var(--border2);align-items:center">'
-      +'<div><div style="font-size:13px;font-weight:700">'+esc(k.MATA_UANG)+'</div><div style="font-size:10px;color:var(--text3)">'+esc(nm)+'</div></div>'
-      +'<div style="text-align:right;font-size:13px;font-weight:600;color:var(--green)">'+kursFmt(k.ERATE_BELI)+'</div>'
-      +'<div style="text-align:right;font-size:13px;font-weight:600;color:var(--red)">'+kursFmt(k.ERATE_JUAL)+'</div></div>';
-  }).join('');
-  html+='</div>';
-  html+='<div style="font-size:10px;color:var(--text3);margin-top:10px;line-height:1.5">Kurs e-Rate BCA (per 1 unit valas, Rupiah) untuk transaksi e-Banking. Referensi saja; kurs aktual mengikuti saat transaksi. Sumber: bca.co.id — diambil otomatis tiap hari.</div>';
-  el.innerHTML=html;
-}
-async function refreshKurs(btn){
-  if(!API_URL){ showToast('Perlu online untuk perbarui kurs','error'); return; }
-  const old=btn?btn.innerHTML:''; if(btn){ btn.disabled=true; btn.innerHTML='<div class="spin" style="width:12px;height:12px;border-width:2px;display:inline-block;vertical-align:middle"></div> mengambil...'; }
-  const r=await apiPost({action:'fetchKurs'});
-  if(r&&r.ok){
-    const fresh=await apiGet({action:'getKurs'});
-    if(Array.isArray(fresh)){ state.kurs=fresh; saveLocal(); }
-    renderKurs(); showToast('Kurs diperbarui ✓','success');
-  } else { showToast((r&&r.error)?('Gagal: '+r.error):'Gagal ambil kurs','error'); }
-  if(btn){ btn.disabled=false; btn.innerHTML=old; }
 }
 
 function renderInvest(){
@@ -3509,7 +3463,7 @@ async function doTransfer() {
   document.getElementById('tr_notes').value = '';
   document.getElementById('trPreview').style.display = 'none';
   updateTransferBtn();
-  renderDashboard(); filterTxn(); renderTransferHist();
+  renderDashboard(); renderTxn(); renderTransferHist();
   showToast(editRef ? 'Transfer diperbarui ✓' : `Transfer ${fmt(nominal)} berhasil ✓`, 'success');
 }
 
@@ -3549,7 +3503,7 @@ async function deleteTransferRow(ref) {
   state.transfers = state.transfers.filter(t => String(t.REF_ID)!==String(ref));
   saveLocal();
   if (API_URL) await apiPost({ action: 'deleteTransfer', data: { refId: ref } });
-  renderDashboard(); filterTxn(); renderTransferHist();
+  renderDashboard(); renderTxn(); renderTransferHist();
   showToast('Transfer dihapus', 'success');
 }
 
@@ -3579,7 +3533,7 @@ async function doReserve() {
   document.getElementById('res_nominal').value = '';
   document.getElementById('res_notes').value = '';
   document.getElementById('resPreview').style.display = 'none';
-  renderDashboard(); filterTxn(); renderReserveDetail();
+  renderDashboard(); renderTxn(); renderReserveDetail();
   showToast(`Reserve ${fmt(nominal)} utk ${kartu} disimpan di ${holding} ✓`, 'success');
 }
 
@@ -3802,7 +3756,7 @@ async function saveDrawer() {
     if(eid){const i=state.txns.findIndex(x=>x.ID===eid);if(i>=0){oldT=state.txns[i];state.txns[i]=obj;}else state.txns.unshift(obj);}else state.txns.unshift(obj);
     if(oldT)applySummaryDelta(oldT,-1); applySummaryDelta(obj,1);
     if(API_URL)bgPost({action:eid?'updateRow':'addTxn',data:eid?{sheet:'TRANSAKSI',id:eid,updates:obj}:obj},(eid?'Edit ':'')+'Transaksi '+fmt(nominal));
-    saveLocal();renderDashboard();filterTxn();renderProject();showToast(eid?'Transaksi diperbarui':'Transaksi tersimpan','success');
+    saveLocal();renderDashboard();renderTxn();renderProject();showToast(eid?'Transaksi diperbarui':'Transaksi tersimpan','success');
   } else if (mode === 'proj') {
     const obj={ID:eid||uid(),NAMA:document.getElementById('fp_nama').value,KLIEN:document.getElementById('fp_klien').value,TGL_MULAI:document.getElementById('fp_tgl').value,STATUS:document.getElementById('fp_status').value,NILAI_CONTRACT:unfmtNum(document.getElementById('fp_nilai').value),CREATED_AT:now};
     if(!obj.NAMA){showToast('Nama project wajib diisi','error');return;}
@@ -4025,7 +3979,7 @@ async function forceRefresh(){
   if(data&&!data.error){
     state.banks=data.banks||state.banks;state.ccs=data.ccs||state.ccs;state.projects=data.projects||state.projects;
     state.kategori=data.kategori||state.kategori;state.txns=data.txns||state.txns;state.transfers=data.transfers||state.transfers;
-    state.reserves=data.reserves||state.reserves;state.kasbon=data.kasbon||state.kasbon;state.jadwal=data.jadwal||state.jadwal;state.piutang=data.piutang||state.piutang||[];state.cicilan=data.cicilan||state.cicilan||[];state.ccbills=data.ccbills||state.ccbills||[];state.investAkun=data.investAkun||state.investAkun||[];state.investLog=data.investLog||state.investLog||[];state.investValue=data.investValue||state.investValue||[];state.addendums=data.addendums||state.addendums||[];state.kurs=data.kurs||state.kurs||[];state.summary=data.summary||null;state.txnsSince=data.since||state.txnsSince;
+    state.reserves=data.reserves||state.reserves;state.kasbon=data.kasbon||state.kasbon;state.jadwal=data.jadwal||state.jadwal;state.piutang=data.piutang||state.piutang||[];state.cicilan=data.cicilan||state.cicilan||[];state.ccbills=data.ccbills||state.ccbills||[];state.investAkun=data.investAkun||state.investAkun||[];state.investLog=data.investLog||state.investLog||[];state.investValue=data.investValue||state.investValue||[];state.addendums=data.addendums||state.addendums||[];state.summary=data.summary||null;state.txnsSince=data.since||state.txnsSince;
     computeReserve();saveLocal();renderAll();closeDrawer();showToast('Total dihitung ulang ✓','success');
   } else { showToast('Gagal refresh','error'); }
 }
@@ -5149,8 +5103,8 @@ async function confirmImport(){
   }
 }
 function showToast(msg,type){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(type||'success');setTimeout(()=>t.classList.add('show'),10);setTimeout(()=>t.classList.remove('show'),2800);}
-function goPage(page){closeFabMenu();closeLainnyaMenu();state.currentPage=page;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+page).classList.add('active');document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));const navKey=({kasbon:'lainnya',forecast:'lainnya',piutang:'lainnya',invest:'lainnya'})[page]||page;const _ab=document.querySelector('.nav-item[data-nav="'+navKey+'"]');if(_ab)_ab.classList.add('active');document.getElementById('content').scrollTop=0;if(page==='master')renderMaster();if(page==='transfer')renderTransferPage();if(page==='kasbon')renderKasbon();if(page==='forecast')renderForecast();if(page==='piutang')renderPiutang();if(page==='invest')renderInvest();if(page==='kurs')renderKurs();}
-function renderAll(){renderDashboard();renderTxnMonthTabs();filterTxn();renderProject();renderCCBillReminder();renderPiutangReminder();updatePiutangBadge();if(state.currentPage==='master')renderMaster();if(state.currentPage==='transfer')renderTransferPage();if(state.currentPage==='kasbon')renderKasbon();if(state.currentPage==='forecast')renderForecast();if(state.currentPage==='piutang')renderPiutang();if(state.currentPage==='invest')renderInvest();if(state.currentPage==='kurs')renderKurs();}
+function goPage(page){closeFabMenu();closeLainnyaMenu();state.currentPage=page;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+page).classList.add('active');document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));const navKey=({kasbon:'lainnya',forecast:'lainnya',piutang:'lainnya',invest:'lainnya'})[page]||page;const _ab=document.querySelector('.nav-item[data-nav="'+navKey+'"]');if(_ab)_ab.classList.add('active');document.getElementById('content').scrollTop=0;if(page==='master')renderMaster();if(page==='transfer')renderTransferPage();if(page==='kasbon')renderKasbon();if(page==='forecast')renderForecast();if(page==='piutang')renderPiutang();if(page==='invest')renderInvest();}
+function renderAll(){renderDashboard();renderTxnMonthTabs();filterTxn();renderProject();renderCCBillReminder();renderPiutangReminder();updatePiutangBadge();if(state.currentPage==='master')renderMaster();if(state.currentPage==='transfer')renderTransferPage();if(state.currentPage==='kasbon')renderKasbon();if(state.currentPage==='forecast')renderForecast();if(state.currentPage==='piutang')renderPiutang();if(state.currentPage==='invest')renderInvest();}
 if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{});}
 let logoTimer;
 document.querySelector('.topbar-title').addEventListener('touchstart',()=>{logoTimer=setTimeout(()=>openDrawer('settings'),800);});

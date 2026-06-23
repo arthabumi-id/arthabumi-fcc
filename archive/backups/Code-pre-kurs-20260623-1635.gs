@@ -20,7 +20,6 @@ const S = {
   PAIDMARK: 'PAID_MARK',   // v23: penanda manual "tagihan sudah dibayar/lunas" per transaksi CC
   INVEST: 'MASTER_INVEST', INVESTLOG: 'INVEST_LOG', INVESTVAL: 'INVEST_VALUE',  // v21 investasi (terpisah dari bisnis)
   ADD: 'ADDENDUM',  // v24: kerja tambah/kurang (addendum) per project — ubah nilai kontrak efektif
-  KURS: 'KURS',     // v25: kurs valas BCA (e-Rate) — di-fetch otomatis harian via trigger
 };
 
 const HEADERS = {
@@ -70,11 +69,6 @@ const HEADERS = {
   // JENIS: 'Tambah' / 'Kurang'. NOMINAL selalu positif; arah dari JENIS. Nilai kontrak efektif
   // = NILAI_CONTRACT + Σ(Tambah) − Σ(Kurang). TIDAK menyentuh laba/kas (laba tetap basis transaksi).
   [S.ADD]:      ['ID','PROJECT_ID','PROJECT_NAMA','TANGGAL','JENIS','DESKRIPSI','NOMINAL','CREATED_BY','CREATED_AT'],
-  // ── v25 KURS (valas BCA e-Rate) ──
-  // Di-fetch otomatis harian (fetchKursBCA via trigger). ERATE_BELI/JUAL = angka (Rp per 1 unit valas).
-  // UPDATE_BCA = string timestamp dari halaman BCA. FETCHED_AT = ISO waktu fetch app.
-  // 1 baris = 1 mata uang. Isi ulang penuh tiap fetch (clear + rewrite). Referensi saja, bukan kas.
-  [S.KURS]:     ['MATA_UANG','ERATE_BELI','ERATE_JUAL','UPDATE_BCA','FETCHED_AT'],
 };
 
 // ── INIT ─────────────────────────────────────────────────────
@@ -176,7 +170,6 @@ function doGet(e) {
       case 'getMarks':     return json(getSheet(ss, S.MARK));
       case 'getPaidMarks': return json(getSheet(ss, S.PAIDMARK));
       case 'getInvest':    return json({ investAkun: getSheet(ss, S.INVEST), investLog: getSheet(ss, S.INVESTLOG), investValue: getSheet(ss, S.INVESTVAL) });
-      case 'getKurs':      return json(getSheet(ss, S.KURS));
       default:             return json({ error: 'Unknown action' });
     }
   } catch (err) { return json({ error: err.message }); }
@@ -223,7 +216,6 @@ function doPost(e) {
       case 'addInvestValue':  res = addInvestValue(ss, data); break;
       case 'deleteInvestFlow':res = deleteInvestFlow(ss, data); break;
       case 'lockCCBill':  res = lockCCBill(ss, data); break;
-      case 'fetchKurs':   res = fetchKursBCA(); break;
       case 'updateRow':   res = updateRow(ss, data); break;
       case 'deleteRow':   res = deleteRow(ss, data); break;
       case 'init':        res = initSheets(); break;
@@ -256,7 +248,6 @@ function getBundle(ss, params) {
     investLog:   getSheet(ss, S.INVESTLOG),
     investValue: getSheet(ss, S.INVESTVAL),
     addendums:   getSheet(ss, S.ADD),
-    kurs:      getSheet(ss, S.KURS),
     summary:   getSummary(ss),
     txns:      getTxns(ss, { since: since }),
     since:     since,
@@ -1178,70 +1169,6 @@ function deleteInvestFlow(ss, data) {
     for (let i=all.length-1;i>=1;i--) if (String(all[i][c]).indexOf(ref)>=0) tx.deleteRow(i+1);
   }
   return { ok:true };
-}
-
-// ── v25 KURS BCA (e-Rate) ────────────────────────────────────
-// Ambil kurs valas e-Rate dari halaman publik BCA, parse, tulis ke sheet KURS.
-// Dipanggil otomatis harian (installKursTrigger) + bisa manual (action 'fetchKurs').
-// PARSER tahan-banting: buang semua tag HTML → teks rata → cari KODE diikuti 2 angka
-// format Indonesia (= e-Rate Beli & Jual, kolom pertama tabel). Selama urutan kolom
-// e-Rate tetap yang pertama, parser tetap jalan walau markup berubah.
-var KURS_MATA_UANG = ['USD','SGD','AUD','EUR'];   // BCA tak punya TWD. Ubah daftar ini bila perlu.
-var KURS_URL = 'https://www.bca.co.id/id/informasi/kurs';
-
-function fetchKursBCA() {
-  var resp;
-  try {
-    resp = UrlFetchApp.fetch(KURS_URL, {
-      muteHttpExceptions: true,
-      followRedirects: true,
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; FCC-Arthabumi/1.0)' }
-    });
-  } catch (err) { return { error: 'fetch gagal: ' + err.message }; }
-  if (resp.getResponseCode() !== 200) return { error: 'BCA HTTP ' + resp.getResponseCode() };
-
-  // Normalisasi: tag → spasi, entity → spasi, rapatkan whitespace.
-  var text = resp.getContentText()
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/\s+/g, ' ');
-
-  var upd = '';
-  var mU = text.match(/Terakhir diperbarui pada\s+(.+?WIB)/i);
-  if (mU) upd = mU[1].trim();
-
-  var now = new Date().toISOString();
-  var numRe = '(\\d{1,3}(?:\\.\\d{3})*,\\d{2})';
-  var rows = KURS_MATA_UANG.map(function(code) {
-    var re = new RegExp('\\b' + code + '\\b[^0-9]{0,80}' + numRe + '\\s+' + numRe);
-    var m = text.match(re);
-    if (m) return [code, idNum_(m[1]), idNum_(m[2]), upd, now];
-    return [code, '', '', (upd ? upd + ' ' : '') + '(parse gagal)', now];
-  });
-
-  var ss = SpreadsheetApp.openById(SHEET_ID);
-  var sh = ensureSheet(ss, S.KURS);
-  if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).clearContent();
-  if (rows.length) sh.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
-
-  return { ok: true, updated: upd, count: rows.length, rows: rows };
-}
-
-// "17.830,00" → 17830 (Number). String kosong → ''.
-function idNum_(s) {
-  if (!s) return '';
-  return Number(String(s).replace(/\./g, '').replace(',', '.'));
-}
-
-// Pasang trigger harian (±09:00) + isi data awal. JALANKAN SEKALI dari editor Apps Script.
-function installKursTrigger() {
-  ScriptApp.getProjectTriggers().forEach(function(t) {
-    if (t.getHandlerFunction() === 'fetchKursBCA') ScriptApp.deleteTrigger(t);
-  });
-  ScriptApp.newTrigger('fetchKursBCA').timeBased().everyDays(1).atHour(9).create();
-  var r = fetchKursBCA();
-  return 'Trigger kurs harian (~09:00 WIB) terpasang. Fetch awal: ' + JSON.stringify(r);
 }
 
 function daysAgoISO(days) {

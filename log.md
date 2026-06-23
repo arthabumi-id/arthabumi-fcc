@@ -3,6 +3,22 @@
 
 ---
 
+## SESSION — 2026-06-23 (Bug filter rekening + v25 Kurs BCA)
+### Bug #1 — Filter rekening ke-reset setelah input (client-only, NO redeploy)
+- **Akar masalah:** handler simpan/transfer/reserve/hapus memanggil `renderTxn()` tanpa argumen → render seluruh `state.txns`, abaikan filter aktif. Dropdown masih nunjuk rekening pilihan tapi daftar tampil semua → Eddy harus ganti pilihan utk re-trigger.
+- **Fix:** 4 panggilan `renderTxn()` → `filterTxn()` (baris 3466/3506/3536/3759). `filterTxn` pertahankan semua filter (rek, tipe, bulan, rentang, search). sw.js → **v21**.
+- Verifikasi: 0 sisa `renderTxn()` no-arg; blok node --check OK.
+
+### v25 — Kurs Valas BCA (e-Rate) — ⚠️ WAJIB REDEPLOY + AUTH BARU
+- **PRD sign-off Eddy:** mata uang USD/SGD/AUD/EUR (TWD TIDAK ADA di BCA → dicoret); jenis = e-Rate saja; update = **otomatis harian**; tampil di menu Lainnya → "Kurs BCA".
+- **Code.gs:** sheet `KURS` `[MATA_UANG,ERATE_BELI,ERATE_JUAL,UPDATE_BCA,FETCHED_AT]`; `fetchKursBCA()` = UrlFetchApp scrape `bca.co.id/id/informasi/kurs`, parser tahan-banting (strip semua tag → teks rata → regex KODE + 2 angka format ID = e-Rate beli/jual; abaikan dropdown krn butuh angka langsung setelah kode); `installKursTrigger()` (Run SEKALI: pasang trigger harian ~09:00 + fetch awal); action `fetchKurs` (manual) + route `getKurs` + `kurs` di getBundle. Helper `idNum_`.
+- **index.html:** `state.kurs` (init+saveLocal+load bundle+offline cache); page `page-kurs` + tombol "Perbarui"; `renderKurs()` (tabel beli/jual + timestamp BCA); `refreshKurs()` (apiPost fetchKurs → apiGet getKurs); entry "Kurs BCA" di menu Lainnya; wire goPage/renderAll.
+- **Verifikasi:** parser disimulasikan di Node thd struktur tabel+kartu BCA → 4 mata uang PASS, e-Rate benar (bukan TT/BankNotes), dropdown kalkulator diabaikan. Blok Code.gs & blok UI node --check OK terisolasi. ⚠️ Mount bash potong index.html & Code.gs (ukuran/whole-file check stale) — Grep/Read/Edit tool = sumber kebenaran. Backup: `index-pre-filterfix-20260623-1631.html`, `Code-pre-kurs-*.gs`.
+- **⚠️ Risiko:** scraping rapuh (BCA ubah layout → parser rusak, perlu diperbaiki). UrlFetchApp+ScriptApp = scope OAuth BARU → redeploy Code.gs lalu **Run `installKursTrigger` sekali & approve izin**.
+- **Pending deploy:** (1) push index.html + sw.js v21 (GitHub Desktop); (2) **redeploy Code.gs** (Apps Script, new version); (3) Run `installKursTrigger()` sekali di editor + approve; (4) buka app → Lainnya → Kurs BCA → cek/Perbarui.
+
+---
+
 ## SESSION — 2026-06-21 (v24: Kerja Tambah / Kurang per Project — Addendum)
 **PERLU REDEPLOY Code.gs** (ada action baru `addAddendum`).
 - **Tujuan:** catat pekerjaan tambah/kurang (variation order) per project yang sudah dibuat, dengan histori.
