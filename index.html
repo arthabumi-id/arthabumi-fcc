@@ -490,8 +490,9 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v27.7';
+const APP_VERSION = 'v27.8';
 const CHANGELOG = [
+  { v:'v27.8', d:'24 Jun 2026', t:'Forex: untung/rugi live per transaksi (Beli) + per bank, ikut kurs sekarang.' },
   { v:'v27.7', d:'24 Jun 2026', t:'Dashboard: kartu Investasi (nilai portofolio + U/R) di grup Aset.' },
   { v:'v27.6', d:'24 Jun 2026', t:'Forex: tombol Edit per transaksi (ubah jenis/akun/jumlah/kurs/tanggal).' },
   { v:'v27.5', d:'24 Jun 2026', t:'Forex: average rate modal (total & per bank) + rincian transaksi dikelompokkan per bank.' },
@@ -1990,17 +1991,18 @@ function renderForex(){
   if(!lots.length){ html+='<div class="empty">Belum ada konversi. Tekan "Convert" untuk mulai.</div>'; }
   else {
     const lotRow = f => { const beli=f.JENIS!=='Jual';
+      const ur = c.hasKurs ? (Number(f.JUMLAH_VALAS)||0)*(c.liveBeli-(Number(f.KURS)||0)) : 0;
       return `<div class="card" style="padding:10px 12px;margin-bottom:8px"><div style="display:flex;align-items:center;gap:10px">
       <div style="width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;background:${beli?'var(--ic-blue)':'var(--ic-green)'};flex-shrink:0"><i class="ti ti-${beli?'arrow-down-left':'arrow-up-right'}" style="font-size:15px;color:${beli?'var(--blue)':'var(--green)'}"></i></div>
       <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">${beli?'Beli':'Jual'} ${usdFmt(f.JUMLAH_VALAS)} USD <span style="font-size:11px;color:var(--text3)">@ ${usdFmt(f.KURS)}</span></div>
-        <div style="font-size:11px;color:var(--text2)">dari ${esc(f.REKENING||'')} · ${String(f.TANGGAL).slice(0,10)}</div>${f.NOTES?`<div style="font-size:10px;color:var(--text3)">${esc(f.NOTES)}</div>`:''}</div>
+        <div style="font-size:11px;color:var(--text2)">dari ${esc(f.REKENING||'')} · ${String(f.TANGGAL).slice(0,10)}</div>${beli&&c.hasKurs?`<div style="font-size:10px;margin-top:1px;color:${ur>=0?'var(--green)':'var(--red)'}">${ur>=0?'untung':'rugi'} ${ur>=0?'+':'-'}${fmt(Math.abs(ur))} <span style="color:var(--text3)">@ live ${usdFmt(c.liveBeli)}</span></div>`:''}${f.NOTES?`<div style="font-size:10px;color:var(--text3)">${esc(f.NOTES)}</div>`:''}</div>
       <div style="text-align:right;flex-shrink:0"><div style="font-size:13px;font-weight:700;color:${beli?'var(--red)':'var(--green)'}">${beli?'-':'+'}${fmt(Number(f.NOMINAL_RP)||0)}</div>
         <div style="margin-top:3px;display:flex;gap:8px;justify-content:flex-end"><button style="font-size:10px;background:transparent;border:none;color:var(--text3);cursor:pointer" onclick="openForexConvert('${esc(f.REF_ID||f.ID)}')">edit</button><button style="font-size:10px;background:transparent;border:none;color:var(--text3);cursor:pointer" onclick="delForex('${esc(f.REF_ID||f.ID)}')">hapus</button></div></div>
     </div></div>`; };
     html += c.byAkun.map(a=>{
       const items = lots.filter(f=>(f.AKUN_VALAS||'(tanpa akun)')===a.akun);
       if(!items.length) return '';
-      return `<div style="display:flex;justify-content:space-between;align-items:center;margin:16px 2px 7px"><span style="font-size:12px;font-weight:600"><i class="ti ti-building-bank" style="font-size:13px;vertical-align:middle;color:var(--gold)"></i> ${esc(a.akun)}</span><span style="font-size:11px;color:var(--text2)">${usdFmt(a.holding)} USD · avg @ <b>${usdFmt(a.avgCost)}</b></span></div>` + items.map(lotRow).join('');
+      return `<div style="display:flex;justify-content:space-between;align-items:center;margin:16px 2px 7px"><span style="font-size:12px;font-weight:600"><i class="ti ti-building-bank" style="font-size:13px;vertical-align:middle;color:var(--gold)"></i> ${esc(a.akun)}</span><span style="font-size:11px;color:var(--text2)">${usdFmt(a.holding)} USD · avg @ <b>${usdFmt(a.avgCost)}</b>${c.hasKurs?` · <span style="color:${a.unreal>=0?'var(--green)':'var(--red)'}">${a.unreal>=0?'+':'-'}${fmt(Math.abs(a.unreal))}</span>`:''}</span></div>` + items.map(lotRow).join('');
     }).join('');
   }
   el.innerHTML=html;
