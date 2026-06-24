@@ -98,6 +98,16 @@
 - `#ptrInd` indikator (panah putar → spinner saat load) sbg anak pertama #content. Handler touchstart/move/end (threshold 70px efektif, redam 0.5x, guard busy). Native pull-to-refresh dimatikan via `overscroll-behavior-y:contain` di .content.
 - **Verifikasi:** PTR IIFE node --check OK; style brace 136/136.
 
+### v27.5 Forex: average rate + rincian transaksi per bank — CLIENT-ONLY, sw.js v36
+- **Average rate modal:** kartu ringkasan tampil `avg rate @ X` keseluruhan (= costHolding/holding); breakdown per-akun + halaman tampil `avg @ avgCost` per bank (sudah dihitung di forexCalc byAkun: beliRp/beliUSD).
+- **Rincian transaksi dikelompokkan per bank:** daftar lot kini dikelompokkan per AKUN_VALAS, tiap grup header bank (nama + holding USD + avg @ rate), lalu transaksi-transaksinya (Beli/Jual, USD @ kurs, dari rekening, tanggal, rupiah, hapus). lotRow jadi helper.
+- **Verifikasi:** renderForex node --check OK.
+
+### v27.6 Forex: edit transaksi — CLIENT-ONLY, sw.js v37
+- Tombol "edit" di tiap baris transaksi forex → `openForexConvert(refRef)` prefill semua field (jenis/akun/rekening/USD/kurs/tanggal/notes) + judul "Edit", tombol "Simpan Perubahan". Var modul `fxEditRef`.
+- `saveForexConvert`: bila editing → `deleteForex(oldRef)` lalu `addForexConvert(new)` (reverse TXN lama + tulis baru → saldo bank tetap benar). fxEditRef di-reset; buka Convert baru reset null (aman dari cancel).
+- **Verifikasi:** openForexConvert+saveForexConvert+renderForex node --check OK.
+
 ---
 
 ## SESSION — 2026-06-23 (Bug filter rekening + v25 Kurs BCA)

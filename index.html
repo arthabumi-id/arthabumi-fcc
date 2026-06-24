@@ -490,8 +490,10 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v27.4';
+const APP_VERSION = 'v27.6';
 const CHANGELOG = [
+  { v:'v27.6', d:'24 Jun 2026', t:'Forex: tombol Edit per transaksi (ubah jenis/akun/jumlah/kurs/tanggal).' },
+  { v:'v27.5', d:'24 Jun 2026', t:'Forex: average rate modal (total & per bank) + rincian transaksi dikelompokkan per bank.' },
   { v:'v27.4', d:'24 Jun 2026', t:'Tarik ke bawah untuk refresh (Sync) — tetap di tab yang sama.' },
   { v:'v27.3', d:'24 Jun 2026', t:'Saldo berjalan rekening tampil di tiap transaksi (seperti buku tabungan).' },
   { v:'v27.2', d:'24 Jun 2026', t:'Fix PWA: ikon 192/512 asli + manifest bersih → bisa "Install app" (buka tanpa browser).' },
@@ -1962,28 +1964,36 @@ function renderForex(){
   const el=document.getElementById('forexBody'); if(!el) return;
   const c=forexCalc(); const T=c.total;
   const lots=(state.forex||[]).slice().sort((a,b)=>String(b.TANGGAL).localeCompare(String(a.TANGGAL))||String(b.CREATED_AT||'').localeCompare(String(a.CREATED_AT||'')));
+  const avgAll = T.holding>0.0001 ? T.costHolding/T.holding : 0;
   let html=`<div class="card" style="margin-bottom:12px">
     <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
       <div><div style="font-size:10px;color:var(--text3);text-transform:uppercase">Total dipegang</div><div style="font-size:22px;font-weight:700">${usdFmt(T.holding)} <span style="font-size:13px;color:var(--text2)">USD</span></div></div>
       <div style="text-align:right"><div style="font-size:10px;color:var(--text3);text-transform:uppercase">Nilai live (Rp)</div><div style="font-size:18px;font-weight:700;color:var(--gold)">${c.hasKurs?fmt(T.liveValue):'—'}</div></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
-      <div style="background:var(--inset);border-radius:8px;padding:8px 10px"><div style="color:var(--text3);font-size:10px">Modal (cost)</div><div style="font-weight:600">${fmt(T.costHolding)}</div></div>
+      <div style="background:var(--inset);border-radius:8px;padding:8px 10px"><div style="color:var(--text3);font-size:10px">Modal (cost)</div><div style="font-weight:600">${fmt(T.costHolding)}</div><div style="font-size:10px;color:var(--text3)">avg rate <b style="color:var(--text2)">@ ${usdFmt(avgAll)}</b></div></div>
       <div style="background:var(--inset);border-radius:8px;padding:8px 10px"><div style="color:var(--text3);font-size:10px">U/R belum terealisasi</div><div style="font-weight:700;color:${T.unreal>=0?'var(--green)':'var(--red)'}">${c.hasKurs?((T.unreal>=0?'+':'-')+fmt(Math.abs(T.unreal))):'—'}</div></div>
     </div>
-    ${c.byAkun.length>1||c.byAkun.some(a=>a.akun!=='(tanpa akun)')?`<div style="margin-top:10px;border-top:1px solid var(--border2);padding-top:8px">${c.byAkun.map(a=>`<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;padding:3px 0"><span style="color:var(--text2)"><i class="ti ti-wallet" style="font-size:12px;vertical-align:middle"></i> ${esc(a.akun)}</span><span><b>${usdFmt(a.holding)}</b> USD${c.hasKurs?` · <span style="color:var(--blue)">${fmt(a.liveValue)}</span>`:''}${a.holding&&c.hasKurs?` · <span style="color:${a.unreal>=0?'var(--green)':'var(--red)'}">${a.unreal>=0?'+':'-'}${fmt(Math.abs(a.unreal))}</span>`:''}</span></div>`).join('')}</div>`:''}
+    ${c.byAkun.length>1||c.byAkun.some(a=>a.akun!=='(tanpa akun)')?`<div style="margin-top:10px;border-top:1px solid var(--border2);padding-top:8px">${c.byAkun.map(a=>`<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;padding:3px 0"><span style="color:var(--text2)"><i class="ti ti-wallet" style="font-size:12px;vertical-align:middle"></i> ${esc(a.akun)} <span style="color:var(--text3)">avg @ ${usdFmt(a.avgCost)}</span></span><span><b>${usdFmt(a.holding)}</b> USD${c.hasKurs?` · <span style="color:var(--gold)">${fmt(a.liveValue)}</span>`:''}</span></div>`).join('')}</div>`:''}
     ${T.realized?`<div style="margin-top:8px;font-size:11px;color:var(--text2)">U/R terealisasi (akumulatif): <b style="color:${T.realized>=0?'var(--green)':'var(--red)'}">${T.realized>=0?'+':'-'}${fmt(Math.abs(T.realized))}</b></div>`:''}
     <div style="margin-top:8px;font-size:10px;color:var(--text3);line-height:1.5">${c.hasKurs?`Nilai pakai e-Rate Beli USD <b>${usdFmt(c.liveBeli)}</b> · update BCA: ${esc(String(c.updBCA||'—'))}`:'⚠ Kurs belum tersedia — buka menu Kurs BCA & Perbarui dulu.'}</div>
   </div>`;
   if(!lots.length){ html+='<div class="empty">Belum ada konversi. Tekan "Convert" untuk mulai.</div>'; }
-  else { html+=lots.map(f=>{ const beli=f.JENIS!=='Jual';
-    return `<div class="card" style="padding:10px 12px;margin-bottom:8px"><div style="display:flex;align-items:center;gap:10px">
+  else {
+    const lotRow = f => { const beli=f.JENIS!=='Jual';
+      return `<div class="card" style="padding:10px 12px;margin-bottom:8px"><div style="display:flex;align-items:center;gap:10px">
       <div style="width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;background:${beli?'var(--ic-blue)':'var(--ic-green)'};flex-shrink:0"><i class="ti ti-${beli?'arrow-down-left':'arrow-up-right'}" style="font-size:15px;color:${beli?'var(--blue)':'var(--green)'}"></i></div>
       <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">${beli?'Beli':'Jual'} ${usdFmt(f.JUMLAH_VALAS)} USD <span style="font-size:11px;color:var(--text3)">@ ${usdFmt(f.KURS)}</span></div>
-        <div style="font-size:11px;color:var(--text2)">${esc(f.REKENING||'')} · ${String(f.TANGGAL).slice(0,10)}</div>${f.NOTES?`<div style="font-size:10px;color:var(--text3)">${esc(f.NOTES)}</div>`:''}</div>
+        <div style="font-size:11px;color:var(--text2)">dari ${esc(f.REKENING||'')} · ${String(f.TANGGAL).slice(0,10)}</div>${f.NOTES?`<div style="font-size:10px;color:var(--text3)">${esc(f.NOTES)}</div>`:''}</div>
       <div style="text-align:right;flex-shrink:0"><div style="font-size:13px;font-weight:700;color:${beli?'var(--red)':'var(--green)'}">${beli?'-':'+'}${fmt(Number(f.NOMINAL_RP)||0)}</div>
-        <button style="font-size:10px;margin-top:3px;background:transparent;border:none;color:var(--text3);cursor:pointer" onclick="delForex('${esc(f.REF_ID||f.ID)}')">hapus</button></div>
-    </div></div>`; }).join(''); }
+        <div style="margin-top:3px;display:flex;gap:8px;justify-content:flex-end"><button style="font-size:10px;background:transparent;border:none;color:var(--text3);cursor:pointer" onclick="openForexConvert('${esc(f.REF_ID||f.ID)}')">edit</button><button style="font-size:10px;background:transparent;border:none;color:var(--text3);cursor:pointer" onclick="delForex('${esc(f.REF_ID||f.ID)}')">hapus</button></div></div>
+    </div></div>`; };
+    html += c.byAkun.map(a=>{
+      const items = lots.filter(f=>(f.AKUN_VALAS||'(tanpa akun)')===a.akun);
+      if(!items.length) return '';
+      return `<div style="display:flex;justify-content:space-between;align-items:center;margin:16px 2px 7px"><span style="font-size:12px;font-weight:600"><i class="ti ti-building-bank" style="font-size:13px;vertical-align:middle;color:var(--gold)"></i> ${esc(a.akun)}</span><span style="font-size:11px;color:var(--text2)">${usdFmt(a.holding)} USD · avg @ <b>${usdFmt(a.avgCost)}</b></span></div>` + items.map(lotRow).join('');
+    }).join('');
+  }
   el.innerHTML=html;
 }
 function forexAkunList(){
@@ -2007,31 +2017,42 @@ function renderForexDash(){
     ${!c.hasKurs?'<div style="font-size:10px;color:var(--amber);margin-top:6px">⚠ Kurs belum ada — buka Kurs BCA & Perbarui</div>':''}
   </div>`;
 }
-function openForexConvert(){
+let fxEditRef=null;
+function openForexConvert(editRef){
   const banks=state.banks.map(b=>b.NAMA);
   const akuns=forexAkunList();
-  document.getElementById('drawerTitle').textContent='Convert Forex (USD)';
+  const ed = editRef ? (state.forex||[]).find(f=>String(f.REF_ID||f.ID)===String(editRef)) : null;
+  fxEditRef = ed ? (ed.REF_ID||ed.ID) : null;
+  const jenisV = ed?(ed.JENIS==='Jual'?'Jual':'Beli'):'Beli';
+  const tglV = ed?String(ed.TANGGAL).slice(0,10):today();
+  const akunV = ed?(ed.AKUN_VALAS||''):(akuns[0]||'');
+  if(ed && akunV && !akuns.includes(akunV)) akuns.push(akunV);
+  const rekV = ed?(ed.REKENING||'(luar)'):'(luar)';
+  const usdV = ed?(ed.JUMLAH_VALAS||''):'';
+  const kursV = ed?(ed.KURS||''):'';
+  const notesV = ed?(ed.NOTES||''):'';
+  document.getElementById('drawerTitle').textContent= ed?'Edit Convert Forex':'Convert Forex (USD)';
   document.getElementById('drawerBody').innerHTML=`
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Jenis</label><select class="form-input" id="fx_jenis" onchange="fxPrefillKurs()"><option value="Beli">Beli USD (Rp→USD)</option><option value="Jual">Jual USD (USD→Rp)</option></select></div>
-      <div class="form-group"><label class="form-label">Tanggal</label><input class="form-input" id="fx_tgl" type="date" value="${today()}"></div>
+      <div class="form-group"><label class="form-label">Jenis</label><select class="form-input" id="fx_jenis" onchange="fxPrefillKurs()"><option value="Beli" ${jenisV==='Beli'?'selected':''}>Beli USD (Rp→USD)</option><option value="Jual" ${jenisV==='Jual'?'selected':''}>Jual USD (USD→Rp)</option></select></div>
+      <div class="form-group"><label class="form-label">Tanggal</label><input class="form-input" id="fx_tgl" type="date" value="${tglV}"></div>
     </div>
     <div class="form-group"><label class="form-label">Akun valas (USD disimpan di)</label>
-      <input class="form-input" id="fx_akun" list="fxAkunOpts" placeholder="BCA / BNI" value="${esc(akuns[0]||'')}">
+      <input class="form-input" id="fx_akun" list="fxAkunOpts" placeholder="BCA / BNI" value="${esc(akunV)}">
       <datalist id="fxAkunOpts">${akuns.map(a=>`<option value="${esc(a)}">`).join('')}</datalist></div>
     <div class="form-group"><label class="form-label">Rekening rupiah</label>
-      <select class="form-input" id="fx_rek"><option value="(luar)">(saldo awal / luar) — tak sentuh saldo bank</option>${banks.map(n=>`<option>${esc(n)}</option>`).join('')}</select>
+      <select class="form-input" id="fx_rek"><option value="(luar)" ${rekV==='(luar)'?'selected':''}>(saldo awal / luar) — tak sentuh saldo bank</option>${banks.map(n=>`<option ${rekV===n?'selected':''}>${esc(n)}</option>`).join('')}</select>
       <div class="settings-sub" style="margin-top:4px">Pilih bank → saldo bergerak nyata (Beli turun / Jual naik). Pilih "(saldo awal)" untuk mencatat USD lama tanpa potong bank.</div></div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Jumlah USD</label><input class="form-input" id="fx_usd" type="text" inputmode="decimal" placeholder="0.00" oninput="fxCalcRp()"></div>
-      <div class="form-group"><label class="form-label">Kurs (Rp/USD)</label><input class="form-input" id="fx_kurs" type="text" inputmode="decimal" placeholder="0" oninput="fxCalcRp()"></div>
+      <div class="form-group"><label class="form-label">Jumlah USD</label><input class="form-input" id="fx_usd" type="text" inputmode="decimal" placeholder="0.00" value="${esc(String(usdV))}" oninput="fxCalcRp()"></div>
+      <div class="form-group"><label class="form-label">Kurs (Rp/USD)</label><input class="form-input" id="fx_kurs" type="text" inputmode="decimal" placeholder="0" value="${esc(String(kursV))}" oninput="fxCalcRp()"></div>
     </div>
     <div class="form-group"><label class="form-label">Nominal Rupiah</label><input class="form-input" id="fx_rp" type="text" readonly style="opacity:.85"><div class="settings-sub" id="fx_hint" style="margin-top:4px"></div></div>
-    <div class="form-group"><label class="form-label">Catatan</label><input class="form-input" id="fx_notes" placeholder="opsional"></div>
-    <button class="btn-primary" onclick="saveForexConvert()"><i class="ti ti-device-floppy"></i> Simpan</button>`;
+    <div class="form-group"><label class="form-label">Catatan</label><input class="form-input" id="fx_notes" placeholder="opsional" value="${esc(String(notesV))}"></div>
+    <button class="btn-primary" onclick="saveForexConvert()"><i class="ti ti-device-floppy"></i> ${ed?'Simpan Perubahan':'Simpan'}</button>`;
   drawerMode='forex'; drawerEditId=null;
   document.getElementById('drawerBg').classList.add('open');
-  fxPrefillKurs();
+  if(ed) fxCalcRp(); else fxPrefillKurs();
 }
 function fxPrefillKurs(){
   const k=(state.kurs||[]).find(x=>x.MATA_UANG==='USD')||{};
@@ -2056,14 +2077,16 @@ async function saveForexConvert(){
   const tgl=document.getElementById('fx_tgl').value;
   const notes=document.getElementById('fx_notes').value;
   if(!usd||!kurs||!akun){showToast('Jumlah USD, kurs, akun valas wajib','error');return;}
+  const editing=fxEditRef; fxEditRef=null;
   closeDrawer();
   if(!API_URL){showToast('Perlu online untuk convert','error');return;}
-  showToast('Menyimpan...','success');
+  showToast(editing?'Menyimpan perubahan...':'Menyimpan...','success');
+  if(editing){ const dres=await apiPost({action:'deleteForex',data:{refId:editing}}); if(dres&&dres.error){showToast('Gagal: '+dres.error,'error');return;} }
   const res=await apiPost({action:'addForexConvert',data:{JENIS:jenis,MATA_UANG:'USD',AKUN_VALAS:akun,REKENING:rek,JUMLAH_VALAS:usd,KURS:kurs,NOMINAL_RP:rp,TANGGAL:tgl,NOTES:notes,USER:state.user}});
   if(res&&res.error){showToast('Gagal: '+res.error,'error');return;}
   await syncAll();
   if(state.currentPage==='forex')renderForex();
-  showToast('Tersimpan ✓','success');
+  showToast(editing?'Perubahan tersimpan ✓':'Tersimpan ✓','success');
 }
 async function delForex(refId){
   if(!confirm('Hapus konversi forex ini? Saldo bank akan dikembalikan.'))return;
