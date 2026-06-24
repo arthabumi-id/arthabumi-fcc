@@ -112,6 +112,10 @@
 - Grup Aset Dashboard kini: Total Saldo Bank + Tabungan Forex (bila ada) + **Investasi** (bila ada akun). Kartu invest: nilai portofolio `fmt(investTotals().nilai)` (ungu) + U/R `inv.rp`. Klik → goPage('invest'). `asetWide` bank full-width hanya bila tak ada forex & invest.
 - **Verifikasi:** renderDashboard node --check OK.
 
+### v28.0 Detail akun: klik slice chart → filter kategori — CLIENT-ONLY, sw.js v41
+- Donut kategori di drawer Detail Akun (openAccountDetail) kini di-pass `acctSliceClick` → klik bagian = set `window._acctKat` (toggle), `acctFilter()` re-render. Daftar transaksi `rowsF` difilter by KATEGORI; donut tetap tampil semua (dari `data`). Chip aktif "Kategori: X · N txn · total Rp · hapus". Reset `_acctKat=''` tiap buka akun. Hint "Ketuk bagian chart untuk filter".
+- **Verifikasi:** openAccountDetail node --check OK.
+
 ### v27.9 Komposisi Pengeluaran Dashboard clickable — CLIENT-ONLY, sw.js v40
 - Dashboard "Komposisi Pengeluaran" pakai `state.summary.katExp` = agregat SEMUA waktu, per Kelompok (bukan bulanan). Label diperjelas "· semua waktu".
 - Kartu kini clickable → `goPage('master');switchMasterTab('kat')` = rincian interaktif (expCompCardHTML + buildKatDonut): filter periode (bulan/semua/custom) + drill-down slice Kelompok→Kategori→transaksi. Hint "Ketuk untuk rincian".
