@@ -112,6 +112,9 @@
 - Grup Aset Dashboard kini: Total Saldo Bank + Tabungan Forex (bila ada) + **Investasi** (bila ada akun). Kartu invest: nilai portofolio `fmt(investTotals().nilai)` (ungu) + U/R `inv.rp`. Klik → goPage('invest'). `asetWide` bank full-width hanya bila tak ada forex & invest.
 - **Verifikasi:** renderDashboard node --check OK.
 
+### v28.1 Tab Forex & Kurs: Kurs di atas berframe — CLIENT-ONLY, sw.js v42
+- page-forex disusun ulang: blok KURS dipindah ke ATAS, dibungkus frame (border 1.5px var(--gold) + bg var(--ic-amber) + radius), header emas + tombol Perbarui emas. Pocket Forex (+Convert) di BAWAH. #kursList & #forexBody tetap (render functions tak berubah).
+
 ### v28.0 Detail akun: klik slice chart → filter kategori — CLIENT-ONLY, sw.js v41
 - Donut kategori di drawer Detail Akun (openAccountDetail) kini di-pass `acctSliceClick` → klik bagian = set `window._acctKat` (toggle), `acctFilter()` re-render. Daftar transaksi `rowsF` difilter by KATEGORI; donut tetap tampil semua (dari `data`). Chip aktif "Kategori: X · N txn · total Rp · hapus". Reset `_acctKat=''` tiap buka akun. Hint "Ketuk bagian chart untuk filter".
 - **Verifikasi:** openAccountDetail node --check OK.

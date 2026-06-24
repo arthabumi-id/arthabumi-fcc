@@ -386,19 +386,21 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
       <div id="investList"></div>
     </div>
 
-    <!-- FOREX & KURS (v26, gabung: pocket forex + kurs BCA live) -->
+    <!-- FOREX & KURS (v26, gabung: KURS di atas berframe + pocket forex di bawah) -->
     <div class="page" id="page-forex">
+      <div style="border:1.5px solid var(--gold);border-radius:14px;padding:12px;margin-bottom:18px;background:var(--ic-amber)">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px">
+          <div style="font-size:15px;font-weight:700;color:var(--gold)"><i class="ti ti-coin" style="font-size:16px;vertical-align:middle"></i> Kurs Valas BCA <span style="font-size:11px;font-weight:500;color:var(--text3)">e-Rate</span></div>
+          <button onclick="refreshKurs(this)" style="font-size:12px;padding:7px 12px;border-radius:10px;border:1px solid var(--gold);background:transparent;color:var(--gold);cursor:pointer"><i class="ti ti-refresh"></i> Perbarui</button>
+        </div>
+        <div id="kursList"></div>
+      </div>
+
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px">
         <div style="font-size:15px;font-weight:700">Pocket Forex <span style="font-size:11px;font-weight:500;color:var(--text3)">USD</span></div>
         <button class="btn-primary" style="width:auto;padding:8px 14px;margin:0" onclick="openForexConvert()"><i class="ti ti-arrows-exchange"></i> Convert</button>
       </div>
       <div id="forexBody"></div>
-
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:22px 0 10px;border-top:1px solid var(--border2);padding-top:16px">
-        <div style="font-size:15px;font-weight:700">Kurs Valas BCA <span style="font-size:11px;font-weight:500;color:var(--text3)">e-Rate</span></div>
-        <button onclick="refreshKurs(this)" style="font-size:12px;padding:7px 12px;border-radius:10px;border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer"><i class="ti ti-refresh"></i> Perbarui</button>
-      </div>
-      <div id="kursList"></div>
     </div>
   </div>
 
@@ -490,8 +492,9 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v28.0';
+const APP_VERSION = 'v28.1';
 const CHANGELOG = [
+  { v:'v28.1', d:'24 Jun 2026', t:'Tab Forex & Kurs: Kurs dipindah ke atas dengan frame emas, Pocket Forex di bawah.' },
   { v:'v28.0', d:'24 Jun 2026', t:'Detail akun: klik bagian chart kategori → filter daftar transaksinya (mis. Transfer Keluar).' },
   { v:'v27.9', d:'24 Jun 2026', t:'Komposisi Pengeluaran Dashboard bisa diklik → rincian per periode & drill-down (Master Kategori).' },
   { v:'v27.8', d:'24 Jun 2026', t:'Forex: untung/rugi live per transaksi (Beli) + per bank, ikut kurs sekarang.' },
