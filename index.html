@@ -76,7 +76,11 @@ body{display:flex;flex-direction:column}
 .online-dot{width:7px;height:7px;border-radius:50%;background:var(--green);flex-shrink:0}
 
 /* CONTENT */
-.content{flex:1;overflow-y:auto;overflow-x:hidden;padding:0 0 80px;-webkit-overflow-scrolling:touch}
+.content{flex:1;overflow-y:auto;overflow-x:hidden;padding:0 0 80px;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain}
+#ptrInd{height:0;overflow:hidden;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s;color:var(--text2)}
+#ptrInd i{font-size:20px;transition:transform .12s}
+#ptrInd.ptr-load i{display:none}
+#ptrInd.ptr-load::after{content:'';width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin .7s linear infinite}
 .page{display:none;padding:16px}
 .page.active{display:block}
 
@@ -253,6 +257,7 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
 
   <!-- CONTENT -->
   <div class="content" id="content">
+    <div id="ptrInd"><i class="ti ti-arrow-down"></i></div>
     <!-- DASHBOARD -->
     <div class="page active" id="page-dashboard">
       <div id="dashCCReminder"></div>
@@ -485,8 +490,9 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v27.3';
+const APP_VERSION = 'v27.4';
 const CHANGELOG = [
+  { v:'v27.4', d:'24 Jun 2026', t:'Tarik ke bawah untuk refresh (Sync) — tetap di tab yang sama.' },
   { v:'v27.3', d:'24 Jun 2026', t:'Saldo berjalan rekening tampil di tiap transaksi (seperti buku tabungan).' },
   { v:'v27.2', d:'24 Jun 2026', t:'Fix PWA: ikon 192/512 asli + manifest bersih → bisa "Install app" (buka tanpa browser).' },
   { v:'v27.1', d:'24 Jun 2026', t:'Garis chart abu adaptif + tombol/blok gelap di tab Kartu Kredit jadi clean (light).' },
@@ -5414,6 +5420,15 @@ function goPage(page){closeFabMenu();closeLainnyaMenu();state.currentPage=page;d
 function renderAll(){setAppVer();setEyeIcon();applyTheme();renderDashboard();renderTxnMonthTabs();filterTxn();renderProject();renderCCBillReminder();renderPiutangReminder();updatePiutangBadge();if(state.currentPage==='master')renderMaster();if(state.currentPage==='transfer')renderTransferPage();if(state.currentPage==='kasbon')renderKasbon();if(state.currentPage==='forecast')renderForecast();if(state.currentPage==='piutang')renderPiutang();if(state.currentPage==='invest')renderInvest();if(state.currentPage==='forex'){renderForex();renderKurs();}}
 if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{});}
 applyTheme();setEyeIcon();
+// ── PULL-TO-REFRESH (tarik ke bawah = Sync, tetap di tab yang sama) ──
+(function(){
+  var el=document.getElementById('content'), ind=document.getElementById('ptrInd');
+  if(!el||!ind) return;
+  var startY=0, pulling=false, dist=0, busy=false, TH=70;
+  el.addEventListener('touchstart',function(e){ if(busy) return; if(el.scrollTop<=0){ startY=e.touches[0].clientY; pulling=true; dist=0; } else pulling=false; },{passive:true});
+  el.addEventListener('touchmove',function(e){ if(!pulling||busy) return; dist=e.touches[0].clientY-startY; if(dist>0){ var d=Math.min(dist*0.5,80); ind.style.height=d+'px'; ind.style.opacity=Math.min(1,d/TH); var ic=ind.querySelector('i'); if(ic) ic.style.transform='rotate('+Math.min(180,d/TH*180)+'deg)'; } },{passive:true});
+  el.addEventListener('touchend',function(){ if(!pulling||busy) return; pulling=false; if(dist*0.5>=TH){ busy=true; ind.classList.add('ptr-load'); ind.style.height='44px'; ind.style.opacity='1'; Promise.resolve(typeof syncAll==='function'?syncAll():null).catch(function(){}).then(function(){ setTimeout(function(){ ind.classList.remove('ptr-load'); ind.style.height='0'; ind.style.opacity='0'; busy=false; },250); }); } else { ind.style.height='0'; ind.style.opacity='0'; } dist=0; },{passive:true});
+})();
 let logoTimer;
 document.querySelector('.topbar-title').addEventListener('touchstart',()=>{logoTimer=setTimeout(()=>openDrawer('settings'),800);});
 document.querySelector('.topbar-title').addEventListener('touchend',()=>clearTimeout(logoTimer));

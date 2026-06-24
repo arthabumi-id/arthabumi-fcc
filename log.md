@@ -93,6 +93,11 @@
 - **Metode:** anchor ke `getSaldo(bank).saldo` (akurat dari agregat server, tak terpengaruh txnsSince), lalu MUNDUR dari txn terbaru: `runBal[t]=bal; bal -= (Pemasukan?+nom:-nom)`. Map dihitung dari SEMUA state.txns (bukan hanya filtered) → benar walau list difilter. Hanya untuk REKENING bank (CC tak punya konsep saldo → dilewati). Ikut mode mata (fmt mask).
 - **Verifikasi:** simulasi backward (saldoawal10, +100/−30/+50 → 110/80/130) PASS; renderTxn node --check OK.
 
+### v27.4 Pull-to-refresh — CLIENT-ONLY, sw.js v35
+- Tarik ke bawah di puncak halaman mana pun → `syncAll()` → re-render via renderAll TAPI tetap di tab/halaman aktif (goPage tak dipanggil).
+- `#ptrInd` indikator (panah putar → spinner saat load) sbg anak pertama #content. Handler touchstart/move/end (threshold 70px efektif, redam 0.5x, guard busy). Native pull-to-refresh dimatikan via `overscroll-behavior-y:contain` di .content.
+- **Verifikasi:** PTR IIFE node --check OK; style brace 136/136.
+
 ---
 
 ## SESSION — 2026-06-23 (Bug filter rekening + v25 Kurs BCA)
