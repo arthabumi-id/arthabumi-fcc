@@ -117,7 +117,7 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
 /* ALERT TOAST */
 .toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:var(--bg4);border:1px solid var(--border2);border-radius:10px;padding:10px 18px;font-size:13px;font-weight:500;z-index:200;white-space:nowrap;opacity:0;transition:opacity .2s}
 .toast.show{opacity:1}
-.toast.success{border-color:#2dd4a050;color:var(--green)}
+.toast.success{border-color:#2EE6A650;color:var(--green)}
 .toast.error{border-color:#f06a6a50;color:var(--red)}
 
 /* TRANSFER PAGE */
@@ -1168,7 +1168,7 @@ function renderDashboard() {
           const lbl = dd===null?'':(dd<0?`<span style="color:var(--red)">lewat ${Math.abs(dd)} hr</span>`:dd===0?`<span style="color:var(--red)">hari ini</span>`:`<span style="color:var(--amber)">${dd} hr lagi</span>`);
           billStrip = `<div style="width:100%;margin-top:8px;padding:7px 9px;border-radius:8px;background:#1a1206;border:1px solid #f59e0b40;display:flex;align-items:center;justify-content:space-between;gap:8px">
             <div style="min-width:0"><div style="font-size:12px;font-weight:700;color:var(--amber)">Tagihan ${fmt(bill.NOMINAL)}</div><div style="font-size:10px;color:var(--text3)">jth tempo ${due||'—'} · ${lbl}</div></div>
-            <div style="display:flex;gap:5px;flex-shrink:0"><button class="btn-danger" style="background:#0a2a1e;color:var(--green);border-color:#2dd4a040" onclick="event.stopPropagation();payCCFromReminder('${esc(c.NAMA)}')">Bayar</button><button class="btn-danger" onclick="event.stopPropagation();clearCCBill('${bill.ID}','${esc(bill.CC||c.NAMA||'')}')">Lunas</button></div>
+            <div style="display:flex;gap:5px;flex-shrink:0"><button class="btn-danger" style="background:#0a2a1e;color:var(--green);border-color:#2EE6A640" onclick="event.stopPropagation();payCCFromReminder('${esc(c.NAMA)}')">Bayar</button><button class="btn-danger" onclick="event.stopPropagation();clearCCBill('${bill.ID}','${esc(bill.CC||c.NAMA||'')}')">Lunas</button></div>
           </div>`;
         }
         return `<div class="list-item" style="flex-wrap:wrap;cursor:pointer" onclick="openAccountDetail('cc','${esc(c.NAMA)}')">
@@ -1237,7 +1237,7 @@ function renderCharts() {
   const keluarPerBulan = months.map(m => monthAgg(m.key).keluar/1e6);
 
   // ── 2. Komposisi Pengeluaran by Kelompok ─────────────
-  const kelompokColors = { PROJECT:'#5b9cf6', OPERASIONAL:'#f5a623', PRIBADI:'#a78bfa', FINANCIAL:'#f06a6a', TRANSFER:'#2dd4a0' };
+  const kelompokColors = { PROJECT:'#5b9cf6', OPERASIONAL:'#f5a623', PRIBADI:'#a78bfa', FINANCIAL:'#f06a6a', TRANSFER:'#2EE6A6' };
   const kelompokMap = {};
   const katToGrp = katName => { const kat = state.kategori.find(k => k.NAMA===katName); return kat ? kat.KELOMPOK : 'LAINNYA'; };
   if (state.summary && state.summary.katExp && Object.keys(state.summary.katExp).length) {
@@ -1303,7 +1303,7 @@ function renderCharts() {
     options: {
       responsive:true, maintainAspectRatio:false,
       plugins:{ legend:{ position:'top', labels:{ boxWidth:10, padding:12 } }, tooltip:{ callbacks:{ label: ctx => ` ${ctx.dataset.label}: ${ctx.raw.toFixed(1)}jt` } } },
-      scales:{ x:{ grid:{ color:'#2e2e3e' } }, y:{ grid:{ color:'#2e2e3e' }, ticks:{ callback: v => v+'jt' } } }
+      scales:{ x:{ grid:{ color:'#1F2B25' } }, y:{ grid:{ color:'#1F2B25' }, ticks:{ callback: v => v+'jt' } } }
     }
   });
 
@@ -1335,7 +1335,7 @@ function renderCharts() {
       options: {
         indexAxis:'y', responsive:true, maintainAspectRatio:false,
         plugins:{ legend:{ position:'top', labels:{ boxWidth:10, padding:10 } }, tooltip:{ callbacks:{ label: ctx => ` ${ctx.dataset.label}: ${ctx.raw.toFixed(1)}jt` } } },
-        scales:{ x:{ grid:{ color:'#2e2e3e' }, ticks:{ callback: v => v+'jt' } }, y:{ grid:{ color:'#2e2e3e' }, ticks:{ font:{ size:10 } } } }
+        scales:{ x:{ grid:{ color:'#1F2B25' }, ticks:{ callback: v => v+'jt' } }, y:{ grid:{ color:'#1F2B25' }, ticks:{ font:{ size:10 } } } }
       }
     });
   }
@@ -1491,7 +1491,7 @@ function renderForecast(){
     ]},
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>' '+ctx.raw.toFixed(1)+'jt'}}},
-      scales:{x:{grid:{color:'#2e2e3e'},ticks:{maxTicksLimit:8,font:{size:9}}},y:{grid:{color:'#2e2e3e'},ticks:{callback:v=>v+'jt'}}}}
+      scales:{x:{grid:{color:'#1F2B25'},ticks:{maxTicksLimit:8,font:{size:9}}},y:{grid:{color:'#1F2B25'},ticks:{callback:v=>v+'jt'}}}}
   });
 }
 
@@ -1629,7 +1629,7 @@ function renderCCBillReminder(){
       return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
         <div style="min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(b.CC)}</div><div style="font-size:10px;color:var(--text3)">${due||'—'} · ${lbl}</div></div>
         <div style="display:flex;align-items:center;gap:6px;flex-shrink:0"><span style="font-size:13px;font-weight:700;color:var(--red)">${fmt(b.NOMINAL)}</span>
-          <button class="btn-danger" style="background:#0a2a1e;color:var(--green);border-color:#2dd4a040" onclick="payCCFromReminder('${esc(b.CC)}')">Bayar</button>
+          <button class="btn-danger" style="background:#0a2a1e;color:var(--green);border-color:#2EE6A640" onclick="payCCFromReminder('${esc(b.CC)}')">Bayar</button>
           <button class="btn-danger" onclick="clearCCBill('${b.ID}','${esc(b.CC||'')}')">Lunas</button></div>
       </div>`;}).join('')}
     </div></div>`;
@@ -1673,7 +1673,7 @@ function renderPiutang(){
   const list=(state.piutang||[]).slice();
   const belum=list.filter(p=>String(p.STATUS)!=='Lunas').sort((a,b)=>_piuDue(a).localeCompare(_piuDue(b)));
   const lunas=list.filter(p=>String(p.STATUS)==='Lunas').sort((a,b)=>String(b.TGL_BAYAR||'').localeCompare(String(a.TGL_BAYAR||'')));
-  let html=`<div class="card" style="margin-bottom:12px;background:linear-gradient(135deg,#0a2a1e,#0d1f2d);border:1px solid #2bd47d30">
+  let html=`<div class="card" style="margin-bottom:12px;background:linear-gradient(140deg,#0E2A1F,#0A1712);border:1px solid #2bd47d30">
     <div class="metric-label">Total Piutang Beredar</div>
     <div class="metric-value" style="font-size:24px;color:${ag.beredar>0?'var(--amber)':'var(--green)'}">${fmt(ag.beredar)}</div>
     <div class="metric-sub">${ag.cntBelum} termin belum lunas</div></div>
@@ -1849,12 +1849,12 @@ function buildInvestTotalChart(){
   _chartInstances['invTotalChart']=new Chart(el,{
     type:'line',
     data:{labels:s.labels,datasets:[
-      {label:'Nilai',data:s.nilai,borderColor:'#2dd4a0',backgroundColor:'rgba(45,212,160,0.12)',fill:true,tension:0.25,pointRadius:2,borderWidth:2},
+      {label:'Nilai',data:s.nilai,borderColor:'#2EE6A6',backgroundColor:'rgba(45,212,160,0.12)',fill:true,tension:0.25,pointRadius:2,borderWidth:2},
       {label:'Modal',data:s.modal,borderColor:'#9090a8',borderDash:[5,4],pointRadius:0,borderWidth:1,fill:false}
     ]},
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:true,labels:{font:{size:10},boxWidth:12}},tooltip:{callbacks:{label:ctx=>' '+ctx.dataset.label+' '+ctx.raw.toFixed(1)+'jt'}}},
-      scales:{x:{grid:{color:'#2e2e3e'},ticks:{maxTicksLimit:8,font:{size:9}}},y:{grid:{color:'#2e2e3e'},ticks:{callback:v=>v+'jt'}}}}
+      scales:{x:{grid:{color:'#1F2B25'},ticks:{maxTicksLimit:8,font:{size:9}}},y:{grid:{color:'#1F2B25'},ticks:{callback:v=>v+'jt'}}}}
   });
 }
 
@@ -1897,8 +1897,8 @@ function renderForex(){
       <div style="text-align:right"><div style="font-size:10px;color:var(--text3);text-transform:uppercase">Nilai live (Rp)</div><div style="font-size:18px;font-weight:700;color:var(--gold)">${c.hasKurs?fmt(T.liveValue):'—'}</div></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
-      <div style="background:#12121a;border-radius:8px;padding:8px 10px"><div style="color:var(--text3);font-size:10px">Modal (cost)</div><div style="font-weight:600">${fmt(T.costHolding)}</div></div>
-      <div style="background:#12121a;border-radius:8px;padding:8px 10px"><div style="color:var(--text3);font-size:10px">U/R belum terealisasi</div><div style="font-weight:700;color:${T.unreal>=0?'var(--green)':'var(--red)'}">${c.hasKurs?((T.unreal>=0?'+':'-')+fmt(Math.abs(T.unreal))):'—'}</div></div>
+      <div style="background:#0E1611;border-radius:8px;padding:8px 10px"><div style="color:var(--text3);font-size:10px">Modal (cost)</div><div style="font-weight:600">${fmt(T.costHolding)}</div></div>
+      <div style="background:#0E1611;border-radius:8px;padding:8px 10px"><div style="color:var(--text3);font-size:10px">U/R belum terealisasi</div><div style="font-weight:700;color:${T.unreal>=0?'var(--green)':'var(--red)'}">${c.hasKurs?((T.unreal>=0?'+':'-')+fmt(Math.abs(T.unreal))):'—'}</div></div>
     </div>
     ${c.byAkun.length>1||c.byAkun.some(a=>a.akun!=='(tanpa akun)')?`<div style="margin-top:10px;border-top:1px solid var(--border2);padding-top:8px">${c.byAkun.map(a=>`<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;padding:3px 0"><span style="color:var(--text2)"><i class="ti ti-wallet" style="font-size:12px;vertical-align:middle"></i> ${esc(a.akun)}</span><span><b>${usdFmt(a.holding)}</b> USD${c.hasKurs?` · <span style="color:var(--blue)">${fmt(a.liveValue)}</span>`:''}${a.holding&&c.hasKurs?` · <span style="color:${a.unreal>=0?'var(--green)':'var(--red)'}">${a.unreal>=0?'+':'-'}${fmt(Math.abs(a.unreal))}</span>`:''}</span></div>`).join('')}</div>`:''}
     ${T.realized?`<div style="margin-top:8px;font-size:11px;color:var(--text2)">U/R terealisasi (akumulatif): <b style="color:${T.realized>=0?'var(--green)':'var(--red)'}">${T.realized>=0?'+':'-'}${fmt(Math.abs(T.realized))}</b></div>`:''}
@@ -2015,7 +2015,7 @@ function renderKurs(){
   const upd=(list.find(k=>k.UPDATE_BCA)||{}).UPDATE_BCA||'—';
   let html='<div style="font-size:11px;color:var(--text3);margin-bottom:10px"><i class="ti ti-clock"></i> Diperbarui BCA: '+esc(String(upd))+'</div>';
   html+='<div class="card" style="padding:0;overflow:hidden">';
-  html+='<div style="display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:8px;padding:9px 12px;background:#12121a;font-size:10px;color:var(--text3);text-transform:uppercase;font-weight:600"><span>Mata Uang</span><span style="text-align:right">Beli</span><span style="text-align:right">Jual</span></div>';
+  html+='<div style="display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:8px;padding:9px 12px;background:#0E1611;font-size:10px;color:var(--text3);text-transform:uppercase;font-weight:600"><span>Mata Uang</span><span style="text-align:right">Beli</span><span style="text-align:right">Jual</span></div>';
   html+=list.map(k=>{
     const nm=KURS_NAMA[k.MATA_UANG]||'';
     return '<div style="display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:8px;padding:11px 12px;border-top:1px solid var(--border2);align-items:center">'
@@ -2122,12 +2122,12 @@ function buildInvestChart(akun){
   _chartInstances['invChart']=new Chart(el,{
     type:'line',
     data:{labels,datasets:[
-      {label:'Nilai',data:nilai,borderColor:'#2dd4a0',backgroundColor:'rgba(45,212,160,0.12)',fill:true,tension:0.25,pointRadius:2,borderWidth:2},
+      {label:'Nilai',data:nilai,borderColor:'#2EE6A6',backgroundColor:'rgba(45,212,160,0.12)',fill:true,tension:0.25,pointRadius:2,borderWidth:2},
       {label:'Modal',data:modal,borderColor:'#9090a8',borderDash:[5,4],pointRadius:0,borderWidth:1,fill:false}
     ]},
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:true,labels:{font:{size:10},boxWidth:12}},tooltip:{callbacks:{label:ctx=>' '+ctx.dataset.label+' '+ctx.raw.toFixed(1)+'jt'}}},
-      scales:{x:{grid:{color:'#2e2e3e'},ticks:{maxTicksLimit:8,font:{size:9}}},y:{grid:{color:'#2e2e3e'},ticks:{callback:v=>v+'jt'}}}}
+      scales:{x:{grid:{color:'#1F2B25'},ticks:{maxTicksLimit:8,font:{size:9}}},y:{grid:{color:'#1F2B25'},ticks:{callback:v=>v+'jt'}}}}
   });
 }
 function openInvestAkun(editId){
@@ -2291,7 +2291,7 @@ function cicilanRowHTML(c){
       <div style="text-align:right;flex-shrink:0">
         <span class="badge" style="background:${lunas?'#0a2a1e':'#241a05'};color:${lunas?'var(--green)':'var(--amber)'}">${lunas?'Lunas':'Jalan'}</span>
         <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">
-          ${!lunas?`<button class="btn-danger" style="background:#0a2a1e;color:var(--green);border-color:#2dd4a040" onclick="doPayCicilan('${c.ID}')">Bayar angsuran</button>`:''}
+          ${!lunas?`<button class="btn-danger" style="background:#0a2a1e;color:var(--green);border-color:#2EE6A640" onclick="doPayCicilan('${c.ID}')">Bayar angsuran</button>`:''}
           ${!lunas?`<button class="btn-danger" style="background:#0a1a3a;color:var(--blue);border-color:#3b82f640" onclick="openChangeReserveBank('${c.ID}')">Ganti bank</button>`:''}
           ${terbayar===0?`<button class="btn-danger" onclick="delCicilan('${c.ID}')">Hapus</button>`:''}
         </div>
@@ -2324,7 +2324,7 @@ function paycCicilanHTML(ccName){
       return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0;border-top:1px solid #ffffff10">
         <div style="min-width:0"><div style="font-size:12px;font-weight:600">${esc(c.DESKRIPSI||'Cicilan')}</div>
         <div style="font-size:10px;color:var(--text3)">angsuran ke-${Math.min(tenor,terbayar+1)}/${tenor} · ${fmt(per)}</div></div>
-        <button class="btn-danger" style="background:#0a2a1e;color:var(--green);border-color:#2dd4a040;flex-shrink:0" onclick="doPayCicilan('${c.ID}')">Bayar</button>
+        <button class="btn-danger" style="background:#0a2a1e;color:var(--green);border-color:#2EE6A640;flex-shrink:0" onclick="doPayCicilan('${c.ID}')">Bayar</button>
       </div>`;
     }).join('')}
   </div>`;
@@ -2669,7 +2669,7 @@ function renderCCBill(from,to){
       <div style="display:flex;justify-content:space-between"><span style="font-size:12px">Belanja + Cicilan periode</span><span style="font-weight:700;color:var(--red)">${fmt(sumCharge+sumCic)}</span></div>
       ${sumPay>0?`<div style="display:flex;justify-content:space-between;margin-top:3px"><span style="font-size:12px">− Pembayaran</span><span style="font-weight:700;color:var(--green)">${fmt(sumPay)}</span></div>`:''}
     </div>
-    <div class="card" style="padding:10px 12px;margin:10px 0 0;background:#0a1f14;border:1px solid #2dd4a040">
+    <div class="card" style="padding:10px 12px;margin:10px 0 0;background:#0a1f14;border:1px solid #2EE6A640">
       <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Cocokkan dengan statement cetak</div>
       <div class="form-group" style="margin:0 0 8px"><label class="form-label">Total tagihan di statement (Rp)</label><input class="form-input" id="ccb_stmt" type="text" inputmode="numeric" placeholder="ketik total dari cetakan" oninput="fmtMoneyInput(this);ccbTick()"></div>
       <div style="display:flex;justify-content:space-between"><span style="font-size:12px">Sudah dicentang (<span id="ccb_cnt">0</span> baris)</span><span id="ccb_checkedSum" style="font-weight:700;color:#b9a3ff">${fmt(0)}</span></div>
@@ -2785,7 +2785,7 @@ function filterTxn() {
     const msk = data.filter(t=>t.JENIS==='Pemasukan').reduce((s,t)=>s+Number(t.NOMINAL||0),0);
     const klr = data.filter(t=>t.JENIS==='Pengeluaran').reduce((s,t)=>s+Number(t.NOMINAL||0),0);
     const oldRange = rangeActive && state.txnsSince && from && from < String(state.txnsSince).slice(0,10);
-    sm.innerHTML = `<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:8px 10px;background:#12121a;border:1px solid var(--border2);border-radius:8px;font-size:11px">
+    sm.innerHTML = `<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:8px 10px;background:#0E1611;border:1px solid var(--border2);border-radius:8px;font-size:11px">
       <span style="color:var(--text2)"><b>${data.length}</b> transaksi</span>
       <span style="color:var(--green)">masuk <b>${fmt(msk)}</b></span>
       <span style="color:var(--red)">keluar <b>${fmt(klr)}</b></span>
@@ -3067,7 +3067,7 @@ function renderMaster() {
               ${res>0?`<div style="font-size:10px;color:var(--blue)">res: ${fmtS(res)}</div>`:''}
               <div style="display:flex;gap:5px;margin-top:6px;justify-content:flex-end;flex-wrap:wrap" onclick="event.stopPropagation()">
                 <button class="btn-danger" style="background:#1a1206;color:var(--amber);border-color:#f59e0b40" onclick="openCCBill('${c.ID}')">Rincian</button>
-                <button class="btn-danger" style="background:#0a2a1e;color:var(--green);border-color:#2dd4a040" onclick="openDrawer('paycc','${c.ID}')">Bayar</button>
+                <button class="btn-danger" style="background:#0a2a1e;color:var(--green);border-color:#2EE6A640" onclick="openDrawer('paycc','${c.ID}')">Bayar</button>
                 <button class="btn-danger" onclick="editCC('${c.ID}')">Edit</button>
                 <button class="btn-danger" onclick="deleteItem('ccs','${c.ID}','MASTER_CC')">Hapus</button>
               </div>
@@ -3161,9 +3161,9 @@ function openAccountDetail(type, nama) {
           </div>
         </div>
       </div>
-      ${isCC ? `<div style="position:sticky;top:0;z-index:5;padding:8px 10px;border-radius:8px;margin-bottom:10px;background:#0a1f14;border:1px solid #2dd4a030;font-size:11px;color:var(--text2)">${sesCnt>0?`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding-bottom:5px;margin-bottom:5px;border-bottom:1px solid #ffffff14"><span style="color:#b9a3ff"><i class="ti ti-checkbox" style="font-size:12px;vertical-align:middle"></i> Ditandai sekarang · ${sesCnt} baris</span><strong style="color:#b9a3ff;font-size:15px">${fmt(sesSum)}</strong></div>`:''}<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span><i class="ti ti-lock" style="font-size:11px;vertical-align:middle;color:var(--green)"></i> Total ditandai kartu ini · ${markCountCC(nama)} transaksi</span><strong style="color:var(--green);font-size:14px">${fmt(markTotalCC(nama))}</strong></div>${(()=>{const hold=ccHoldingBank(nama),gap=reserveGapBank(hold),n=cardsOnReserveBank(hold);return gap>0?`<div style="margin-top:5px;padding-top:5px;border-top:1px solid #ffffff12;font-size:11px;color:var(--amber)"><i class="ti ti-arrow-right" style="font-size:11px;vertical-align:middle"></i> Perlu transfer sekarang ke <b>${esc(hold)}</b>: <b>${fmt(gap)}</b>${n>1?` <span style="color:var(--text3)">(gabungan ${n} kartu di rekening ini)</span>`:''}</div>`:`<div style="margin-top:5px;padding-top:5px;border-top:1px solid #ffffff12;font-size:11px;color:var(--green)"><i class="ti ti-circle-check" style="font-size:11px;vertical-align:middle"></i> Reserve di <b>${esc(hold)}</b> sudah cukup</div>`;})()}</div>
+      ${isCC ? `<div style="position:sticky;top:0;z-index:5;padding:8px 10px;border-radius:8px;margin-bottom:10px;background:#0a1f14;border:1px solid #2EE6A630;font-size:11px;color:var(--text2)">${sesCnt>0?`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding-bottom:5px;margin-bottom:5px;border-bottom:1px solid #ffffff14"><span style="color:#b9a3ff"><i class="ti ti-checkbox" style="font-size:12px;vertical-align:middle"></i> Ditandai sekarang · ${sesCnt} baris</span><strong style="color:#b9a3ff;font-size:15px">${fmt(sesSum)}</strong></div>`:''}<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span><i class="ti ti-lock" style="font-size:11px;vertical-align:middle;color:var(--green)"></i> Total ditandai kartu ini · ${markCountCC(nama)} transaksi</span><strong style="color:var(--green);font-size:14px">${fmt(markTotalCC(nama))}</strong></div>${(()=>{const hold=ccHoldingBank(nama),gap=reserveGapBank(hold),n=cardsOnReserveBank(hold);return gap>0?`<div style="margin-top:5px;padding-top:5px;border-top:1px solid #ffffff12;font-size:11px;color:var(--amber)"><i class="ti ti-arrow-right" style="font-size:11px;vertical-align:middle"></i> Perlu transfer sekarang ke <b>${esc(hold)}</b>: <b>${fmt(gap)}</b>${n>1?` <span style="color:var(--text3)">(gabungan ${n} kartu di rekening ini)</span>`:''}</div>`:`<div style="margin-top:5px;padding-top:5px;border-top:1px solid #ffffff12;font-size:11px;color:var(--green)"><i class="ti ti-circle-check" style="font-size:11px;vertical-align:middle"></i> Reserve di <b>${esc(hold)}</b> sudah cukup</div>`;})()}</div>
       ${unmarkedRegularCC(nama)>0?`<div style="padding:6px 10px;border-radius:8px;margin-bottom:10px;background:#1a1206;border:1px solid #f59e0b40;font-size:11px;color:var(--amber)"><i class="ti ti-bell" style="font-size:11px;vertical-align:middle"></i> Belum dicentang: <b>${fmt(unmarkedRegularCC(nama))}</b> — tandai belanja yg dananya sudah disiapkan.</div>`:''}
-      ${paidExpCount>0?`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px;border-radius:8px;margin-bottom:10px;background:#0a1424;border:1px solid var(--border2);font-size:11px;color:var(--text2)"><span><i class="ti ti-circle-check" style="font-size:12px;vertical-align:middle"></i> ${paidExpCount} belanja ditandai lunas</span><button onclick="window._acctHidePaid=!window._acctHidePaid;acctFilter()" style="font-size:10px;padding:3px 9px;border-radius:10px;cursor:pointer;border:1px solid ${window._acctHidePaid?'#2dd4a060':'var(--border2)'};background:${window._acctHidePaid?'#0a2a1e':'transparent'};color:${window._acctHidePaid?'var(--green)':'var(--text3)'}">${window._acctHidePaid?'✅ disembunyikan':'Sembunyikan'}</button></div>`:''}` : bankReserveCardHTML(nama)}
+      ${paidExpCount>0?`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px;border-radius:8px;margin-bottom:10px;background:#0a1424;border:1px solid var(--border2);font-size:11px;color:var(--text2)"><span><i class="ti ti-circle-check" style="font-size:12px;vertical-align:middle"></i> ${paidExpCount} belanja ditandai lunas</span><button onclick="window._acctHidePaid=!window._acctHidePaid;acctFilter()" style="font-size:10px;padding:3px 9px;border-radius:10px;cursor:pointer;border:1px solid ${window._acctHidePaid?'#2EE6A660':'var(--border2)'};background:${window._acctHidePaid?'#0a2a1e':'transparent'};color:${window._acctHidePaid?'var(--green)':'var(--text3)'}">${window._acctHidePaid?'✅ disembunyikan':'Sembunyikan'}</button></div>`:''}` : bankReserveCardHTML(nama)}
       ${donutCardHTML('acctKatDonut', katEntries)}
       <div style="font-size:11px;color:var(--text3);margin-bottom:8px">${rows.length} transaksi ditampilkan${hidePaid&&paidExpCount>0?` · ${paidExpCount} lunas disembunyikan`:''}</div>
       ${rows.length ? rows.map(t => {
@@ -3181,7 +3181,7 @@ function openAccountDetail(type, nama) {
             <div style="text-align:right;flex-shrink:0">
               <div style="font-size:13px;font-weight:700;color:${t.JENIS==='Pemasukan'?'var(--green)':'var(--red)'}">${t.JENIS==='Pemasukan'?'+':'-'}${fmt(Number(t.NOMINAL))}</div>
               ${(!isTr&&!isRes)?`<button style="font-size:10px;background:transparent;border:none;color:var(--text3);cursor:pointer;padding:0" onclick="closeDrawer();setTimeout(()=>editTxn('${t.ID}'),200)">edit</button>`:''}
-              ${(isCC && t.JENIS==='Pengeluaran' && !isTr && !isRes)?`<div><button onclick="toggleMark('${t.ID}','${esc(nama)}',${Number(t.NOMINAL)})" style="font-size:10px;margin-top:4px;padding:2px 8px;border-radius:10px;cursor:pointer;border:1px solid ${isMarked(t.ID)?'#2dd4a060':'var(--border2)'};background:${isMarked(t.ID)?'#0a2a1e':'transparent'};color:${isMarked(t.ID)?'var(--green)':'var(--text3)'}">${isMarked(t.ID)?'✅ reserved':'☐ tandai'}</button></div>
+              ${(isCC && t.JENIS==='Pengeluaran' && !isTr && !isRes)?`<div><button onclick="toggleMark('${t.ID}','${esc(nama)}',${Number(t.NOMINAL)})" style="font-size:10px;margin-top:4px;padding:2px 8px;border-radius:10px;cursor:pointer;border:1px solid ${isMarked(t.ID)?'#2EE6A660':'var(--border2)'};background:${isMarked(t.ID)?'#0a2a1e':'transparent'};color:${isMarked(t.ID)?'var(--green)':'var(--text3)'}">${isMarked(t.ID)?'✅ reserved':'☐ tandai'}</button></div>
               <div style="display:flex;gap:4px;justify-content:flex-end;margin-top:4px"><button onclick="togglePaid('${t.ID}')" style="font-size:10px;padding:2px 8px;border-radius:10px;cursor:pointer;border:1px solid ${isPaid(t.ID)?'#3b82f660':'var(--border2)'};background:${isPaid(t.ID)?'#0a1a3a':'transparent'};color:${isPaid(t.ID)?'var(--blue)':'var(--text3)'}">${isPaid(t.ID)?'✅ lunas':'☐ lunas'}</button><button title="Tandai lunas s/d transaksi ini" onclick="markPaidUntil('${t.ID}','${esc(nama)}')" style="font-size:10px;padding:2px 6px;border-radius:10px;cursor:pointer;border:1px solid var(--border2);background:transparent;color:var(--text3)">s/d sini</button></div>`:''}
             </div>
           </div>
@@ -3263,7 +3263,7 @@ document.getElementById('masterContent').addEventListener('click', function(e) {
 });
 
 // ── KOMPOSISI PENGELUARAN (donut per kategori) ────────
-const KAT_PALETTE = ['#5b9cf6','#f5a623','#a78bfa','#f06a6a','#2dd4a0','#e879c9','#fbbf24','#60a5fa','#34d399','#f87171','#c084fc','#22d3ee','#a3e635','#fb923c','#94a3b8'];
+const KAT_PALETTE = ['#5b9cf6','#f5a623','#a78bfa','#f06a6a','#2EE6A6','#e879c9','#fbbf24','#60a5fa','#34d399','#f87171','#c084fc','#22d3ee','#a3e635','#fb923c','#94a3b8'];
 function katComposition(txns) {
   const m = {};
   txns.filter(t => t.JENIS === 'Pengeluaran').forEach(t => {
@@ -3479,7 +3479,7 @@ function openProjectDetail(id) {
         <div class="detail-sum-item"><div class="detail-sum-label">Keluar</div><div class="detail-sum-val neg">${fmt(cf.keluar)}</div></div>
         <div class="detail-sum-item"><div class="detail-sum-label">Sisa CF</div><div class="detail-sum-val" style="color:${cf.sisa>=0?'var(--green)':'var(--red)'}">${cf.sisa>=0?'':'-'}${fmt(Math.abs(cf.sisa))}</div></div>
       </div>
-      <div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#0a2a1e,#0d1f2d);border:1px solid #2dd4a030;border-radius:10px;padding:10px 14px;margin-bottom:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(140deg,#0E2A1F,#0A1712);border:1px solid #2EE6A630;border-radius:10px;padding:10px 14px;margin-bottom:12px">
         <span style="font-size:11px;color:var(--text2);text-transform:uppercase">Laba Bersih (Margin)</span>
         <span style="font-size:16px;font-weight:700;color:${pr.laba>=0?'var(--green)':'var(--red)'}">${pr.laba>=0?'+':'-'}${fmt(Math.abs(pr.laba))} <span style="font-size:13px;color:var(--text2)">(${pr.margin.toFixed(1)}%)</span></span>
       </div>
@@ -3509,7 +3509,7 @@ function addendumSectionHTML(p){
   const kurang = adds.filter(a=>a.JENIS==='Kurang').reduce((s,a)=>s+Math.abs(Number(a.NOMINAL)||0),0);
   const eff = base + tambah - kurang;
   const row = (lbl,val,col)=>`<div style="display:flex;justify-content:space-between;font-size:11px;margin:2px 0"><span style="color:var(--text3)">${lbl}</span><span style="font-weight:600;${col?'color:'+col:''}">${val}</span></div>`;
-  let h = `<div style="background:#12121a;border:1px solid var(--border2);border-radius:10px;padding:12px 14px;margin-bottom:12px">
+  let h = `<div style="background:#0E1611;border:1px solid var(--border2);border-radius:10px;padding:12px 14px;margin-bottom:12px">
     <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Nilai Kontrak${p.KLIEN?' · '+esc(p.KLIEN):''}</div>`;
   h += row('Kontrak awal', fmt(base));
   if(tambah) h += row('+ Kerja tambah', '+'+fmt(tambah), 'var(--green)');
@@ -3536,7 +3536,7 @@ function addendumSectionHTML(p){
     h += `</div>`;
   }
   h += `<div style="display:flex;gap:8px;margin-top:10px">
-    <button onclick="openAddendumForm('${p.ID}','Tambah')" style="flex:1;background:#0a2a1e;border:1px solid #2dd4a040;color:var(--green);border-radius:8px;padding:8px;font-size:11px;font-weight:600;cursor:pointer">+ Kerja Tambah</button>
+    <button onclick="openAddendumForm('${p.ID}','Tambah')" style="flex:1;background:#0a2a1e;border:1px solid #2EE6A640;color:var(--green);border-radius:8px;padding:8px;font-size:11px;font-weight:600;cursor:pointer">+ Kerja Tambah</button>
     <button onclick="openAddendumForm('${p.ID}','Kurang')" style="flex:1;background:#2a1414;border:1px solid #ff6b6b40;color:#ff6b6b;border-radius:8px;padding:8px;font-size:11px;font-weight:600;cursor:pointer">− Kerja Kurang</button>
   </div>`;
   h += `</div>`;
@@ -3552,7 +3552,7 @@ function openAddendumForm(projId, jenis){
   div.id = 'addendumModal';
   div.style.cssText = 'position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:18px';
   div.onclick = (e)=>{ if(e.target===div) closeAddendumForm(); };
-  div.innerHTML = `<div style="background:var(--bg2,#12121a);border:1px solid var(--border2);border-radius:14px;padding:18px;width:100%;max-width:380px;box-shadow:0 8px 30px rgba(0,0,0,.5)">
+  div.innerHTML = `<div style="background:var(--bg2,#0E1611);border:1px solid var(--border2);border-radius:14px;padding:18px;width:100%;max-width:380px;box-shadow:0 8px 30px rgba(0,0,0,.5)">
     <div style="font-size:14px;font-weight:700;margin-bottom:2px;color:${kurang?'#ff6b6b':'var(--green)'}">${kurang?'− Kerja Kurang':'+ Kerja Tambah'}</div>
     <div style="font-size:11px;color:var(--text3);margin-bottom:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.NAMA)}</div>
     <div class="form-group"><label class="form-label">Tanggal</label><input class="form-input" type="date" id="adn_tgl" value="${today()}"></div>
@@ -4087,10 +4087,10 @@ function openProjDeleteModal(id){
   div.id='projDeleteModal';
   div.style.cssText='position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:18px';
   div.onclick=(e)=>{ if(e.target===div) closeProjDeleteModal(); };
-  div.innerHTML=`<div style="background:var(--bg2,#12121a);border:1px solid var(--border2);border-radius:14px;padding:18px;width:100%;max-width:400px;box-shadow:0 8px 30px rgba(0,0,0,.5)">
+  div.innerHTML=`<div style="background:var(--bg2,#0E1611);border:1px solid var(--border2);border-radius:14px;padding:18px;width:100%;max-width:400px;box-shadow:0 8px 30px rgba(0,0,0,.5)">
     <div style="font-size:14px;font-weight:700;color:var(--amber);margin-bottom:2px">⚠ Hapus Project</div>
     <div style="font-size:12px;color:var(--text2);margin-bottom:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.NAMA)}</div>
-    <div style="background:#12121a;border:1px solid var(--border2);border-radius:10px;padding:10px 12px;margin-bottom:12px">
+    <div style="background:#0E1611;border:1px solid var(--border2);border-radius:10px;padding:10px 12px;margin-bottom:12px">
       <div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:6px">Data yang menempel</div>
       ${li('Transaksi'+(c.txn?` (masuk ${fmt(c.masuk)} · keluar ${fmt(c.keluar)})`:''),c.txn)}
       ${li('Piutang',c.piutang)}
