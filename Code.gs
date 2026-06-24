@@ -1199,6 +1199,7 @@ function deleteInvestFlow(ss, data) {
 // (katExp & metrik hanya hitung TIPE_LOG 'Pengeluaran'/'Cicilan-Beli'), tapi saldo bank tetap akurat.
 function addForexConvert(ss, data) {
   const sh = ensureSheet(ss, S.FOREX);
+  ensureCol(ss, S.FOREX, 'AKUN_VALAS');   // self-heal: tambah kolom bila sheet versi lama
   const now = new Date().toISOString();
   const ref = data.REF_ID || ('FX' + Date.now());
   const jenis = (data.JENIS === 'Jual') ? 'Jual' : 'Beli';
@@ -1211,11 +1212,12 @@ function addForexConvert(ss, data) {
   const tgl = data.TANGGAL || now.slice(0, 10);
   if (!valas || !kurs || !akun) return { error: 'JUMLAH_VALAS, KURS, AKUN_VALAS wajib' };
 
-  // Header-mapped append (tahan perubahan urutan kolom).
+  // Append berdasar header AKTUAL di sheet (bukan urutan kode) → tahan beda urutan kolom.
   const o = { ID: 'ID' + Date.now(), TANGGAL: tgl, JENIS: jenis, MATA_UANG: mu, AKUN_VALAS: akun,
     REKENING: rek, JUMLAH_VALAS: valas, KURS: kurs, NOMINAL_RP: rp, NOTES: data.NOTES || '',
     REF_ID: ref, CREATED_BY: data.USER || '', CREATED_AT: now };
-  sh.appendRow(HEADERS[S.FOREX].map(h => o[h] !== undefined ? o[h] : ''));
+  const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  sh.appendRow(headers.map(h => o[h] !== undefined ? o[h] : ''));
 
   // Saldo bank bergerak HANYA bila REKENING bank nyata (bukan '(luar)' / saldo awal).
   const realBank = rek && rek !== '(luar)';

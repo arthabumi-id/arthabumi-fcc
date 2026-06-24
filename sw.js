@@ -1,4 +1,4 @@
-const CACHE = 'fcc-arthabumi-v24';
+const CACHE = 'fcc-arthabumi-v25';
 const ASSETS = ['./index.html', './manifest.json'];
 
 self.addEventListener('install', e => {

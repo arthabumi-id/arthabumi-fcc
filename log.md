@@ -26,6 +26,18 @@
 - **Gabung tab (req Eddy):** halaman `page-kurs` DIHAPUS; isinya (Kurs BCA + tombol Perbarui + #kursList) dipindah ke bawah `page-forex` (dipisah garis). Menu Lainnya: entry "Kurs BCA" dihapus, "Pocket Forex" → "Forex & Kurs". goPage('forex') & renderAll kini render `renderForex()`+`renderKurs()`. navKey map + forex→'lainnya'. #kursList tetap unik.
 - **Deploy:** CLIENT-ONLY — cukup push index.html + sw.js **v24** (GitHub Desktop), TANPA redeploy Code.gs.
 
+### v26.3 Fix data forex geser kolom + tombol hapus gagal
+- **Gejala:** holding 0 (halaman & dashboard), entri tampil "Beli — USD @ 2.785,82 ... 50000000 ... -Rp 17.948" (kolom bergeser), tombol hapus tak jalan.
+- **Akar:** tab FOREX_LOG di Sheet masih header LAMA (12 kolom, tanpa AKUN_VALAS). addForexConvert v26.1 menulis 13 nilai (urutan kode, AKUN_VALAS di tengah) ke sheet 12-kolom → getSheet baca pakai header lama → semua nilai geser 1 (JUMLAH_VALAS←REKENING='(luar)'→NaN→holding 0; REF_ID geser → server deleteForex tak ketemu → hapus gagal). Eddy "hapus FOREX_LOG" kemarin = hapus baris, bukan tab.
+- **Fix Eddy (no redeploy):** hapus TAB FOREX_LOG (klik kanan → Delete) → input ulang. ensureSheet bikin ulang dgn 13 kolom benar.
+- **Hardening code (opsional redeploy):** addForexConvert kini `ensureCol(AKUN_VALAS)` + append pakai header AKTUAL sheet (bukan urutan HEADERS kode) → self-healing, baris baru selalu benar walau sheet beda urutan. node --check OK.
+
+### v26.4 Penanda versi + What's new in-app (CLIENT-ONLY, sw.js v25)
+- Eddy minta tahu versi yang lagi jalan + ringkasan update terakhir di app.
+- `APP_VERSION='v26.4'` + array `CHANGELOG` (5 entri terbaru). Badge versi kecil di header (klik → ke Master), `setAppVer()` dipanggil di renderAll. Section "Versi & Update" di halaman Master (`#masterVersi` + `renderVersiBox()`, dipanggil di renderMaster) — tampil 5 update terakhir (versi/tanggal/ringkasan).
+- **Maintenance:** tiap rilis baru → bump APP_VERSION + tambah 1 entri di CHANGELOG (paling atas) + bump sw.js. Riwayat lengkap tetap di log.md ini.
+- **Deploy:** CLIENT-ONLY — push index.html + sw.js v25.
+
 ---
 
 ## SESSION — 2026-06-23 (Bug filter rekening + v25 Kurs BCA)

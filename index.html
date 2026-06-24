@@ -219,7 +219,7 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
   <!-- TOPBAR -->
   <div class="topbar">
     <div>
-      <div class="topbar-title">🏗 FCC Arthabumi</div>
+      <div class="topbar-title">🏗 FCC Arthabumi <span id="appVer" onclick="goPage('master')" style="font-size:10px;font-weight:600;color:var(--text3);background:var(--bg);border:1px solid var(--border2);border-radius:6px;padding:1px 6px;margin-left:4px;cursor:pointer;vertical-align:middle"></span></div>
       <div class="topbar-sub" id="topbarSub">Memuat data...</div>
     </div>
     <div class="topbar-right">
@@ -331,6 +331,7 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
         <button class="ttab" onclick="switchMasterTab('kat')" id="mTab-kat" style="flex:none;padding:8px 14px;border-radius:20px;border:1px solid var(--border2);font-size:12px">Kategori</button>
       </div>
       <div id="masterContent"></div>
+      <div id="masterVersi" style="margin-top:20px"></div>
     </div>
 
     <!-- KASBON -->
@@ -456,6 +457,27 @@ let state = {
 };
 
 // ── UTILS ─────────────────────────────────────────────
+// ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
+const APP_VERSION = 'v26.4';
+const CHANGELOG = [
+  { v:'v26.4', d:'24 Jun 2026', t:'Penanda versi + "What\'s new" di app (header & Master).' },
+  { v:'v26.3', d:'24 Jun 2026', t:'Fix data forex geser kolom + tombol hapus; backend self-healing.' },
+  { v:'v26.2', d:'24 Jun 2026', t:'Fix kartu Forex Dashboard 0; gabung tab Forex & Kurs.' },
+  { v:'v26.1', d:'24 Jun 2026', t:'Pocket Forex per akun valas (BCA/BNI) + kartu Dashboard.' },
+  { v:'v26',   d:'24 Jun 2026', t:'Pocket Forex USD — convert Rp↔USD, nilai live ikut kurs BCA.' },
+];
+function renderVersiBox(){
+  const el=document.getElementById('masterVersi'); if(!el) return;
+  el.innerHTML=`<div class="card">
+    <div class="card-title">Versi &amp; Update <span style="font-size:11px;font-weight:600;color:var(--green);margin-left:6px">${APP_VERSION}</span></div>
+    <div style="font-size:10px;color:var(--text3);margin:2px 0 10px">5 update terakhir · riwayat lengkap di log.md</div>
+    ${CHANGELOG.slice(0,5).map((c,i)=>`<div style="display:flex;gap:10px;padding:7px 0;${i?'border-top:1px solid var(--border2)':''}">
+      <span style="font-size:11px;font-weight:700;color:${i?'var(--text2)':'var(--green)'};min-width:46px">${c.v}</span>
+      <div style="flex:1"><div style="font-size:12px;color:var(--text)">${c.t}</div><div style="font-size:10px;color:var(--text3)">${c.d}</div></div>
+    </div>`).join('')}
+  </div>`;
+}
+function setAppVer(){ const el=document.getElementById('appVer'); if(el) el.textContent=APP_VERSION; }
 const fmt = n => 'Rp ' + Math.round(Math.abs(n)).toLocaleString('id-ID');
 const fmtS = n => {
   const a = Math.abs(n);
@@ -2989,6 +3011,7 @@ async function delKasbon(ref){
 
 // ── RENDER MASTER ─────────────────────────────────────
 function renderMaster() {
+  renderVersiBox();
   const tab = state.currentMasterTab;
   if (tab === 'bank') {
     document.getElementById('masterContent').innerHTML = `
@@ -5309,7 +5332,7 @@ async function confirmImport(){
 }
 function showToast(msg,type){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(type||'success');setTimeout(()=>t.classList.add('show'),10);setTimeout(()=>t.classList.remove('show'),2800);}
 function goPage(page){closeFabMenu();closeLainnyaMenu();state.currentPage=page;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+page).classList.add('active');document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));const navKey=({kasbon:'lainnya',forecast:'lainnya',piutang:'lainnya',invest:'lainnya',forex:'lainnya'})[page]||page;const _ab=document.querySelector('.nav-item[data-nav="'+navKey+'"]');if(_ab)_ab.classList.add('active');document.getElementById('content').scrollTop=0;if(page==='master')renderMaster();if(page==='transfer')renderTransferPage();if(page==='kasbon')renderKasbon();if(page==='forecast')renderForecast();if(page==='piutang')renderPiutang();if(page==='invest')renderInvest();if(page==='forex'){renderForex();renderKurs();}if(page==='dashboard')renderDashboard();}
-function renderAll(){renderDashboard();renderTxnMonthTabs();filterTxn();renderProject();renderCCBillReminder();renderPiutangReminder();updatePiutangBadge();if(state.currentPage==='master')renderMaster();if(state.currentPage==='transfer')renderTransferPage();if(state.currentPage==='kasbon')renderKasbon();if(state.currentPage==='forecast')renderForecast();if(state.currentPage==='piutang')renderPiutang();if(state.currentPage==='invest')renderInvest();if(state.currentPage==='forex'){renderForex();renderKurs();}}
+function renderAll(){setAppVer();renderDashboard();renderTxnMonthTabs();filterTxn();renderProject();renderCCBillReminder();renderPiutangReminder();updatePiutangBadge();if(state.currentPage==='master')renderMaster();if(state.currentPage==='transfer')renderTransferPage();if(state.currentPage==='kasbon')renderKasbon();if(state.currentPage==='forecast')renderForecast();if(state.currentPage==='piutang')renderPiutang();if(state.currentPage==='invest')renderInvest();if(state.currentPage==='forex'){renderForex();renderKurs();}}
 if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{});}
 let logoTimer;
 document.querySelector('.topbar-title').addEventListener('touchstart',()=>{logoTimer=setTimeout(()=>openDrawer('settings'),800);});
