@@ -15,6 +15,12 @@
 - **Verifikasi:** simulasi avg-cost (beli 1000@15k + 500@16k, jual 600@16.5k, live beli 16.2k) → holding 900, avg 15.333, cost 13,8jt, nilai live 14,58jt, unreal +780rb, realized +700rb = PASS 6/6. Blok Code.gs & index.html node --check OK terisolasi. sw.js → **v22**. Backup: `Code-pre-forex-*`, `index-pre-forex-*`.
 - **Pending deploy:** push index.html+sw.js v22 (GitHub Desktop) + **redeploy Code.gs** (new version). Convert butuh online (sentuh saldo bank, blocking+syncAll).
 
+### v26.1 Forex per-akun valas + kartu Dashboard (⚠️ REDEPLOY, sw.js v23)
+- Eddy: punya 2 tabungan valas (BCA & BNI), minta tampil di Dashboard.
+- **Model:** tambah kolom `AKUN_VALAS` (tempat USD disimpan: BCA/BNI) ke FOREX_LOG (sesudah MATA_UANG). `REKENING`='(luar)' → mode **saldo awal**, TIDAK tulis TXN (uang sudah jadi USD sejak dulu); rek bank nyata → saldo bergerak. addForexConvert kini header-mapped append + validasi wajib AKUN_VALAS (bukan REKENING). ⚠️ Bila sheet FOREX_LOG sudah pernah dibuat (test v26 lama) → HAPUS tab itu biar recreate dgn header baru.
+- **index.html:** forexCalc → group per AKUN_VALAS + total (avg-cost per akun). renderForex tampil rincian per akun. Form: input "Akun valas" (datalist BCA/BNI, bisa tambah) + opsi rekening "(saldo awal/luar)". Kartu Dashboard `#dashForex` + `renderForexDash()` (total USD + nilai live + U/R + rincian per akun, klik→halaman Forex; sembunyi bila belum ada data). sw.js → **v23**.
+- **Verifikasi:** simulasi 2 akun (BCA beli 1500/jual600, BNI beli2000, live 16.2k) → BCA holding900 unreal+780k realized+700k; BNI holding2000 unreal+1.4jt; TOTAL holding2900 live46,98jt unreal+2,18jt realized+700k = PASS. node --check backend+UI OK. Backup `*-pre-forexakun-*`.
+
 ---
 
 ## SESSION — 2026-06-23 (Bug filter rekening + v25 Kurs BCA)

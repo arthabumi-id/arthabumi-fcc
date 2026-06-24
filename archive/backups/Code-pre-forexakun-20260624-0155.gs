@@ -81,9 +81,7 @@ const HEADERS = {
   // & NOMINAL_RP selalu positif (NOMINAL_RP = JUMLAH_VALAS × KURS, kurs diisi user saat convert).
   // Tiap baris tulis 1 TXN TIPE_LOG 'Forex' (saldo bank turun/naik NYATA, tapi dikecualikan dari
   // laba/komposisi/forecast krn bukan 'Pengeluaran'). Nilai live = holding × e-Rate Beli (client).
-  // AKUN_VALAS = tempat USD disimpan (mis. BCA / BNI). REKENING = rekening rupiah yg dipotong/ditambah
-  // saat convert; bila REKENING='(luar)' → saldo awal / tak sentuh bank (uang sudah jadi valas sejak dulu).
-  [S.FOREX]:    ['ID','TANGGAL','JENIS','MATA_UANG','AKUN_VALAS','REKENING','JUMLAH_VALAS','KURS','NOMINAL_RP','NOTES','REF_ID','CREATED_BY','CREATED_AT'],
+  [S.FOREX]:    ['ID','TANGGAL','JENIS','MATA_UANG','REKENING','JUMLAH_VALAS','KURS','NOMINAL_RP','NOTES','REF_ID','CREATED_BY','CREATED_AT'],
 };
 
 // ── INIT ─────────────────────────────────────────────────────
@@ -1203,31 +1201,22 @@ function addForexConvert(ss, data) {
   const ref = data.REF_ID || ('FX' + Date.now());
   const jenis = (data.JENIS === 'Jual') ? 'Jual' : 'Beli';
   const mu = data.MATA_UANG || 'USD';
-  const akun = data.AKUN_VALAS || '';
   const rek = data.REKENING || '';
   const valas = Math.abs(Number(data.JUMLAH_VALAS) || 0);
   const kurs = Math.abs(Number(data.KURS) || 0);
   const rp = Math.round(Math.abs(Number(data.NOMINAL_RP) || (valas * kurs)));
   const tgl = data.TANGGAL || now.slice(0, 10);
-  if (!valas || !kurs || !akun) return { error: 'JUMLAH_VALAS, KURS, AKUN_VALAS wajib' };
+  if (!valas || !kurs || !rek) return { error: 'JUMLAH_VALAS, KURS, REKENING wajib' };
 
-  // Header-mapped append (tahan perubahan urutan kolom).
-  const o = { ID: 'ID' + Date.now(), TANGGAL: tgl, JENIS: jenis, MATA_UANG: mu, AKUN_VALAS: akun,
-    REKENING: rek, JUMLAH_VALAS: valas, KURS: kurs, NOMINAL_RP: rp, NOTES: data.NOTES || '',
-    REF_ID: ref, CREATED_BY: data.USER || '', CREATED_AT: now };
-  sh.appendRow(HEADERS[S.FOREX].map(h => o[h] !== undefined ? o[h] : ''));
+  sh.appendRow(['ID' + Date.now(), tgl, jenis, mu, rek, valas, kurs, rp, data.NOTES || '', ref, data.USER || '', now]);
 
-  // Saldo bank bergerak HANYA bila REKENING bank nyata (bukan '(luar)' / saldo awal).
-  const realBank = rek && rek !== '(luar)';
-  if (realBank) {
-    const tx = ss.getSheetByName(S.TXN);
-    if (jenis === 'Beli') {
-      tx.appendRow(['ID' + Date.now() + 'F', tgl, 'Pengeluaran', '', rek, 'Beli Valas', rp,
-        '[FOREX ' + ref + '] beli ' + valas + ' ' + mu + ' (' + akun + ') @ ' + kurs + ' ' + (data.NOTES || ''), 'Forex', data.USER || '', now]);
-    } else {
-      tx.appendRow(['ID' + Date.now() + 'F', tgl, 'Pemasukan', '', rek, 'Jual Valas', rp,
-        '[FOREX ' + ref + '] jual ' + valas + ' ' + mu + ' (' + akun + ') @ ' + kurs + ' ' + (data.NOTES || ''), 'Forex', data.USER || '', now]);
-    }
+  const tx = ss.getSheetByName(S.TXN);
+  if (jenis === 'Beli') {
+    tx.appendRow(['ID' + Date.now() + 'F', tgl, 'Pengeluaran', '', rek, 'Beli Valas', rp,
+      '[FOREX ' + ref + '] beli ' + valas + ' ' + mu + ' @ ' + kurs + ' ' + (data.NOTES || ''), 'Forex', data.USER || '', now]);
+  } else {
+    tx.appendRow(['ID' + Date.now() + 'F', tgl, 'Pemasukan', '', rek, 'Jual Valas', rp,
+      '[FOREX ' + ref + '] jual ' + valas + ' ' + mu + ' @ ' + kurs + ' ' + (data.NOTES || ''), 'Forex', data.USER || '', now]);
   }
   return { ok: true, ref: ref };
 }

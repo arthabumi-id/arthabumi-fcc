@@ -238,7 +238,6 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
       <div id="dashCharts"></div>
       <div id="dashSaldo"></div>
       <div id="dashCC"></div>
-      <div id="dashForex"></div>
       <div id="dashRecent"></div>
     </div>
 
@@ -1165,9 +1164,6 @@ function renderDashboard() {
     </div>
   `;
 
-  // Tabungan Forex (v26)
-  renderForexDash();
-
   // Charts (defer to next frame so DOM is ready)
   setTimeout(renderCharts, 0);
 
@@ -1843,42 +1839,33 @@ const fxUsdNum=v=>parseFloat(String(v==null?'':v).replace(',','.').replace(/[^0-
 const fxKursNum=v=>parseFloat(String(v==null?'':v).replace(/\./g,'').replace(',','.').replace(/[^0-9.]/g,''))||0; // Rp: titik=ribuan
 function forexCalc(){
   const lots=(state.forex||[]).filter(f=>(f.MATA_UANG||'USD')==='USD');
+  let beliUSD=0,beliRp=0,jualUSD=0,jualRp=0;
+  lots.forEach(f=>{ const v=Number(f.JUMLAH_VALAS)||0, rp=Number(f.NOMINAL_RP)||0;
+    if(f.JENIS==='Jual'){jualUSD+=v;jualRp+=rp;}else{beliUSD+=v;beliRp+=rp;} });
+  const avgCost=beliUSD>0?beliRp/beliUSD:0;
+  const holding=beliUSD-jualUSD;
+  const costHolding=holding*avgCost;
   const k=(state.kurs||[]).find(x=>x.MATA_UANG==='USD')||{};
   const liveBeli=Number(k.ERATE_BELI)||0;
-  const groups={};
-  lots.forEach(f=>{ const ak=f.AKUN_VALAS||'(tanpa akun)';
-    const g=groups[ak]||(groups[ak]={beliUSD:0,beliRp:0,jualUSD:0,jualRp:0});
-    const v=Number(f.JUMLAH_VALAS)||0, rp=Number(f.NOMINAL_RP)||0;
-    if(f.JENIS==='Jual'){g.jualUSD+=v;g.jualRp+=rp;}else{g.beliUSD+=v;g.beliRp+=rp;} });
-  const total={holding:0,costHolding:0,liveValue:0,unreal:0,realized:0};
-  const byAkun=Object.keys(groups).sort().map(ak=>{
-    const g=groups[ak];
-    const avgCost=g.beliUSD>0?g.beliRp/g.beliUSD:0;
-    const holding=g.beliUSD-g.jualUSD;
-    const costHolding=holding*avgCost;
-    const liveValue=holding*liveBeli;
-    const unreal=liveBeli?(liveValue-costHolding):0;
-    const realized=g.jualRp-g.jualUSD*avgCost;
-    total.holding+=holding; total.costHolding+=costHolding; total.liveValue+=liveValue; total.unreal+=unreal; total.realized+=realized;
-    return {akun:ak,avgCost,holding,costHolding,liveValue,unreal,realized};
-  });
-  return {byAkun,total,liveBeli,updBCA:k.UPDATE_BCA||'',hasKurs:!!liveBeli};
+  const liveValue=holding*liveBeli;
+  const unreal=liveBeli?(liveValue-costHolding):0;
+  const realized=jualRp-jualUSD*avgCost;
+  return {holding,avgCost,costHolding,liveBeli,liveValue,unreal,realized,updBCA:k.UPDATE_BCA||'',hasKurs:!!liveBeli};
 }
 function renderForex(){
   const el=document.getElementById('forexBody'); if(!el) return;
-  const c=forexCalc(); const T=c.total;
+  const c=forexCalc();
   const lots=(state.forex||[]).slice().sort((a,b)=>String(b.TANGGAL).localeCompare(String(a.TANGGAL))||String(b.CREATED_AT||'').localeCompare(String(a.CREATED_AT||'')));
   let html=`<div class="card" style="margin-bottom:12px">
     <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
-      <div><div style="font-size:10px;color:var(--text3);text-transform:uppercase">Total dipegang</div><div style="font-size:22px;font-weight:700">${usdFmt(T.holding)} <span style="font-size:13px;color:var(--text2)">USD</span></div></div>
-      <div style="text-align:right"><div style="font-size:10px;color:var(--text3);text-transform:uppercase">Nilai live (Rp)</div><div style="font-size:18px;font-weight:700;color:var(--blue)">${c.hasKurs?fmt(T.liveValue):'—'}</div></div>
+      <div><div style="font-size:10px;color:var(--text3);text-transform:uppercase">Dipegang</div><div style="font-size:22px;font-weight:700">${usdFmt(c.holding)} <span style="font-size:13px;color:var(--text2)">USD</span></div></div>
+      <div style="text-align:right"><div style="font-size:10px;color:var(--text3);text-transform:uppercase">Nilai live (Rp)</div><div style="font-size:18px;font-weight:700;color:var(--blue)">${c.hasKurs?fmt(c.liveValue):'—'}</div></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
-      <div style="background:#12121a;border-radius:8px;padding:8px 10px"><div style="color:var(--text3);font-size:10px">Modal (cost)</div><div style="font-weight:600">${fmt(T.costHolding)}</div></div>
-      <div style="background:#12121a;border-radius:8px;padding:8px 10px"><div style="color:var(--text3);font-size:10px">U/R belum terealisasi</div><div style="font-weight:700;color:${T.unreal>=0?'var(--green)':'var(--red)'}">${c.hasKurs?((T.unreal>=0?'+':'-')+fmt(Math.abs(T.unreal))):'—'}</div></div>
+      <div style="background:#12121a;border-radius:8px;padding:8px 10px"><div style="color:var(--text3);font-size:10px">Modal (cost)</div><div style="font-weight:600">${fmt(c.costHolding)}</div><div style="font-size:9px;color:var(--text3)">avg @ ${usdFmt(c.avgCost)}</div></div>
+      <div style="background:#12121a;border-radius:8px;padding:8px 10px"><div style="color:var(--text3);font-size:10px">U/R belum terealisasi</div><div style="font-weight:700;color:${c.unreal>=0?'var(--green)':'var(--red)'}">${c.hasKurs?((c.unreal>=0?'+':'-')+fmt(Math.abs(c.unreal))):'—'}</div></div>
     </div>
-    ${c.byAkun.length>1||c.byAkun.some(a=>a.akun!=='(tanpa akun)')?`<div style="margin-top:10px;border-top:1px solid var(--border2);padding-top:8px">${c.byAkun.map(a=>`<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;padding:3px 0"><span style="color:var(--text2)"><i class="ti ti-wallet" style="font-size:12px;vertical-align:middle"></i> ${esc(a.akun)}</span><span><b>${usdFmt(a.holding)}</b> USD${c.hasKurs?` · <span style="color:var(--blue)">${fmt(a.liveValue)}</span>`:''}${a.holding&&c.hasKurs?` · <span style="color:${a.unreal>=0?'var(--green)':'var(--red)'}">${a.unreal>=0?'+':'-'}${fmt(Math.abs(a.unreal))}</span>`:''}</span></div>`).join('')}</div>`:''}
-    ${T.realized?`<div style="margin-top:8px;font-size:11px;color:var(--text2)">U/R terealisasi (akumulatif): <b style="color:${T.realized>=0?'var(--green)':'var(--red)'}">${T.realized>=0?'+':'-'}${fmt(Math.abs(T.realized))}</b></div>`:''}
+    ${c.realized?`<div style="margin-top:8px;font-size:11px;color:var(--text2)">U/R terealisasi (akumulatif): <b style="color:${c.realized>=0?'var(--green)':'var(--red)'}">${c.realized>=0?'+':'-'}${fmt(Math.abs(c.realized))}</b></div>`:''}
     <div style="margin-top:8px;font-size:10px;color:var(--text3);line-height:1.5">${c.hasKurs?`Nilai pakai e-Rate Beli USD <b>${usdFmt(c.liveBeli)}</b> · update BCA: ${esc(String(c.updBCA||'—'))}`:'⚠ Kurs belum tersedia — buka menu Kurs BCA & Perbarui dulu.'}</div>
   </div>`;
   if(!lots.length){ html+='<div class="empty">Belum ada konversi. Tekan "Convert" untuk mulai.</div>'; }
@@ -1892,42 +1879,17 @@ function renderForex(){
     </div></div>`; }).join(''); }
   el.innerHTML=html;
 }
-function forexAkunList(){
-  const s=new Set(['BCA','BNI']);
-  (state.forex||[]).forEach(f=>{ if(f.AKUN_VALAS) s.add(f.AKUN_VALAS); });
-  return [...s];
-}
-function renderForexDash(){
-  const el=document.getElementById('dashForex'); if(!el) return;
-  const c=forexCalc(); const T=c.total;
-  if(!(state.forex||[]).length){ el.innerHTML=''; return; }   // sembunyikan bila belum ada forex
-  const akunRows=c.byAkun.filter(a=>a.holding>0.0001).map(a=>
-    `<div style="display:flex;justify-content:space-between;font-size:11px;padding:3px 0;color:var(--text2)"><span><i class="ti ti-wallet" style="font-size:12px;vertical-align:middle"></i> ${esc(a.akun)}</span><span><b style="color:var(--text)">${usdFmt(a.holding)}</b> USD${c.hasKurs?` · ${fmt(a.liveValue)}`:''}</span></div>`).join('');
-  el.innerHTML=`<div class="card" style="cursor:pointer" onclick="goPage('forex')">
-    <div class="card-title">Tabungan Forex <span style="font-size:11px;font-weight:500;color:var(--text3);margin-left:4px">USD</span><i class="ti ti-chevron-right" style="float:right;color:var(--text3)"></i></div>
-    <div style="display:flex;justify-content:space-between;align-items:baseline;margin:2px 0 6px">
-      <div style="font-size:20px;font-weight:700">${usdFmt(T.holding)} <span style="font-size:12px;color:var(--text2)">USD</span></div>
-      <div style="text-align:right"><div style="font-size:16px;font-weight:700;color:var(--blue)">${c.hasKurs?fmt(T.liveValue):'—'}</div>${c.hasKurs?`<div style="font-size:10px;color:${T.unreal>=0?'var(--green)':'var(--red)'}">${T.unreal>=0?'+':'-'}${fmt(Math.abs(T.unreal))} U/R</div>`:''}</div>
-    </div>
-    ${akunRows?`<div style="border-top:1px solid var(--border2);padding-top:6px">${akunRows}</div>`:''}
-    ${!c.hasKurs?'<div style="font-size:10px;color:var(--amber);margin-top:6px">⚠ Kurs belum ada — buka Kurs BCA & Perbarui</div>':''}
-  </div>`;
-}
 function openForexConvert(){
   const banks=state.banks.map(b=>b.NAMA);
-  const akuns=forexAkunList();
+  if(!banks.length){showToast('Tambah rekening dulu','error');return;}
   document.getElementById('drawerTitle').textContent='Convert Forex (USD)';
   document.getElementById('drawerBody').innerHTML=`
     <div class="form-row">
       <div class="form-group"><label class="form-label">Jenis</label><select class="form-input" id="fx_jenis" onchange="fxPrefillKurs()"><option value="Beli">Beli USD (Rp→USD)</option><option value="Jual">Jual USD (USD→Rp)</option></select></div>
       <div class="form-group"><label class="form-label">Tanggal</label><input class="form-input" id="fx_tgl" type="date" value="${today()}"></div>
     </div>
-    <div class="form-group"><label class="form-label">Akun valas (USD disimpan di)</label>
-      <input class="form-input" id="fx_akun" list="fxAkunOpts" placeholder="BCA / BNI" value="${esc(akuns[0]||'')}">
-      <datalist id="fxAkunOpts">${akuns.map(a=>`<option value="${esc(a)}">`).join('')}</datalist></div>
-    <div class="form-group"><label class="form-label">Rekening rupiah</label>
-      <select class="form-input" id="fx_rek"><option value="(luar)">(saldo awal / luar) — tak sentuh saldo bank</option>${banks.map(n=>`<option>${esc(n)}</option>`).join('')}</select>
-      <div class="settings-sub" style="margin-top:4px">Pilih bank → saldo bergerak nyata (Beli turun / Jual naik). Pilih "(saldo awal)" untuk mencatat USD lama tanpa potong bank.</div></div>
+    <div class="form-group"><label class="form-label">Rekening (Rupiah)</label><select class="form-input" id="fx_rek">${banks.map(n=>`<option>${esc(n)}</option>`).join('')}</select>
+      <div class="settings-sub" style="margin-top:4px">Beli → saldo turun. Jual → saldo naik. Uang nyata bergerak.</div></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Jumlah USD</label><input class="form-input" id="fx_usd" type="text" inputmode="decimal" placeholder="0.00" oninput="fxCalcRp()"></div>
       <div class="form-group"><label class="form-label">Kurs (Rp/USD)</label><input class="form-input" id="fx_kurs" type="text" inputmode="decimal" placeholder="0" oninput="fxCalcRp()"></div>
@@ -1954,18 +1916,17 @@ function fxCalcRp(){
 }
 async function saveForexConvert(){
   const jenis=document.getElementById('fx_jenis').value;
-  const akun=(document.getElementById('fx_akun').value||'').trim();
   const rek=document.getElementById('fx_rek').value;
   const usd=fxUsdNum(document.getElementById('fx_usd').value);
   const kurs=fxKursNum(document.getElementById('fx_kurs').value);
   const rp=Math.round(usd*kurs);
   const tgl=document.getElementById('fx_tgl').value;
   const notes=document.getElementById('fx_notes').value;
-  if(!usd||!kurs||!akun){showToast('Jumlah USD, kurs, akun valas wajib','error');return;}
+  if(!usd||!kurs||!rek){showToast('Jumlah USD, kurs, rekening wajib','error');return;}
   closeDrawer();
-  if(!API_URL){showToast('Perlu online untuk convert','error');return;}
+  if(!API_URL){showToast('Perlu online untuk convert (sentuh saldo bank)','error');return;}
   showToast('Menyimpan...','success');
-  const res=await apiPost({action:'addForexConvert',data:{JENIS:jenis,MATA_UANG:'USD',AKUN_VALAS:akun,REKENING:rek,JUMLAH_VALAS:usd,KURS:kurs,NOMINAL_RP:rp,TANGGAL:tgl,NOTES:notes,USER:state.user}});
+  const res=await apiPost({action:'addForexConvert',data:{JENIS:jenis,MATA_UANG:'USD',REKENING:rek,JUMLAH_VALAS:usd,KURS:kurs,NOMINAL_RP:rp,TANGGAL:tgl,NOTES:notes,USER:state.user}});
   if(res&&res.error){showToast('Gagal: '+res.error,'error');return;}
   await syncAll();
   if(state.currentPage==='forex')renderForex();
