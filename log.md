@@ -57,6 +57,12 @@
 - **Menu Lainnya dikelompokkan:** sub-judul Keuangan (Kasbon, Piutang, Forecast) + Aset (Forex&Kurs, Investasi; ikon emas). 
 - **Verifikasi:** renderDashboard node --check OK (172 baris). Pakai forexCalc()/usdFmt() (hoisted/top-level const, aman saat runtime).
 
+### v26.8 Poles halaman dalam (CSS global) — CLIENT-ONLY, sw.js v29
+- **Latar:** body radial-gradient glow hijau halus di atas (#13231C→bg). Scrollbar tipis.
+- **Komponen global (kena semua halaman):** `.card` transition + active scale; `.metric` dapat border + active scale + cursor; `.form-input:focus` ring hijau (box-shadow 3px); `.btn-primary` shadow hijau lembut + active scale + teks #06140D; `.nav-item.active::before` indikator bar hijau di atas + transition; `.topbar` shadow bawah utk depth; `.card-title` letter-spacing.
+- **Re-tone gradient sektoral:** forecast biru `#0C2233,#0A1620`; piutang/kasbon amber `#2A1F0A,#180F06` (buang ekor biru #0d1f2d).
+- **Verifikasi:** style block brace 118/118 balanced; 4 marker poles ada. Backup `index-pre-polish-*`.
+
 ---
 
 ## SESSION — 2026-06-23 (Bug filter rekening + v25 Kurs BCA)
