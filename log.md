@@ -77,6 +77,11 @@
 - Kartu hero pakai metric-label/value/sub (var-driven) → teks adaptif, bukan putih hardcode.
 - **Verifikasi:** style brace 132/132; 0 stray hero gradient di usage; 24 var(--ic-*); renderDashboard node --check OK. Backup `index-pre-light2-*`.
 
+### v27.1 Garis chart adaptif + blok gelap tab CC — CLIENT-ONLY, sw.js v32
+- **Chart:** helper `gridCol()` (light #E6EAE6 / dark #1F2B25); `color:'#1F2B25'`→`color:gridCol()` (5 chart). `applyTheme` set `Chart.defaults.color` (tick/legend) per tema. `toggleTheme` panggil `renderAll()` → chart redraw saat ganti tema.
+- **Tab Kartu Kredit:** `#1a1030`→`var(--ic-purple)` (Beli Cicilan), `#1a1206`→`var(--ic-amber)` (Rincian ×4), `#b9a3ff`→`var(--purple)` (×14 teks cicilan), bar progress `#222`→`var(--inset)` + `#7c5cff`→`var(--purple)`.
+- **Verifikasi:** 0 sisa `color:'#1F2B25'`; 0 sisa blok gelap CC; renderCharts & applyTheme node --check OK; style 132/132.
+
 ---
 
 ## SESSION — 2026-06-23 (Bug filter rekening + v25 Kurs BCA)

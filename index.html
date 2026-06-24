@@ -508,8 +508,9 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v27.0';
+const APP_VERSION = 'v27.1';
 const CHANGELOG = [
+  { v:'v27.1', d:'24 Jun 2026', t:'Garis chart abu adaptif + tombol/blok gelap di tab Kartu Kredit jadi clean (light).' },
   { v:'v27.0', d:'24 Jun 2026', t:'Light mode dirombak premium: warna chip/kartu/ikon adaptif dua tema + bayangan halus.' },
   { v:'v26.9', d:'24 Jun 2026', t:'Mode mata (sembunyikan nominal ••••) + tema terang/gelap di header.' },
   { v:'v26.8', d:'24 Jun 2026', t:'Poles halaman dalam: latar glow halus, kartu/metrik/form/nav lebih premium & konsisten.' },
@@ -536,8 +537,8 @@ function renderVersiBox(){
 function setAppVer(){ const el=document.getElementById('appVer'); if(el) el.textContent=APP_VERSION; }
 function setEyeIcon(){ const b=document.getElementById('eyeBtn'); if(b) b.innerHTML='<i class="ti ti-'+(state.hideAmounts?'eye-off':'eye')+'"></i>'; }
 function toggleHide(){ state.hideAmounts=!state.hideAmounts; localStorage.setItem('fcc_hide', state.hideAmounts?'1':''); setEyeIcon(); renderAll(); showToast(state.hideAmounts?'Nominal disembunyikan':'Nominal ditampilkan','success'); }
-function applyTheme(){ document.body.classList.toggle('light', state.theme==='light'); const b=document.getElementById('themeBtn'); if(b) b.innerHTML='<i class="ti ti-'+(state.theme==='light'?'sun':'moon')+'"></i>'; }
-function toggleTheme(){ state.theme=state.theme==='light'?'dark':'light'; localStorage.setItem('fcc_theme',state.theme); applyTheme(); showToast(state.theme==='light'?'Tema terang':'Tema gelap','success'); }
+function applyTheme(){ document.body.classList.toggle('light', state.theme==='light'); const b=document.getElementById('themeBtn'); if(b) b.innerHTML='<i class="ti ti-'+(state.theme==='light'?'sun':'moon')+'"></i>'; if(window.Chart){ Chart.defaults.color = state.theme==='light'?'#5B6E64':'#8B9C93'; } }
+function toggleTheme(){ state.theme=state.theme==='light'?'dark':'light'; localStorage.setItem('fcc_theme',state.theme); applyTheme(); renderAll(); showToast(state.theme==='light'?'Tema terang':'Tema gelap','success'); }
 const HIDE_MASK = '••••';
 const fmt = n => state.hideAmounts ? ('Rp ' + HIDE_MASK) : ('Rp ' + Math.round(Math.abs(n)).toLocaleString('id-ID'));
 const fmtS = n => {
@@ -548,6 +549,7 @@ const fmtS = n => {
   return Math.round(a).toLocaleString('id-ID');
 };
 const uid = () => 'ID' + Date.now().toString(36).toUpperCase();
+const gridCol = () => state.theme==='light' ? '#E6EAE6' : '#1F2B25';
 const today = () => new Date().toISOString().slice(0, 10);
 const esc = s => String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
@@ -1250,7 +1252,7 @@ function renderDashboard() {
           const due = String(bill.JATUH_TEMPO||'').slice(0,10);
           const dd = due ? _daysBetween(today(),due) : null;
           const lbl = dd===null?'':(dd<0?`<span style="color:var(--red)">lewat ${Math.abs(dd)} hr</span>`:dd===0?`<span style="color:var(--red)">hari ini</span>`:`<span style="color:var(--amber)">${dd} hr lagi</span>`);
-          billStrip = `<div style="width:100%;margin-top:8px;padding:7px 9px;border-radius:8px;background:#1a1206;border:1px solid #f59e0b40;display:flex;align-items:center;justify-content:space-between;gap:8px">
+          billStrip = `<div style="width:100%;margin-top:8px;padding:7px 9px;border-radius:8px;background:var(--ic-amber);border:1px solid #f59e0b40;display:flex;align-items:center;justify-content:space-between;gap:8px">
             <div style="min-width:0"><div style="font-size:12px;font-weight:700;color:var(--amber)">Tagihan ${fmt(bill.NOMINAL)}</div><div style="font-size:10px;color:var(--text3)">jth tempo ${due||'—'} · ${lbl}</div></div>
             <div style="display:flex;gap:5px;flex-shrink:0"><button class="btn-danger" style="background:var(--ic-green);color:var(--green);border-color:#2EE6A640" onclick="event.stopPropagation();payCCFromReminder('${esc(c.NAMA)}')">Bayar</button><button class="btn-danger" onclick="event.stopPropagation();clearCCBill('${bill.ID}','${esc(bill.CC||c.NAMA||'')}')">Lunas</button></div>
           </div>`;
@@ -1387,7 +1389,7 @@ function renderCharts() {
     options: {
       responsive:true, maintainAspectRatio:false,
       plugins:{ legend:{ position:'top', labels:{ boxWidth:10, padding:12 } }, tooltip:{ callbacks:{ label: ctx => ` ${ctx.dataset.label}: ${ctx.raw.toFixed(1)}jt` } } },
-      scales:{ x:{ grid:{ color:'#1F2B25' } }, y:{ grid:{ color:'#1F2B25' }, ticks:{ callback: v => v+'jt' } } }
+      scales:{ x:{ grid:{ color:gridCol() } }, y:{ grid:{ color:gridCol() }, ticks:{ callback: v => v+'jt' } } }
     }
   });
 
@@ -1419,7 +1421,7 @@ function renderCharts() {
       options: {
         indexAxis:'y', responsive:true, maintainAspectRatio:false,
         plugins:{ legend:{ position:'top', labels:{ boxWidth:10, padding:10 } }, tooltip:{ callbacks:{ label: ctx => ` ${ctx.dataset.label}: ${ctx.raw.toFixed(1)}jt` } } },
-        scales:{ x:{ grid:{ color:'#1F2B25' }, ticks:{ callback: v => v+'jt' } }, y:{ grid:{ color:'#1F2B25' }, ticks:{ font:{ size:10 } } } }
+        scales:{ x:{ grid:{ color:gridCol() }, ticks:{ callback: v => v+'jt' } }, y:{ grid:{ color:gridCol() }, ticks:{ font:{ size:10 } } } }
       }
     });
   }
@@ -1575,7 +1577,7 @@ function renderForecast(){
     ]},
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>' '+ctx.raw.toFixed(1)+'jt'}}},
-      scales:{x:{grid:{color:'#1F2B25'},ticks:{maxTicksLimit:8,font:{size:9}}},y:{grid:{color:'#1F2B25'},ticks:{callback:v=>v+'jt'}}}}
+      scales:{x:{grid:{color:gridCol()},ticks:{maxTicksLimit:8,font:{size:9}}},y:{grid:{color:gridCol()},ticks:{callback:v=>v+'jt'}}}}
   });
 }
 
@@ -1704,7 +1706,7 @@ function renderCCBillReminder(){
     return _daysBetween(today(),due)<=7; // lewat tempo & ≤7 hari
   }).sort((a,b)=>String(a.JATUH_TEMPO||'').localeCompare(String(b.JATUH_TEMPO||'')));
   if(!items.length){el.innerHTML='';return;}
-  el.innerHTML=`<div class="card" style="margin-bottom:12px;background:#1a1206;border:1px solid #f59e0b">
+  el.innerHTML=`<div class="card" style="margin-bottom:12px;background:var(--ic-amber);border:1px solid #f59e0b">
     <div style="display:flex;align-items:center;justify-content:space-between">
       <div style="font-weight:700;color:var(--amber)"><i class="ti ti-bell-ringing"></i> Tagihan CC mendesak (${items.length})</div></div>
     <div style="margin-top:8px;display:flex;flex-direction:column;gap:8px">
@@ -1938,7 +1940,7 @@ function buildInvestTotalChart(){
     ]},
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:true,labels:{font:{size:10},boxWidth:12}},tooltip:{callbacks:{label:ctx=>' '+ctx.dataset.label+' '+ctx.raw.toFixed(1)+'jt'}}},
-      scales:{x:{grid:{color:'#1F2B25'},ticks:{maxTicksLimit:8,font:{size:9}}},y:{grid:{color:'#1F2B25'},ticks:{callback:v=>v+'jt'}}}}
+      scales:{x:{grid:{color:gridCol()},ticks:{maxTicksLimit:8,font:{size:9}}},y:{grid:{color:gridCol()},ticks:{callback:v=>v+'jt'}}}}
   });
 }
 
@@ -2211,7 +2213,7 @@ function buildInvestChart(akun){
     ]},
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:true,labels:{font:{size:10},boxWidth:12}},tooltip:{callbacks:{label:ctx=>' '+ctx.dataset.label+' '+ctx.raw.toFixed(1)+'jt'}}},
-      scales:{x:{grid:{color:'#1F2B25'},ticks:{maxTicksLimit:8,font:{size:9}}},y:{grid:{color:'#1F2B25'},ticks:{callback:v=>v+'jt'}}}}
+      scales:{x:{grid:{color:gridCol()},ticks:{maxTicksLimit:8,font:{size:9}}},y:{grid:{color:gridCol()},ticks:{callback:v=>v+'jt'}}}}
   });
 }
 function openInvestAkun(editId){
@@ -2370,7 +2372,7 @@ function cicilanRowHTML(c){
         <div style="font-size:11px;color:var(--text2)">${esc(c.CC)}${c.PROJECT?' · '+esc(c.PROJECT):''} · ${fmtS(per)}/bln</div>
         <div style="font-size:10px;color:var(--text3);margin-top:2px">${terbayar}/${tenor} angsuran${lunas?'':' · sisa '+fmt(sisa)}</div>
         ${(!lunas && cicilanHolding(c))?`<div style="font-size:10px;color:var(--blue);margin-top:2px"><i class="ti ti-building-bank"></i> reserve di ${esc(cicilanHolding(c))}</div>`:''}
-        <div style="height:5px;background:#222;border-radius:3px;margin-top:5px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${lunas?'var(--green)':'#7c5cff'}"></div></div>
+        <div style="height:5px;background:var(--inset);border-radius:3px;margin-top:5px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${lunas?'var(--green)':'var(--purple)'}"></div></div>
       </div>
       <div style="text-align:right;flex-shrink:0">
         <span class="badge" style="background:${lunas?'var(--ic-green)':'var(--ic-amber)'};color:${lunas?'var(--green)':'var(--amber)'}">${lunas?'Lunas':'Jalan'}</span>
@@ -2402,7 +2404,7 @@ function paycCicilanHTML(ccName){
   const list=(state.cicilan||[]).filter(c=>c.CC===ccName && c.STATUS!=='Lunas');
   if(!list.length) return '';
   return `<div class="card" style="padding:8px 10px;margin:0 0 12px;background:#140d24;border:1px solid #7c5cff40">
-    <div style="font-size:10px;color:#b9a3ff;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px"><i class="ti ti-calendar-repeat"></i> Angsuran cicilan kartu ini (dibayar dari reserve)</div>
+    <div style="font-size:10px;color:var(--purple);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px"><i class="ti ti-calendar-repeat"></i> Angsuran cicilan kartu ini (dibayar dari reserve)</div>
     ${list.map(c=>{
       const tenor=+c.TENOR||0, terbayar=+c.TENOR_TERBAYAR||0, per=+c.NOMINAL_PER_BULAN||0;
       return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0;border-top:1px solid #ffffff10">
@@ -2430,7 +2432,7 @@ function openCicilan(){
       <div class="form-group"><label class="form-label">Tenor (x)</label><input class="form-input" id="ci_tenor" type="number" inputmode="numeric" value="12" min="1" oninput="ciPreview()"></div>
       <div class="form-group"><label class="form-label">Tanggal Beli</label><input class="form-input" id="ci_tgl" type="date" value="${today()}"></div>
     </div>
-    <div class="card" style="padding:8px 10px;margin:0 0 12px;background:#140d24;border:1px solid #7c5cff40"><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Angsuran per bulan</div><div id="ci_per" style="font-size:16px;font-weight:700;color:#b9a3ff">Rp 0</div><div id="ci_perSub" style="font-size:10px;color:var(--text3)"></div></div>
+    <div class="card" style="padding:8px 10px;margin:0 0 12px;background:#140d24;border:1px solid #7c5cff40"><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Angsuran per bulan</div><div id="ci_per" style="font-size:16px;font-weight:700;color:var(--purple)">Rp 0</div><div id="ci_perSub" style="font-size:10px;color:var(--text3)"></div></div>
     <div class="form-group"><label class="form-label">Project (biaya masuk ke sini)</label><select class="form-input" id="ci_proj">${projOpts}</select></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Kelompok</label><select class="form-input" id="ci_kat_grp" onchange="ciFillKatList()"></select></div>
@@ -2586,7 +2588,7 @@ function openConvertCicilan(txnId){
       <div class="form-group"><label class="form-label">Tenor (x)</label><input class="form-input" id="cv_tenor" type="number" inputmode="numeric" value="12" min="1" oninput="cvPreview()"></div>
       <div class="form-group"><label class="form-label">Total Bunga (Rp)</label><input class="form-input" id="cv_bunga" type="text" inputmode="numeric" value="0" oninput="fmtMoneyInput(this);cvPreview()"></div>
     </div>
-    <div class="card" style="padding:8px 10px;margin:0 0 12px;background:#140d24;border:1px solid #7c5cff40"><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Angsuran per bulan</div><div id="cv_per" style="font-size:16px;font-weight:700;color:#b9a3ff">Rp 0</div><div id="cv_perSub" style="font-size:10px;color:var(--text3)"></div></div>
+    <div class="card" style="padding:8px 10px;margin:0 0 12px;background:#140d24;border:1px solid #7c5cff40"><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Angsuran per bulan</div><div id="cv_per" style="font-size:16px;font-weight:700;color:var(--purple)">Rp 0</div><div id="cv_perSub" style="font-size:10px;color:var(--text3)"></div></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Dana reserve dari (sumber)</label><select class="form-input" id="cv_bank">${bankOpts}</select></div>
       <div class="form-group"><label class="form-label">Simpan di rekening</label><select class="form-input" id="cv_holding">${state.banks.map(b=>`<option ${b.NAMA===ccHoldingBank(t.REKENING)?'selected':''}>${esc(b.NAMA)}</option>`).join('')}</select></div>
@@ -2736,8 +2738,8 @@ function renderCCBill(from,to){
   const row=(tgl,label,amt,color,chkAmt,txnId)=>{const ca=(chkAmt===undefined?amt:chkAmt);return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid #ffffff10"><input type="checkbox" class="ccb-chk" data-amt="${ca}" data-id="${txnId||''}" onchange="ccbTick(this)" style="width:18px;height:18px;flex-shrink:0;accent-color:#7c5cff"><div style="flex:1;min-width:0"><div style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(label)}</div><div style="font-size:10px;color:var(--text3)">${tgl}</div></div><div style="font-size:13px;font-weight:600;color:${color};flex-shrink:0">${ca<0?'−':''}${fmt(amt)}</div></div>`;};
   document.getElementById('drawerBody').innerHTML=`
     <div id="ccb_topbar" style="position:sticky;top:0;z-index:6;background:#12121c;padding:8px 10px;margin-bottom:10px;border-radius:8px;border:1px solid #7c5cff55;display:flex;justify-content:space-between;align-items:center;gap:8px">
-      <span style="font-size:11px;color:var(--text2)"><i class="ti ti-checkbox" style="font-size:13px;vertical-align:middle;color:#b9a3ff"></i> Dicentang sekarang · <span id="ccb_topCnt">0</span> baris</span>
-      <b id="ccb_topSum" style="font-size:15px;color:#b9a3ff">${fmt(0)}</b>
+      <span style="font-size:11px;color:var(--text2)"><i class="ti ti-checkbox" style="font-size:13px;vertical-align:middle;color:var(--purple)"></i> Dicentang sekarang · <span id="ccb_topCnt">0</span> baris</span>
+      <b id="ccb_topSum" style="font-size:15px;color:var(--purple)">${fmt(0)}</b>
     </div>
     <div style="display:flex;gap:8px;margin-bottom:10px">
       <div class="form-group" style="flex:1;margin:0"><label class="form-label">Dari</label><input type="date" class="form-input" id="ccb_from" value="${from}" onchange="ccbApply()"></div>
@@ -2746,8 +2748,8 @@ function renderCCBill(from,to){
     <div class="card" style="padding:8px 10px;margin:0 0 12px"><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Total tagihan berjalan (kumulatif, semua waktu)</div><div style="font-size:16px;font-weight:700;color:var(--red)">${fmt(getCCOut(name))}</div><div style="font-size:10px;color:var(--text3)">termasuk cicilan jatuh tempo ${fmt(cicilanDueAmt(name))}</div></div>
     <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">Belanja periode ini · <b style="color:var(--red)">${fmt(sumCharge)}</b></div>
     ${charges.length?charges.map(t=>row(String(t.TANGGAL).slice(0,10),(t.KATEGORI||'')+(t.NOTES?' · '+t.NOTES:''),Number(t.NOMINAL),'var(--red)',undefined,t.ID)).join(''):'<div class="settings-sub" style="margin:4px 0">Tidak ada belanja di periode ini.</div>'}
-    <div style="font-size:11px;color:#b9a3ff;text-transform:uppercase;letter-spacing:.5px;margin:12px 0 2px">Angsuran cicilan periode ini · <b style="color:#b9a3ff">${fmt(sumCic)}</b></div>
-    ${cics.length?cics.map(c=>row(c.date,'Cicilan '+c.ke+'/'+c.tenor+' · '+c.desk+(c.paid?' (sdh dibayar)':''),c.amt,'#b9a3ff')).join(''):'<div class="settings-sub" style="margin:4px 0">Tidak ada angsuran jatuh tempo di periode ini.</div>'}
+    <div style="font-size:11px;color:var(--purple);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 2px">Angsuran cicilan periode ini · <b style="color:var(--purple)">${fmt(sumCic)}</b></div>
+    ${cics.length?cics.map(c=>row(c.date,'Cicilan '+c.ke+'/'+c.tenor+' · '+c.desk+(c.paid?' (sdh dibayar)':''),c.amt,'var(--purple)')).join(''):'<div class="settings-sub" style="margin:4px 0">Tidak ada angsuran jatuh tempo di periode ini.</div>'}
     ${pays.length?`<div style="font-size:11px;color:var(--green);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 2px">Pembayaran/kredit periode ini · <b style="color:var(--green)">${fmt(sumPay)}</b></div>${pays.map(t=>row(String(t.TANGGAL).slice(0,10),(t.KATEGORI||'')+(t.NOTES?' · '+t.NOTES:''),Number(t.NOMINAL),'var(--green)',-Number(t.NOMINAL),t.ID)).join('')}`:''}
     <div class="card" style="padding:8px 10px;margin:12px 0 0;background:#140d24;border:1px solid #7c5cff40">
       <div style="display:flex;justify-content:space-between"><span style="font-size:12px">Belanja + Cicilan periode</span><span style="font-weight:700;color:var(--red)">${fmt(sumCharge+sumCic)}</span></div>
@@ -2756,7 +2758,7 @@ function renderCCBill(from,to){
     <div class="card" style="padding:10px 12px;margin:10px 0 0;background:var(--ic-green);border:1px solid #2EE6A640">
       <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Cocokkan dengan statement cetak</div>
       <div class="form-group" style="margin:0 0 8px"><label class="form-label">Total tagihan di statement (Rp)</label><input class="form-input" id="ccb_stmt" type="text" inputmode="numeric" placeholder="ketik total dari cetakan" oninput="fmtMoneyInput(this);ccbTick()"></div>
-      <div style="display:flex;justify-content:space-between"><span style="font-size:12px">Sudah dicentang (<span id="ccb_cnt">0</span> baris)</span><span id="ccb_checkedSum" style="font-weight:700;color:#b9a3ff">${fmt(0)}</span></div>
+      <div style="display:flex;justify-content:space-between"><span style="font-size:12px">Sudah dicentang (<span id="ccb_cnt">0</span> baris)</span><span id="ccb_checkedSum" style="font-weight:700;color:var(--purple)">${fmt(0)}</span></div>
       <div style="display:flex;justify-content:space-between;margin-top:3px"><span style="font-size:12px">Selisih vs statement</span><span id="ccb_diff" style="font-weight:700;color:var(--text2)">—</span></div>
     </div>
     <div style="display:flex;gap:8px;align-items:flex-end;margin-top:10px">
@@ -3130,7 +3132,7 @@ function renderMaster() {
     document.getElementById('masterContent').innerHTML = `
       <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
         <button class="btn-primary" style="flex:1" onclick="openDrawer('cc')"><i class="ti ti-plus"></i> Tambah Kartu Kredit</button>
-        <button class="btn-primary" style="flex:1;background:#1a1030;border-color:#7c5cff60;color:#b9a3ff" onclick="openCicilan()"><i class="ti ti-calendar-repeat"></i> Beli Cicilan</button>
+        <button class="btn-primary" style="flex:1;background:var(--ic-purple);border-color:#7c5cff60;color:var(--purple)" onclick="openCicilan()"><i class="ti ti-calendar-repeat"></i> Beli Cicilan</button>
       </div>
       ${state.ccs.map(c => {
         const out = getCCOut(c.NAMA), res = state.reserveFunds[c.NAMA] || 0;
@@ -3143,14 +3145,14 @@ function renderMaster() {
               <div style="font-size:13px;font-weight:600">${esc(c.NAMA)}</div>
               <div style="font-size:11px;color:var(--text2)">${c.BANK} · Limit ${c.LIMIT?fmtS(c.LIMIT):'—'} · Jth tgl ${c.JATUH_TEMPO}</div>
               <div style="font-size:10px;color:var(--text3);margin-top:2px">${txnCount} transaksi · ketuk untuk detail</div>
-              ${cicN>0?`<div style="font-size:10px;color:#b9a3ff;margin-top:2px"><i class="ti ti-calendar-repeat"></i> ${cicN} cicilan jalan · sisa ${fmtS(cicSisa)}</div>`:''}
+              ${cicN>0?`<div style="font-size:10px;color:var(--purple);margin-top:2px"><i class="ti ti-calendar-repeat"></i> ${cicN} cicilan jalan · sisa ${fmtS(cicSisa)}</div>`:''}
             </div>
             <div style="text-align:right;flex-shrink:0">
               <span class="badge ${out>0?'badge-red':'badge-green'}">${out>0?'Tagihan':'Lunas'}</span>
               ${out>0?`<div style="font-size:12px;font-weight:700;color:var(--red);margin-top:3px">${fmt(out)}</div>`:''}
               ${res>0?`<div style="font-size:10px;color:var(--blue)">res: ${fmtS(res)}</div>`:''}
               <div style="display:flex;gap:5px;margin-top:6px;justify-content:flex-end;flex-wrap:wrap" onclick="event.stopPropagation()">
-                <button class="btn-danger" style="background:#1a1206;color:var(--amber);border-color:#f59e0b40" onclick="openCCBill('${c.ID}')">Rincian</button>
+                <button class="btn-danger" style="background:var(--ic-amber);color:var(--amber);border-color:#f59e0b40" onclick="openCCBill('${c.ID}')">Rincian</button>
                 <button class="btn-danger" style="background:var(--ic-green);color:var(--green);border-color:#2EE6A640" onclick="openDrawer('paycc','${c.ID}')">Bayar</button>
                 <button class="btn-danger" onclick="editCC('${c.ID}')">Edit</button>
                 <button class="btn-danger" onclick="deleteItem('ccs','${c.ID}','MASTER_CC')">Hapus</button>
@@ -3245,8 +3247,8 @@ function openAccountDetail(type, nama) {
           </div>
         </div>
       </div>
-      ${isCC ? `<div style="position:sticky;top:0;z-index:5;padding:8px 10px;border-radius:8px;margin-bottom:10px;background:var(--ic-green);border:1px solid #2EE6A630;font-size:11px;color:var(--text2)">${sesCnt>0?`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding-bottom:5px;margin-bottom:5px;border-bottom:1px solid #ffffff14"><span style="color:#b9a3ff"><i class="ti ti-checkbox" style="font-size:12px;vertical-align:middle"></i> Ditandai sekarang · ${sesCnt} baris</span><strong style="color:#b9a3ff;font-size:15px">${fmt(sesSum)}</strong></div>`:''}<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span><i class="ti ti-lock" style="font-size:11px;vertical-align:middle;color:var(--green)"></i> Total ditandai kartu ini · ${markCountCC(nama)} transaksi</span><strong style="color:var(--green);font-size:14px">${fmt(markTotalCC(nama))}</strong></div>${(()=>{const hold=ccHoldingBank(nama),gap=reserveGapBank(hold),n=cardsOnReserveBank(hold);return gap>0?`<div style="margin-top:5px;padding-top:5px;border-top:1px solid #ffffff12;font-size:11px;color:var(--amber)"><i class="ti ti-arrow-right" style="font-size:11px;vertical-align:middle"></i> Perlu transfer sekarang ke <b>${esc(hold)}</b>: <b>${fmt(gap)}</b>${n>1?` <span style="color:var(--text3)">(gabungan ${n} kartu di rekening ini)</span>`:''}</div>`:`<div style="margin-top:5px;padding-top:5px;border-top:1px solid #ffffff12;font-size:11px;color:var(--green)"><i class="ti ti-circle-check" style="font-size:11px;vertical-align:middle"></i> Reserve di <b>${esc(hold)}</b> sudah cukup</div>`;})()}</div>
-      ${unmarkedRegularCC(nama)>0?`<div style="padding:6px 10px;border-radius:8px;margin-bottom:10px;background:#1a1206;border:1px solid #f59e0b40;font-size:11px;color:var(--amber)"><i class="ti ti-bell" style="font-size:11px;vertical-align:middle"></i> Belum dicentang: <b>${fmt(unmarkedRegularCC(nama))}</b> — tandai belanja yg dananya sudah disiapkan.</div>`:''}
+      ${isCC ? `<div style="position:sticky;top:0;z-index:5;padding:8px 10px;border-radius:8px;margin-bottom:10px;background:var(--ic-green);border:1px solid #2EE6A630;font-size:11px;color:var(--text2)">${sesCnt>0?`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding-bottom:5px;margin-bottom:5px;border-bottom:1px solid #ffffff14"><span style="color:var(--purple)"><i class="ti ti-checkbox" style="font-size:12px;vertical-align:middle"></i> Ditandai sekarang · ${sesCnt} baris</span><strong style="color:var(--purple);font-size:15px">${fmt(sesSum)}</strong></div>`:''}<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span><i class="ti ti-lock" style="font-size:11px;vertical-align:middle;color:var(--green)"></i> Total ditandai kartu ini · ${markCountCC(nama)} transaksi</span><strong style="color:var(--green);font-size:14px">${fmt(markTotalCC(nama))}</strong></div>${(()=>{const hold=ccHoldingBank(nama),gap=reserveGapBank(hold),n=cardsOnReserveBank(hold);return gap>0?`<div style="margin-top:5px;padding-top:5px;border-top:1px solid #ffffff12;font-size:11px;color:var(--amber)"><i class="ti ti-arrow-right" style="font-size:11px;vertical-align:middle"></i> Perlu transfer sekarang ke <b>${esc(hold)}</b>: <b>${fmt(gap)}</b>${n>1?` <span style="color:var(--text3)">(gabungan ${n} kartu di rekening ini)</span>`:''}</div>`:`<div style="margin-top:5px;padding-top:5px;border-top:1px solid #ffffff12;font-size:11px;color:var(--green)"><i class="ti ti-circle-check" style="font-size:11px;vertical-align:middle"></i> Reserve di <b>${esc(hold)}</b> sudah cukup</div>`;})()}</div>
+      ${unmarkedRegularCC(nama)>0?`<div style="padding:6px 10px;border-radius:8px;margin-bottom:10px;background:var(--ic-amber);border:1px solid #f59e0b40;font-size:11px;color:var(--amber)"><i class="ti ti-bell" style="font-size:11px;vertical-align:middle"></i> Belum dicentang: <b>${fmt(unmarkedRegularCC(nama))}</b> — tandai belanja yg dananya sudah disiapkan.</div>`:''}
       ${paidExpCount>0?`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px;border-radius:8px;margin-bottom:10px;background:#0a1424;border:1px solid var(--border2);font-size:11px;color:var(--text2)"><span><i class="ti ti-circle-check" style="font-size:12px;vertical-align:middle"></i> ${paidExpCount} belanja ditandai lunas</span><button onclick="window._acctHidePaid=!window._acctHidePaid;acctFilter()" style="font-size:10px;padding:3px 9px;border-radius:10px;cursor:pointer;border:1px solid ${window._acctHidePaid?'#2EE6A660':'var(--border2)'};background:${window._acctHidePaid?'var(--ic-green)':'transparent'};color:${window._acctHidePaid?'var(--green)':'var(--text3)'}">${window._acctHidePaid?'✅ disembunyikan':'Sembunyikan'}</button></div>`:''}` : bankReserveCardHTML(nama)}
       ${donutCardHTML('acctKatDonut', katEntries)}
       <div style="font-size:11px;color:var(--text3);margin-bottom:8px">${rows.length} transaksi ditampilkan${hidePaid&&paidExpCount>0?` · ${paidExpCount} lunas disembunyikan`:''}</div>
@@ -3936,7 +3938,7 @@ function openDrawer(mode, editId = null, preset = null) {
         <div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="f_notes" value="${t?esc(t.NOTES||''):''}" placeholder="Opsional"></div>
       </div>
       <button class="btn-primary" onclick="saveDrawer()">Simpan ke Sheets</button>
-      ${editId && t && t.JENIS==='Pengeluaran' && (t.TIPE_LOG==='Pengeluaran'||!t.TIPE_LOG) && state.ccs.some(c=>c.NAMA===t.REKENING) ? `<button class="btn-secondary" style="color:#b9a3ff" onclick="openConvertCicilan('${editId}')"><i class="ti ti-calendar-repeat"></i> Ubah jadi Cicilan</button>` : ''}
+      ${editId && t && t.JENIS==='Pengeluaran' && (t.TIPE_LOG==='Pengeluaran'||!t.TIPE_LOG) && state.ccs.some(c=>c.NAMA===t.REKENING) ? `<button class="btn-secondary" style="color:var(--purple)" onclick="openConvertCicilan('${editId}')"><i class="ti ti-calendar-repeat"></i> Ubah jadi Cicilan</button>` : ''}
       ${editId ? `<button class="btn-secondary" style="color:var(--red)" onclick="deleteItem('txns','${editId}','TRANSAKSI')">Hapus Transaksi</button>` : ''}
     `;
     const _pg = t ? ((state.kategori.find(k=>k.NAMA===t.KATEGORI)||{}).KELOMPOK||null) : null;
