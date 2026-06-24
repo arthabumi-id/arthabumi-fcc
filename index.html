@@ -392,11 +392,13 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
   <!-- LAINNYA MENU -->
   <div id="lainnyaBg" style="display:none;position:fixed;inset:0;z-index:59" onclick="closeLainnyaMenu()"></div>
   <div id="lainnyaMenu" style="display:none;position:fixed;right:8px;bottom:74px;z-index:60;flex-direction:column;gap:2px;background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:8px;box-shadow:0 6px 22px rgba(0,0,0,.5);min-width:175px">
-    <button onclick="goPage('kasbon')" style="display:flex;align-items:center;gap:11px;padding:12px 12px;border:none;background:transparent;color:var(--text);font-family:var(--font);font-size:15px;text-align:left;border-radius:9px;cursor:pointer;width:100%"><i class="ti ti-wallet" style="font-size:20px;color:var(--text2)"></i> Kasbon</button>
-    <button onclick="goPage('forecast')" style="display:flex;align-items:center;gap:11px;padding:12px 12px;border:none;background:transparent;color:var(--text);font-family:var(--font);font-size:15px;text-align:left;border-radius:9px;cursor:pointer;width:100%"><i class="ti ti-chart-line" style="font-size:20px;color:var(--text2)"></i> Forecast</button>
-    <button onclick="goPage('piutang')" style="display:flex;align-items:center;gap:11px;padding:12px 12px;border:none;background:transparent;color:var(--text);font-family:var(--font);font-size:15px;text-align:left;border-radius:9px;cursor:pointer;width:100%"><i class="ti ti-cash" style="font-size:20px;color:var(--text2)"></i> Piutang</button>
-    <button onclick="goPage('invest')" style="display:flex;align-items:center;gap:11px;padding:12px 12px;border:none;background:transparent;color:var(--text);font-family:var(--font);font-size:15px;text-align:left;border-radius:9px;cursor:pointer;width:100%"><i class="ti ti-trending-up" style="font-size:20px;color:var(--text2)"></i> Investasi</button>
-    <button onclick="goPage('forex')" style="display:flex;align-items:center;gap:11px;padding:12px 12px;border:none;background:transparent;color:var(--text);font-family:var(--font);font-size:15px;text-align:left;border-radius:9px;cursor:pointer;width:100%"><i class="ti ti-arrows-exchange" style="font-size:20px;color:var(--text2)"></i> Forex &amp; Kurs</button>
+    <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;font-weight:600;padding:5px 12px 3px">Keuangan</div>
+    <button onclick="goPage('kasbon')" style="display:flex;align-items:center;gap:11px;padding:11px 12px;border:none;background:transparent;color:var(--text);font-family:var(--font);font-size:15px;text-align:left;border-radius:9px;cursor:pointer;width:100%"><i class="ti ti-wallet" style="font-size:20px;color:var(--text2)"></i> Kasbon</button>
+    <button onclick="goPage('piutang')" style="display:flex;align-items:center;gap:11px;padding:11px 12px;border:none;background:transparent;color:var(--text);font-family:var(--font);font-size:15px;text-align:left;border-radius:9px;cursor:pointer;width:100%"><i class="ti ti-cash" style="font-size:20px;color:var(--text2)"></i> Piutang</button>
+    <button onclick="goPage('forecast')" style="display:flex;align-items:center;gap:11px;padding:11px 12px;border:none;background:transparent;color:var(--text);font-family:var(--font);font-size:15px;text-align:left;border-radius:9px;cursor:pointer;width:100%"><i class="ti ti-chart-line" style="font-size:20px;color:var(--text2)"></i> Forecast</button>
+    <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;font-weight:600;padding:8px 12px 3px;border-top:1px solid var(--border);margin-top:4px">Aset</div>
+    <button onclick="goPage('forex')" style="display:flex;align-items:center;gap:11px;padding:11px 12px;border:none;background:transparent;color:var(--text);font-family:var(--font);font-size:15px;text-align:left;border-radius:9px;cursor:pointer;width:100%"><i class="ti ti-arrows-exchange" style="font-size:20px;color:var(--gold)"></i> Forex &amp; Kurs</button>
+    <button onclick="goPage('invest')" style="display:flex;align-items:center;gap:11px;padding:11px 12px;border:none;background:transparent;color:var(--text);font-family:var(--font);font-size:15px;text-align:left;border-radius:9px;cursor:pointer;width:100%"><i class="ti ti-trending-up" style="font-size:20px;color:var(--gold)"></i> Investasi</button>
   </div>
 
   <!-- FAB -->
@@ -460,8 +462,10 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v26.5';
+const APP_VERSION = 'v26.7';
 const CHANGELOG = [
+  { v:'v26.7', d:'24 Jun 2026', t:'Dashboard ditata ulang: hero tunggal, grup Aset/Kewajiban/Bisnis, strip bulan ini, menu Lainnya dikelompokkan.' },
+  { v:'v26.6', d:'24 Jun 2026', t:'Tema premium diratakan ke semua halaman (warna lama diselaraskan).' },
   { v:'v26.5', d:'24 Jun 2026', t:'Tampilan premium BaZi-tuned (hijau · emas · coral) — tema global + Dashboard.' },
   { v:'v26.4', d:'24 Jun 2026', t:'Penanda versi + "What\'s new" di app (header & Master).' },
   { v:'v26.3', d:'24 Jun 2026', t:'Fix data forex geser kolom + tombol hapus; backend self-healing.' },
@@ -1078,50 +1082,75 @@ function renderDashboard() {
   const totBelumRes = state.ccs.reduce((s,c) => s + unreservedCC(c.NAMA).belum, 0);
   const projAktif = state.projects.filter(p => p.STATUS === 'Jalan').length;
   const dp = doneProjectsProfit();
+  const ym = new Date().toISOString().slice(0,7);
+  let mIn=0,mOut=0;
+  state.txns.forEach(t=>{ if(String(t.TANGGAL).slice(0,7)!==ym) return; if(t.TIPE_LOG==='Pemasukan') mIn+=Number(t.NOMINAL)||0; else if(t.TIPE_LOG==='Pengeluaran') mOut+=Number(t.NOMINAL)||0; });
+  const mNet=mIn-mOut;
+  const fx=(typeof forexCalc==='function')?forexCalc():{total:{holding:0,liveValue:0},hasKurs:false};
+  const asetWide=fx.total.holding>0.0001?'':' wide';
 
   document.getElementById('dashMetrics').innerHTML = `
+    <div class="card" style="padding:11px 14px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <span style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px">Bulan ini</span>
+      <span style="font-size:12px;color:var(--text2)">masuk <b class="num" style="color:var(--green)">${fmtS(mIn)}</b> · keluar <b class="num" style="color:var(--red)">${fmtS(mOut)}</b> · net <b class="num" style="color:${mNet>=0?'var(--green)':'var(--red)'}">${mNet>=0?'+':'-'}${fmtS(Math.abs(mNet))}</b></span>
+    </div>
+
+    <div class="metric wide" style="background:linear-gradient(140deg,#0E2A1F,#0A1712);border:1px solid #2EE6A633;margin-bottom:4px">
+      <div style="height:2px;width:40px;background:var(--gold);border-radius:2px;margin-bottom:9px"></div>
+      <div class="metric-label">Net Cash Position</div>
+      <div class="metric-value num" style="font-size:30px;color:${(totBank-totRes) >= 0?'var(--green)':'var(--red)'}">${fmt(totBank-totRes)}</div>
+      <div class="metric-sub">Kas bebas = Bank ${fmtS(totBank)} − Reserve ${fmtS(totRes)}</div>
+    </div>
+
+    <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;font-weight:600;margin:16px 2px 8px">Aset</div>
     <div class="metric-grid">
-      <div class="metric wide" style="background:linear-gradient(140deg,#0E2A1F,#0A1712);border:1px solid #2EE6A633">
-        <div style="height:2px;width:40px;background:var(--gold);border-radius:2px;margin-bottom:9px"></div>
-        <div class="metric-label">Net Cash Position</div>
-        <div class="metric-value num" style="font-size:30px;color:${(totBank-totRes) >= 0?'var(--green)':'var(--red)'}">${fmt(totBank-totRes)}</div>
-        <div class="metric-sub">Kas bebas = Bank ${fmtS(totBank)} − Reserve ${fmtS(totRes)} (reserve diparkir di rekening penyimpan)</div>
-      </div>
-      <div class="metric">
+      <div class="metric${asetWide}">
         <div class="metric-label">Total Saldo Bank</div>
-        <div class="metric-value" style="color:${totBank>=0?'var(--green)':'var(--red)'}">${fmt(totBank)}</div>
+        <div class="metric-value num" style="color:${totBank>=0?'var(--green)':'var(--red)'}">${fmt(totBank)}</div>
         <div class="metric-sub">${state.banks.length} rekening</div>
       </div>
+      ${fx.total.holding>0.0001?`<div class="metric" onclick="goPage('forex')" style="cursor:pointer">
+        <div class="metric-label">Tabungan Forex <i class="ti ti-chevron-right" style="font-size:11px;vertical-align:middle"></i></div>
+        <div class="metric-value num" style="color:var(--gold)">${fx.hasKurs?fmt(fx.total.liveValue):'—'}</div>
+        <div class="metric-sub">${usdFmt(fx.total.holding)} USD</div>
+      </div>`:''}
+    </div>
+
+    <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;font-weight:600;margin:16px 2px 8px">Kewajiban</div>
+    <div class="metric-grid">
       <div class="metric">
         <div class="metric-label">Outstanding CC</div>
-        <div class="metric-value ${totCC > 0?'neg':'pos'}">${fmt(totCC)}</div>
+        <div class="metric-value num ${totCC > 0?'neg':'pos'}">${fmt(totCC)}</div>
         <div class="metric-sub">${state.ccs.length} kartu</div>
       </div>
       <div class="metric" onclick="openReserveDetail()" style="cursor:pointer">
-        <div class="metric-label">Dana Disisihkan (Reserve) <i class="ti ti-chevron-right" style="font-size:11px;vertical-align:middle"></i></div>
-        <div class="metric-value info">${fmt(totRes)}</div>
-        <div class="metric-sub">ketuk untuk rincian per kartu${totCicilan>0?` · cicilan ${fmtS(totCicilan)}`:''}</div>
+        <div class="metric-label">Dana Disisihkan <i class="ti ti-chevron-right" style="font-size:11px;vertical-align:middle"></i></div>
+        <div class="metric-value num info">${fmt(totRes)}</div>
+        <div class="metric-sub">reserve di rekening penyimpan</div>
       </div>
       ${totBelumRes>0?`<div class="metric" onclick="gotoCCReserve()" style="cursor:pointer;background:linear-gradient(140deg,#2A0E0C,#1A0A0C);border:1px solid #F0726A40">
-        <div class="metric-label">Belum di-reserve (semua kartu) <i class="ti ti-chevron-right" style="font-size:11px;vertical-align:middle"></i></div>
-        <div class="metric-value neg">${fmt(totBelumRes)}</div>
-        <div class="metric-sub">perlu kamu transfer ke bank reserve · ketuk untuk rincian</div>
+        <div class="metric-label">Belum di-reserve <i class="ti ti-chevron-right" style="font-size:11px;vertical-align:middle"></i></div>
+        <div class="metric-value num neg">${fmt(totBelumRes)}</div>
+        <div class="metric-sub">perlu transfer ke bank reserve</div>
       </div>`:''}
       ${totCicilan>0?`<div class="metric" onclick="gotoCicilan()" style="cursor:pointer">
         <div class="metric-label">Sisa Cicilan CC <i class="ti ti-chevron-right" style="font-size:11px;vertical-align:middle"></i></div>
-        <div class="metric-value neg">${fmt(totCicilan)}</div>
-        <div class="metric-sub">ketuk untuk lihat semua cicilan</div>
+        <div class="metric-value num neg">${fmt(totCicilan)}</div>
+        <div class="metric-sub">ketuk untuk lihat semua</div>
       </div>`:''}
+    </div>
+
+    <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;font-weight:600;margin:16px 2px 8px">Bisnis</div>
+    <div class="metric-grid">
       <div class="metric">
         <div class="metric-label">Project Aktif</div>
-        <div class="metric-value warn">${projAktif}</div>
+        <div class="metric-value num warn">${projAktif}</div>
         <div class="metric-sub">dari ${state.projects.length} total</div>
       </div>
-      <div class="metric wide" style="background:linear-gradient(140deg,#0E2A1F,#0A1712);border:1px solid #2EE6A633">
-        <div style="height:2px;width:40px;background:var(--gold);border-radius:2px;margin-bottom:9px"></div>
-        <div class="metric-label">Laba Bersih · Project Selesai</div>
-        <div class="metric-value num" style="font-size:26px;color:${dp.laba>=0?'var(--green)':'var(--red)'}">${dp.laba>=0?'':'-'}${fmt(Math.abs(dp.laba))} <span style="font-size:15px;color:var(--text2)">(${dp.margin.toFixed(1)}%)</span></div>
-        <div class="metric-sub">Masuk ${fmtS(dp.masuk)} − Keluar ${fmtS(dp.keluar)} · ${dp.count} project selesai</div>
+      <div class="metric">
+        <div class="metric-label">Laba Bersih (Selesai)</div>
+        <div class="metric-value num" style="color:${dp.laba>=0?'var(--green)':'var(--red)'}">${dp.laba>=0?'':'-'}${fmt(Math.abs(dp.laba))} <span style="font-size:13px;color:var(--text2)">(${dp.margin.toFixed(1)}%)</span></div>
+        <div class="metric-sub">${dp.count} project selesai</div>
       </div>
     </div>
   `;
@@ -1673,7 +1702,7 @@ function renderPiutang(){
   const list=(state.piutang||[]).slice();
   const belum=list.filter(p=>String(p.STATUS)!=='Lunas').sort((a,b)=>_piuDue(a).localeCompare(_piuDue(b)));
   const lunas=list.filter(p=>String(p.STATUS)==='Lunas').sort((a,b)=>String(b.TGL_BAYAR||'').localeCompare(String(a.TGL_BAYAR||'')));
-  let html=`<div class="card" style="margin-bottom:12px;background:linear-gradient(140deg,#0E2A1F,#0A1712);border:1px solid #2bd47d30">
+  let html=`<div class="card" style="margin-bottom:12px;background:linear-gradient(140deg,#0E2A1F,#0A1712);border:1px solid #2EE6A640">
     <div class="metric-label">Total Piutang Beredar</div>
     <div class="metric-value" style="font-size:24px;color:${ag.beredar>0?'var(--amber)':'var(--green)'}">${fmt(ag.beredar)}</div>
     <div class="metric-sub">${ag.cntBelum} termin belum lunas</div></div>

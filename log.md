@@ -45,6 +45,18 @@
 - **Belum disentuh (rollout berikutnya):** gradient lama #0a2a1e di renderReserveDetail (1676), transfer (3482), drawer detail CC (3164); login logo emoji. Tetap kebaca di bg baru.
 - **Verifikasi:** renderDashboard node --check OK; backtick/brace balanced. Backup `index-pre-design-*`.
 
+### v26.6 Tema premium diratakan ke semua halaman — CLIENT-ONLY, sw.js v27
+- Sapu warna hardcode lama → palet baru (replace_all): `#2dd4a0`→`#2EE6A6` (16x), hero grad `#0a2a1e,#0d1f2d`→`#0E2A1F,#0A1712` (6x), inset `#12121a`→`#0E1611` (8x), border `#2e2e3e`→`#1F2B25` (10x), `#2bd47d30`→`#2EE6A640`.
+- Dibiarkan (sudah serasi/aksen sektoral): chip hijau-gelap `#0a2a1e` (tombol Bayar/badge), gradient biru (forecast) & amber (piutang/kasbon) sebagai aksen per-section, login logo emoji.
+- Pure color swaps → tak ubah struktur JS.
+
+### v26.7 Penataan susunan Dashboard + menu Lainnya — CLIENT-ONLY, sw.js v28
+- **Strip "Bulan ini"** di atas Dashboard: masuk/keluar/net bulan berjalan (hitung dari txns TIPE_LOG Pemasukan/Pengeluaran, exclude transfer/reserve/forex/dll).
+- **Hero tunggal:** hanya Net Cash yang jadi kartu hero besar (gradient+emas). Laba turun jadi metric biasa di grup Bisnis.
+- **Grup metrik:** Aset (Total Saldo Bank + Tabungan Forex bila holding>0, klik→halaman Forex) · Kewajiban (Outstanding CC, Dana Disisihkan, Belum-reserve & Cicilan bila >0) · Bisnis (Project Aktif, Laba). Kartu nilai 0 disembunyikan. Total Saldo Bank `wide` bila Forex absen (hindari kartu setengah sendirian). Semua angka `.num` tabular.
+- **Menu Lainnya dikelompokkan:** sub-judul Keuangan (Kasbon, Piutang, Forecast) + Aset (Forex&Kurs, Investasi; ikon emas). 
+- **Verifikasi:** renderDashboard node --check OK (172 baris). Pakai forexCalc()/usdFmt() (hoisted/top-level const, aman saat runtime).
+
 ---
 
 ## SESSION — 2026-06-23 (Bug filter rekening + v25 Kurs BCA)
