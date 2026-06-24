@@ -485,8 +485,9 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v27.2';
+const APP_VERSION = 'v27.3';
 const CHANGELOG = [
+  { v:'v27.3', d:'24 Jun 2026', t:'Saldo berjalan rekening tampil di tiap transaksi (seperti buku tabungan).' },
   { v:'v27.2', d:'24 Jun 2026', t:'Fix PWA: ikon 192/512 asli + manifest bersih → bisa "Install app" (buka tanpa browser).' },
   { v:'v27.1', d:'24 Jun 2026', t:'Garis chart abu adaptif + tombol/blok gelap di tab Kartu Kredit jadi clean (light).' },
   { v:'v27.0', d:'24 Jun 2026', t:'Light mode dirombak premium: warna chip/kartu/ikon adaptif dua tema + bayangan halus.' },
@@ -2750,6 +2751,14 @@ function renderCCBill(from,to){
 function renderTxn(filtered) {
   // Urut: TANGGAL desc, lalu CREATED_AT desc (input terakhir di paling atas utk tanggal sama).
   const data = (filtered || [...state.txns]).sort((a,b) => String(b.TANGGAL).localeCompare(String(a.TANGGAL)) || String(b.CREATED_AT||'').localeCompare(String(a.CREATED_AT||'')));
+  // Saldo berjalan per rekening bank: anchor ke saldo terkini (akurat dari server), lalu mundur dari txn terbaru.
+  const runBal = {};
+  state.banks.forEach(b => {
+    const list = state.txns.filter(t => t.REKENING === b.NAMA)
+      .sort((x,y)=> String(y.TANGGAL).localeCompare(String(x.TANGGAL)) || String(y.CREATED_AT||'').localeCompare(String(x.CREATED_AT||'')));
+    let bal = getSaldo(b.NAMA).saldo;
+    list.forEach(t => { runBal[t.ID] = bal; const nom = Number(t.NOMINAL)||0; bal -= (t.JENIS==='Pemasukan' ? nom : -nom); });
+  });
   document.getElementById('txnList').innerHTML = data.length ? data.map(t => {
     const isTr = t.TIPE_LOG === 'Transfer', isRes = t.TIPE_LOG === 'Reserve';
     return `<div class="card" style="padding:10px 12px;margin-bottom:8px">
@@ -2764,6 +2773,7 @@ function renderTxn(filtered) {
         </div>
         <div style="text-align:right;flex-shrink:0">
           <div style="font-size:14px;font-weight:700;color:${t.JENIS==='Pemasukan'?'var(--green)':'var(--red)'}">${t.JENIS==='Pemasukan'?'+':'-'}${fmt(Number(t.NOMINAL))}</div>
+          ${runBal[t.ID]!==undefined ? `<div style="font-size:10px;color:var(--text3);margin-top:1px"><i class="ti ti-businessplan" style="font-size:10px;vertical-align:middle"></i> ${fmt(runBal[t.ID])}</div>` : ''}
           ${(!isTr&&!isRes) ? `<button style="font-size:10px;margin-top:3px;background:transparent;border:none;color:var(--text3);cursor:pointer" onclick="editTxn('${t.ID}')">edit</button>` : '<div style="font-size:10px;color:var(--text3)">auto</div>'}
         </div>
       </div>

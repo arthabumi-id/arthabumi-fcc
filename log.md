@@ -88,6 +88,11 @@
 - **Eddy harus:** hapus shortcut lama → buka situs di Chrome → menu ⋮ → **Install app / Tambahkan ke layar utama** (sekarang muncul opsi install WebAPK) → buka standalone tanpa address bar.
 - File baru di repo: icon-192.png, icon-512.png, apple-touch-icon.png (perlu di-push).
 
+### v27.3 Saldo berjalan per transaksi (buku tabungan) — CLIENT-ONLY, sw.js v34
+- Di halaman Transaksi, tiap baris (rekening bank) tampil saldo SETELAH transaksi itu (ikon businessplan + Rp).
+- **Metode:** anchor ke `getSaldo(bank).saldo` (akurat dari agregat server, tak terpengaruh txnsSince), lalu MUNDUR dari txn terbaru: `runBal[t]=bal; bal -= (Pemasukan?+nom:-nom)`. Map dihitung dari SEMUA state.txns (bukan hanya filtered) → benar walau list difilter. Hanya untuk REKENING bank (CC tak punya konsep saldo → dilewati). Ikut mode mata (fmt mask).
+- **Verifikasi:** simulasi backward (saldoawal10, +100/−30/+50 → 110/80/130) PASS; renderTxn node --check OK.
+
 ---
 
 ## SESSION — 2026-06-23 (Bug filter rekening + v25 Kurs BCA)
