@@ -490,8 +490,9 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v27.8';
+const APP_VERSION = 'v27.9';
 const CHANGELOG = [
+  { v:'v27.9', d:'24 Jun 2026', t:'Komposisi Pengeluaran Dashboard bisa diklik → rincian per periode & drill-down (Master Kategori).' },
   { v:'v27.8', d:'24 Jun 2026', t:'Forex: untung/rugi live per transaksi (Beli) + per bank, ikut kurs sekarang.' },
   { v:'v27.7', d:'24 Jun 2026', t:'Dashboard: kartu Investasi (nilai portofolio + U/R) di grup Aset.' },
   { v:'v27.6', d:'24 Jun 2026', t:'Forex: tombol Edit per transaksi (ubah jenis/akun/jumlah/kurs/tanggal).' },
@@ -1352,12 +1353,13 @@ function renderCharts() {
       <div class="card-title">Arus Kas 6 Bulan Terakhir</div>
       <div style="position:relative;height:180px"><canvas id="chartArus"></canvas></div>
     </div>
-    ${kelLabels.length ? `<div class="card" style="margin-bottom:12px">
-      <div class="card-title">Komposisi Pengeluaran</div>
+    ${kelLabels.length ? `<div class="card" style="margin-bottom:12px;cursor:pointer" onclick="goPage('master');switchMasterTab('kat')">
+      <div class="card-title">Komposisi Pengeluaran <span style="font-size:10px;font-weight:500;color:var(--text3)">· semua waktu</span><i class="ti ti-chevron-right" style="float:right;color:var(--text3)"></i></div>
       <div style="display:flex;align-items:center;gap:12px">
         <div style="position:relative;height:140px;width:140px;flex-shrink:0"><canvas id="chartKel"></canvas></div>
         <div style="font-size:11px;line-height:2">${kelLabels.map((l,i)=>`<div><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${kelColors[i]};margin-right:5px;vertical-align:middle"></span>${l}: <b>${kelValues[i].toFixed(1)}jt</b></div>`).join('')}</div>
       </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:8px">Ketuk untuk rincian per periode & drill-down kategori →</div>
     </div>` : ''}
     ${projWithTxn.length ? `<div class="card" style="margin-bottom:12px">
       <div class="card-title">Cashflow Project</div>
@@ -3220,6 +3222,7 @@ function renderMaster() {
 function openAccountDetail(type, nama) {
   const isCC = type === 'cc';
   window._acctHidePaid = false;   // v23: toggle "sembunyikan yg lunas" default OFF tiap buka
+  window._acctKat = '';           // v28: filter kategori dari klik slice donut detail akun
   // v22/C: snapshot centang reserve saat buka → "Ditandai sekarang" = yg ditandai SESUDAH ini saja (sesi ini).
   if(isCC){ window._markBaselineCard = nama; window._markBaseline = new Set((state.marks||[]).filter(m=>m.CC===nama).map(m=>String(m.TXN_ID))); }
   document.getElementById('drawerTitle').textContent = nama;

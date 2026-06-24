@@ -112,6 +112,10 @@
 - Grup Aset Dashboard kini: Total Saldo Bank + Tabungan Forex (bila ada) + **Investasi** (bila ada akun). Kartu invest: nilai portofolio `fmt(investTotals().nilai)` (ungu) + U/R `inv.rp`. Klik → goPage('invest'). `asetWide` bank full-width hanya bila tak ada forex & invest.
 - **Verifikasi:** renderDashboard node --check OK.
 
+### v27.9 Komposisi Pengeluaran Dashboard clickable — CLIENT-ONLY, sw.js v40
+- Dashboard "Komposisi Pengeluaran" pakai `state.summary.katExp` = agregat SEMUA waktu, per Kelompok (bukan bulanan). Label diperjelas "· semua waktu".
+- Kartu kini clickable → `goPage('master');switchMasterTab('kat')` = rincian interaktif (expCompCardHTML + buildKatDonut): filter periode (bulan/semua/custom) + drill-down slice Kelompok→Kategori→transaksi. Hint "Ketuk untuk rincian".
+
 ### v27.8 Forex: U/R live per transaksi & per bank — CLIENT-ONLY, sw.js v39
 - Header grup bank: tambah U/R (a.unreal) ikut kurs live. Per transaksi Beli: `ur = JUMLAH_VALAS × (liveBeli − KURS)` → baris "untung/rugi ±Rp X @ live <rate>" (hijau/merah). Jual dilewati (sudah realized). Hanya bila hasKurs.
 - **Verifikasi:** renderForex node --check OK.
