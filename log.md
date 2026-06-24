@@ -63,6 +63,12 @@
 - **Re-tone gradient sektoral:** forecast biru `#0C2233,#0A1620`; piutang/kasbon amber `#2A1F0A,#180F06` (buang ekor biru #0d1f2d).
 - **Verifikasi:** style block brace 118/118 balanced; 4 marker poles ada. Backup `index-pre-polish-*`.
 
+### v26.9 Mode mata (privasi) + tema terang/gelap — CLIENT-ONLY, sw.js v30
+- **Mode mata:** `state.hideAmounts` (persist `localStorage fcc_hide`). fmt/fmtS/usdFmt → '••••' saat aktif (fmtSigned ikut via fmt). Kurs (kursFmt) TIDAK disembunyikan (rate publik). Tombol mata di topbar (ti-eye/eye-off), `toggleHide()` + renderAll. setEyeIcon di renderAll & boot.
+- **Tema:** `state.theme` (persist `localStorage fcc_theme`). Tombol bulan/matahari di topbar. `applyTheme()` toggle `body.light` + ikon; dipanggil di renderAll & boot (login ikut bertema). Palet `body.light` override semua CSS var (bg putih, text gelap, green/gold/coral disesuaikan kontras). Var baru `--inset` & `--glow` (light: putih → glow hilang). `background:#0E1611`→`var(--inset)` (8x). Override `.light .badge-*`, `.light .btn-danger/.btn-primary`.
+- **Catatan:** kartu hero gradient & chip aksi kecil (#0a2a1e) tetap gelap di light mode (by design, aksen). Mungkin perlu setel halus bila ada elemen kurang kontras — tunggu feedback Eddy.
+- **Verifikasi:** style brace 126/126; formatter+toggle node --check OK; 18 marker. Backup `index-pre-polish-*` (sesi sama).
+
 ---
 
 ## SESSION — 2026-06-23 (Bug filter rekening + v25 Kurs BCA)
