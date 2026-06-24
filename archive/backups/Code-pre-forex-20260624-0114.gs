@@ -21,7 +21,6 @@ const S = {
   INVEST: 'MASTER_INVEST', INVESTLOG: 'INVEST_LOG', INVESTVAL: 'INVEST_VALUE',  // v21 investasi (terpisah dari bisnis)
   ADD: 'ADDENDUM',  // v24: kerja tambah/kurang (addendum) per project — ubah nilai kontrak efektif
   KURS: 'KURS',     // v25: kurs valas BCA (e-Rate) — di-fetch otomatis harian via trigger
-  FOREX: 'FOREX_LOG', // v26: pocket forex — konversi Rp↔valas, nilai live ikut kurs BCA
 };
 
 const HEADERS = {
@@ -76,12 +75,6 @@ const HEADERS = {
   // UPDATE_BCA = string timestamp dari halaman BCA. FETCHED_AT = ISO waktu fetch app.
   // 1 baris = 1 mata uang. Isi ulang penuh tiap fetch (clear + rewrite). Referensi saja, bukan kas.
   [S.KURS]:     ['MATA_UANG','ERATE_BELI','ERATE_JUAL','UPDATE_BCA','FETCHED_AT'],
-  // ── v26 FOREX (pocket forex / kantong valas) ──
-  // JENIS: 'Beli' (Rp→valas, beli valas) / 'Jual' (valas→Rp, jual valas). JUMLAH_VALAS & KURS
-  // & NOMINAL_RP selalu positif (NOMINAL_RP = JUMLAH_VALAS × KURS, kurs diisi user saat convert).
-  // Tiap baris tulis 1 TXN TIPE_LOG 'Forex' (saldo bank turun/naik NYATA, tapi dikecualikan dari
-  // laba/komposisi/forecast krn bukan 'Pengeluaran'). Nilai live = holding × e-Rate Beli (client).
-  [S.FOREX]:    ['ID','TANGGAL','JENIS','MATA_UANG','REKENING','JUMLAH_VALAS','KURS','NOMINAL_RP','NOTES','REF_ID','CREATED_BY','CREATED_AT'],
 };
 
 // ── INIT ─────────────────────────────────────────────────────
@@ -184,7 +177,6 @@ function doGet(e) {
       case 'getPaidMarks': return json(getSheet(ss, S.PAIDMARK));
       case 'getInvest':    return json({ investAkun: getSheet(ss, S.INVEST), investLog: getSheet(ss, S.INVESTLOG), investValue: getSheet(ss, S.INVESTVAL) });
       case 'getKurs':      return json(getSheet(ss, S.KURS));
-      case 'getForex':     return json(getSheet(ss, S.FOREX));
       default:             return json({ error: 'Unknown action' });
     }
   } catch (err) { return json({ error: err.message }); }
@@ -232,8 +224,6 @@ function doPost(e) {
       case 'deleteInvestFlow':res = deleteInvestFlow(ss, data); break;
       case 'lockCCBill':  res = lockCCBill(ss, data); break;
       case 'fetchKurs':   res = fetchKursBCA(); break;
-      case 'addForexConvert': res = addForexConvert(ss, data); break;
-      case 'deleteForex':     res = deleteForex(ss, data); break;
       case 'updateRow':   res = updateRow(ss, data); break;
       case 'deleteRow':   res = deleteRow(ss, data); break;
       case 'init':        res = initSheets(); break;
@@ -267,7 +257,6 @@ function getBundle(ss, params) {
     investValue: getSheet(ss, S.INVESTVAL),
     addendums:   getSheet(ss, S.ADD),
     kurs:      getSheet(ss, S.KURS),
-    forex:     getSheet(ss, S.FOREX),
     summary:   getSummary(ss),
     txns:      getTxns(ss, { since: since }),
     since:     since,
@@ -1180,157 +1169,4 @@ function deleteInvestFlow(ss, data) {
   if (sh && sh.getLastRow() > 1) {
     const all = sh.getRange(1,1,sh.getLastRow(),sh.getLastColumn()).getValues();
     const c = all[0].indexOf('REF_ID');
-    for (let i=all.length-1;i>=1;i--) if (String(all[i][c])===ref) sh.deleteRow(i+1);
-  }
-  const tx = ss.getSheetByName(S.TXN);
-  if (tx && tx.getLastRow() > 1) {
-    const all = tx.getRange(1,1,tx.getLastRow(),tx.getLastColumn()).getValues();
-    const c = all[0].indexOf('NOTES');
-    for (let i=all.length-1;i>=1;i--) if (String(all[i][c]).indexOf(ref)>=0) tx.deleteRow(i+1);
-  }
-  return { ok:true };
-}
-
-// ── v26 POCKET FOREX ─────────────────────────────────────────
-// Konversi Rp↔valas. Beli = Rp→valas (bank TURUN nyata); Jual = valas→Rp (bank NAIK nyata).
-// Tulis 1 baris FOREX_LOG + 1 TXN TIPE_LOG 'Forex' → dikecualikan dari laba/komposisi/forecast
-// (katExp & metrik hanya hitung TIPE_LOG 'Pengeluaran'/'Cicilan-Beli'), tapi saldo bank tetap akurat.
-function addForexConvert(ss, data) {
-  const sh = ensureSheet(ss, S.FOREX);
-  const now = new Date().toISOString();
-  const ref = data.REF_ID || ('FX' + Date.now());
-  const jenis = (data.JENIS === 'Jual') ? 'Jual' : 'Beli';
-  const mu = data.MATA_UANG || 'USD';
-  const rek = data.REKENING || '';
-  const valas = Math.abs(Number(data.JUMLAH_VALAS) || 0);
-  const kurs = Math.abs(Number(data.KURS) || 0);
-  const rp = Math.round(Math.abs(Number(data.NOMINAL_RP) || (valas * kurs)));
-  const tgl = data.TANGGAL || now.slice(0, 10);
-  if (!valas || !kurs || !rek) return { error: 'JUMLAH_VALAS, KURS, REKENING wajib' };
-
-  sh.appendRow(['ID' + Date.now(), tgl, jenis, mu, rek, valas, kurs, rp, data.NOTES || '', ref, data.USER || '', now]);
-
-  const tx = ss.getSheetByName(S.TXN);
-  if (jenis === 'Beli') {
-    tx.appendRow(['ID' + Date.now() + 'F', tgl, 'Pengeluaran', '', rek, 'Beli Valas', rp,
-      '[FOREX ' + ref + '] beli ' + valas + ' ' + mu + ' @ ' + kurs + ' ' + (data.NOTES || ''), 'Forex', data.USER || '', now]);
-  } else {
-    tx.appendRow(['ID' + Date.now() + 'F', tgl, 'Pemasukan', '', rek, 'Jual Valas', rp,
-      '[FOREX ' + ref + '] jual ' + valas + ' ' + mu + ' @ ' + kurs + ' ' + (data.NOTES || ''), 'Forex', data.USER || '', now]);
-  }
-  return { ok: true, ref: ref };
-}
-
-// Hapus 1 konversi forex (by REF_ID) + TXN terkait (NOTES memuat ref). Dari bawah ke atas.
-function deleteForex(ss, data) {
-  const ref = String(data.refId || data.REF_ID || '');
-  if (!ref) return { error: 'refId required' };
-  const sh = ss.getSheetByName(S.FOREX);
-  if (sh && sh.getLastRow() > 1) {
-    const all = sh.getRange(1, 1, sh.getLastRow(), sh.getLastColumn()).getValues();
-    const c = all[0].indexOf('REF_ID');
-    for (let i = all.length - 1; i >= 1; i--) if (String(all[i][c]) === ref) sh.deleteRow(i + 1);
-  }
-  const tx = ss.getSheetByName(S.TXN);
-  if (tx && tx.getLastRow() > 1) {
-    const all = tx.getRange(1, 1, tx.getLastRow(), tx.getLastColumn()).getValues();
-    const c = all[0].indexOf('NOTES');
-    for (let i = all.length - 1; i >= 1; i--) if (String(all[i][c]).indexOf(ref) >= 0) tx.deleteRow(i + 1);
-  }
-  return { ok: true };
-}
-
-// ── v25 KURS BCA (e-Rate) ────────────────────────────────────
-// Ambil kurs valas e-Rate dari halaman publik BCA, parse, tulis ke sheet KURS.
-// Dipanggil otomatis harian (installKursTrigger) + bisa manual (action 'fetchKurs').
-// PARSER tahan-banting: buang semua tag HTML → teks rata → cari KODE diikuti 2 angka
-// format Indonesia (= e-Rate Beli & Jual, kolom pertama tabel). Selama urutan kolom
-// e-Rate tetap yang pertama, parser tetap jalan walau markup berubah.
-var KURS_MATA_UANG = ['USD','SGD','AUD','EUR'];   // BCA tak punya TWD. Ubah daftar ini bila perlu.
-var KURS_URL = 'https://www.bca.co.id/id/informasi/kurs';
-
-function fetchKursBCA() {
-  var ss = SpreadsheetApp.openById(SHEET_ID);
-  var sh = ensureSheet(ss, S.KURS);   // SELALU buat tab KURS dulu — biar kelihatan + bisa didiagnosa
-  var now = new Date().toISOString();
-  var code = 0, exErr = '', body = '';
-
-  try {
-    var resp = UrlFetchApp.fetch(KURS_URL, {
-      muteHttpExceptions: true,
-      followRedirects: true,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml',
-        'Accept-Language': 'id-ID,id;q=0.9'
-      }
-    });
-    code = resp.getResponseCode();
-    body = resp.getContentText();
-  } catch (e) { exErr = e.message; }
-  Logger.log('Kurs fetch → HTTP ' + code + (exErr ? ' | exception: ' + exErr : '') + ' | body length: ' + body.length);
-
-  if (exErr || code !== 200) {
-    if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).clearContent();
-    sh.getRange(2, 1, 1, 5).setValues([['(GAGAL FETCH)', '', '', 'HTTP ' + code + (exErr ? ' ' + exErr : ''), now]]);
-    return { error: 'BCA HTTP ' + code + (exErr ? ' | ' + exErr : '') };
-  }
-
-  // Normalisasi: tag → spasi, entity → spasi, rapatkan whitespace.
-  var text = body.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/\s+/g, ' ');
-  var upd = '';
-  var mU = text.match(/Terakhir diperbarui pada\s+(.+?WIB)/i);
-  if (mU) upd = mU[1].trim();
-
-  var numRe = '(\\d{1,3}(?:\\.\\d{3})*,\\d{2})';
-  var rows = KURS_MATA_UANG.map(function(c) {
-    var m = text.match(new RegExp('\\b' + c + '\\b[^0-9]{0,80}' + numRe + '\\s+' + numRe));
-    return m ? [c, idNum_(m[1]), idNum_(m[2]), upd, now] : [c, '', '', (upd ? upd + ' ' : '') + '(parse gagal)', now];
-  });
-  Logger.log('Kurs parsed: ' + JSON.stringify(rows));
-
-  if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).clearContent();
-  sh.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
-  return { ok: true, updated: upd, count: rows.length, rows: rows };
-}
-
-// "17.830,00" → 17830 (Number). String kosong → ''.
-function idNum_(s) {
-  if (!s) return '';
-  return Number(String(s).replace(/\./g, '').replace(',', '.'));
-}
-
-// Handler trigger: jalan tiap 10 menit, TAPI hanya fetch dalam jam 09:00–15:00 WIB.
-// Di luar jam itu langsung lewati (hemat kuota & tak spam BCA). Manual refresh (action
-// fetchKurs) tetap panggil fetchKursBCA langsung tanpa batas jam.
-function kursAutoFetch() {
-  var hm = Utilities.formatDate(new Date(), 'Asia/Jakarta', 'HH:mm');
-  var p = hm.split(':');
-  var mins = parseInt(p[0], 10) * 60 + parseInt(p[1], 10);
-  if (mins < 540 || mins > 900) return;   // 540=09:00, 900=15:00
-  fetchKursBCA();
-}
-
-// Pasang trigger tiap 10 menit (efektif 09:00–15:00 WIB) + isi data awal.
-// JALANKAN SEKALI dari editor Apps Script (akan hapus trigger kurs lama lalu pasang baru).
-function installKursTrigger() {
-  ScriptApp.getProjectTriggers().forEach(function(t) {
-    var f = t.getHandlerFunction();
-    if (f === 'fetchKursBCA' || f === 'kursAutoFetch') ScriptApp.deleteTrigger(t);
-  });
-  ScriptApp.newTrigger('kursAutoFetch').timeBased().everyMinutes(10).create();
-  var r = fetchKursBCA();
-  return 'Trigger kurs tiap 10 menit (aktif 09:00–15:00 WIB) terpasang. Fetch awal: ' + JSON.stringify(r);
-}
-
-function daysAgoISO(days) {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return d.toISOString().slice(0, 10);
-}
-
-function json(obj) {
-  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
-}
-// v3 scalable backend
-
+    for (let i=all

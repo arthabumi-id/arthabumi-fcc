@@ -3,6 +3,20 @@
 
 ---
 
+## SESSION — 2026-06-24 (Trigger kurs 10-menit + v26 Pocket Forex)
+### Kurs trigger → tiap 10 menit, jam 09:00–15:00 WIB (⚠️ re-Run installKursTrigger)
+- `kursAutoFetch()` baru: handler trigger, cek jam Jakarta (Utilities.formatDate) → fetch hanya bila 540≤menit≤900 (09:00–15:00), di luar itu skip. `installKursTrigger` diubah: hapus trigger lama (fetchKursBCA & kursAutoFetch) → pasang `everyMinutes(10)` ke kursAutoFetch. Manual `fetchKurs` tetap tanpa batas jam. **Eddy: update Code.gs + Save + Run installKursTrigger sekali** (tak perlu redeploy utk trigger).
+
+### v26 Pocket Forex (kantong valas USD) — ⚠️ WAJIB REDEPLOY
+- **PRD sign-off Eddy:** convert kurangi saldo bank NYATA; valuasi pakai **e-Rate Beli**; **dipisah** dari metrik bisnis (seperti Investasi); **USD saja** v1.
+- **Akunting:** metode rata-rata biaya. Convert Beli (Rp→USD) = TXN Pengeluaran dari rek `TIPE_LOG:'Forex'`; Jual (USD→Rp) = TXN Pemasukan. Karena 'Forex' bukan 'Pengeluaran', otomatis EXCLUDED dari laba/komposisi/forecast (titik yg sama dgn 'Investasi'), tapi saldo bank (out.acct) tetap akurat. holding=ΣBeli−ΣJual; avgCost=ΣBeliRp/ΣBeliUSD; nilai live=holding×eRateBeli; U/R unreal=live−costHolding; realized=ΣJualRp−ΣJualUSD×avgCost.
+- **Code.gs:** S.FOREX sheet `FOREX_LOG [ID,TANGGAL,JENIS,MATA_UANG,REKENING,JUMLAH_VALAS,KURS,NOMINAL_RP,NOTES,REF_ID,CREATED_BY,CREATED_AT]`; action `addForexConvert`/`deleteForex`; route `getForex`; `forex` di getBundle.
+- **index.html:** state.forex (init+saveLocal+load+offline); page `page-forex` + entry "Pocket Forex" di Lainnya; `forexCalc/renderForex` (kartu holding/modal/nilai live/UR unreal+realized + daftar lot); form `openForexConvert/saveForexConvert` (kurs prefill dari live e-Rate: Beli→pakai Jual, Jual→pakai Beli; editable; auto-calc Rp); `delForex`; wire goPage/renderAll. Helper fxUsdNum (titik=desimal) vs fxKursNum (titik=ribuan).
+- **Verifikasi:** simulasi avg-cost (beli 1000@15k + 500@16k, jual 600@16.5k, live beli 16.2k) → holding 900, avg 15.333, cost 13,8jt, nilai live 14,58jt, unreal +780rb, realized +700rb = PASS 6/6. Blok Code.gs & index.html node --check OK terisolasi. sw.js → **v22**. Backup: `Code-pre-forex-*`, `index-pre-forex-*`.
+- **Pending deploy:** push index.html+sw.js v22 (GitHub Desktop) + **redeploy Code.gs** (new version). Convert butuh online (sentuh saldo bank, blocking+syncAll).
+
+---
+
 ## SESSION — 2026-06-23 (Bug filter rekening + v25 Kurs BCA)
 ### Bug #1 — Filter rekening ke-reset setelah input (client-only, NO redeploy)
 - **Akar masalah:** handler simpan/transfer/reserve/hapus memanggil `renderTxn()` tanpa argumen → render seluruh `state.txns`, abaikan filter aktif. Dropdown masih nunjuk rekening pilihan tapi daftar tampil semua → Eddy harus ganti pilihan utk re-trigger.
@@ -16,6 +30,14 @@
 - **Verifikasi:** parser disimulasikan di Node thd struktur tabel+kartu BCA → 4 mata uang PASS, e-Rate benar (bukan TT/BankNotes), dropdown kalkulator diabaikan. Blok Code.gs & blok UI node --check OK terisolasi. ⚠️ Mount bash potong index.html & Code.gs (ukuran/whole-file check stale) — Grep/Read/Edit tool = sumber kebenaran. Backup: `index-pre-filterfix-20260623-1631.html`, `Code-pre-kurs-*.gs`.
 - **⚠️ Risiko:** scraping rapuh (BCA ubah layout → parser rusak, perlu diperbaiki). UrlFetchApp+ScriptApp = scope OAuth BARU → redeploy Code.gs lalu **Run `installKursTrigger` sekali & approve izin**.
 - **Pending deploy:** (1) push index.html + sw.js v21 (GitHub Desktop); (2) **redeploy Code.gs** (Apps Script, new version); (3) Run `installKursTrigger()` sekali di editor + approve; (4) buka app → Lainnya → Kurs BCA → cek/Perbarui.
+
+### RESOLVED — Auth UrlFetchApp & hasil fetch (2026-06-24)
+- **Gejala:** Run `fetchKursBCA` → error "You do not have permission to call UrlFetchApp.fetch (script.external_request)". Setelah tambah oauthScopes ke manifest pun Run TIDAK memunculkan popup izin → langsung error → "completed" (exception ketangkap try/catch). HTTP 0.
+- **Akar:** **stale authorization** — Google mengira script sudah authorized penuh (tak re-prompt) padahal token belum punya scope external_request. Manifest sudah benar (oauthScopes: spreadsheets + script.external_request + script.scriptapp), bukan itu masalahnya.
+- **Fix yang berhasil:** **CABUT akses script di https://myaccount.google.com/permissions** → Run lagi → popup izin baru muncul → lewati layar "Google hasn't verified this app" (Advanced → Go to … unsafe) → Allow. Kunci: revoke memaksa consent fresh; tanpa itu Google tak pernah nanya ulang.
+- **Hardening fetchKursBCA:** selalu `ensureSheet(KURS)` dulu + Logger.log HTTP code/body length + tulis baris "(GAGAL FETCH) HTTP xxx" saat gagal → diagnosa kelihatan di tab KURS & Executions. UA diganti Chrome-like + Accept headers.
+- **HASIL 2026-06-24 00:18 WIB:** HTTP 200, body 365.638 char, parser PASS 4/4 → USD 17.835/17.925, SGD 13.683,52/13.885,08, AUD 12.272,62/12.463,75, EUR 20.197/20.496,79 (update BCA "24 Juni 2026 00.18 WIB"). BCA TIDAK blokir IP Google. Tab KURS terisi, muncul di app.
+- **Pelajaran:** scraping BCA via Apps Script OK. Bila scope baru "nyangkut": revoke di myaccount/permissions = solusi paling andal (bukan sekadar redeploy/edit manifest).
 
 ---
 
