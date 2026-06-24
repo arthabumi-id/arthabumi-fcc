@@ -357,18 +357,15 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
       <div id="investList"></div>
     </div>
 
-    <!-- POCKET FOREX (v26, kantong valas — nilai live ikut kurs BCA) -->
+    <!-- FOREX & KURS (v26, gabung: pocket forex + kurs BCA live) -->
     <div class="page" id="page-forex">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px">
         <div style="font-size:15px;font-weight:700">Pocket Forex <span style="font-size:11px;font-weight:500;color:var(--text3)">USD</span></div>
         <button class="btn-primary" style="width:auto;padding:8px 14px;margin:0" onclick="openForexConvert()"><i class="ti ti-arrows-exchange"></i> Convert</button>
       </div>
       <div id="forexBody"></div>
-    </div>
 
-    <!-- KURS BCA (v25, e-Rate, otomatis harian) -->
-    <div class="page" id="page-kurs">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:22px 0 10px;border-top:1px solid var(--border2);padding-top:16px">
         <div style="font-size:15px;font-weight:700">Kurs Valas BCA <span style="font-size:11px;font-weight:500;color:var(--text3)">e-Rate</span></div>
         <button onclick="refreshKurs(this)" style="font-size:12px;padding:7px 12px;border-radius:10px;border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer"><i class="ti ti-refresh"></i> Perbarui</button>
       </div>
@@ -396,8 +393,7 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
     <button onclick="goPage('forecast')" style="display:flex;align-items:center;gap:11px;padding:12px 12px;border:none;background:transparent;color:var(--text);font-family:var(--font);font-size:15px;text-align:left;border-radius:9px;cursor:pointer;width:100%"><i class="ti ti-chart-line" style="font-size:20px;color:var(--text2)"></i> Forecast</button>
     <button onclick="goPage('piutang')" style="display:flex;align-items:center;gap:11px;padding:12px 12px;border:none;background:transparent;color:var(--text);font-family:var(--font);font-size:15px;text-align:left;border-radius:9px;cursor:pointer;width:100%"><i class="ti ti-cash" style="font-size:20px;color:var(--text2)"></i> Piutang</button>
     <button onclick="goPage('invest')" style="display:flex;align-items:center;gap:11px;padding:12px 12px;border:none;background:transparent;color:var(--text);font-family:var(--font);font-size:15px;text-align:left;border-radius:9px;cursor:pointer;width:100%"><i class="ti ti-trending-up" style="font-size:20px;color:var(--text2)"></i> Investasi</button>
-    <button onclick="goPage('forex')" style="display:flex;align-items:center;gap:11px;padding:12px 12px;border:none;background:transparent;color:var(--text);font-family:var(--font);font-size:15px;text-align:left;border-radius:9px;cursor:pointer;width:100%"><i class="ti ti-arrows-exchange" style="font-size:20px;color:var(--text2)"></i> Pocket Forex</button>
-    <button onclick="goPage('kurs')" style="display:flex;align-items:center;gap:11px;padding:12px 12px;border:none;background:transparent;color:var(--text);font-family:var(--font);font-size:15px;text-align:left;border-radius:9px;cursor:pointer;width:100%"><i class="ti ti-currency-dollar" style="font-size:20px;color:var(--text2)"></i> Kurs BCA</button>
+    <button onclick="goPage('forex')" style="display:flex;align-items:center;gap:11px;padding:12px 12px;border:none;background:transparent;color:var(--text);font-family:var(--font);font-size:15px;text-align:left;border-radius:9px;cursor:pointer;width:100%"><i class="ti ti-arrows-exchange" style="font-size:20px;color:var(--text2)"></i> Forex &amp; Kurs</button>
   </div>
 
   <!-- FAB -->
@@ -5312,8 +5308,8 @@ async function confirmImport(){
   }
 }
 function showToast(msg,type){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(type||'success');setTimeout(()=>t.classList.add('show'),10);setTimeout(()=>t.classList.remove('show'),2800);}
-function goPage(page){closeFabMenu();closeLainnyaMenu();state.currentPage=page;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+page).classList.add('active');document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));const navKey=({kasbon:'lainnya',forecast:'lainnya',piutang:'lainnya',invest:'lainnya'})[page]||page;const _ab=document.querySelector('.nav-item[data-nav="'+navKey+'"]');if(_ab)_ab.classList.add('active');document.getElementById('content').scrollTop=0;if(page==='master')renderMaster();if(page==='transfer')renderTransferPage();if(page==='kasbon')renderKasbon();if(page==='forecast')renderForecast();if(page==='piutang')renderPiutang();if(page==='invest')renderInvest();if(page==='kurs')renderKurs();if(page==='forex')renderForex();}
-function renderAll(){renderDashboard();renderTxnMonthTabs();filterTxn();renderProject();renderCCBillReminder();renderPiutangReminder();updatePiutangBadge();if(state.currentPage==='master')renderMaster();if(state.currentPage==='transfer')renderTransferPage();if(state.currentPage==='kasbon')renderKasbon();if(state.currentPage==='forecast')renderForecast();if(state.currentPage==='piutang')renderPiutang();if(state.currentPage==='invest')renderInvest();if(state.currentPage==='kurs')renderKurs();if(state.currentPage==='forex')renderForex();}
+function goPage(page){closeFabMenu();closeLainnyaMenu();state.currentPage=page;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+page).classList.add('active');document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));const navKey=({kasbon:'lainnya',forecast:'lainnya',piutang:'lainnya',invest:'lainnya',forex:'lainnya'})[page]||page;const _ab=document.querySelector('.nav-item[data-nav="'+navKey+'"]');if(_ab)_ab.classList.add('active');document.getElementById('content').scrollTop=0;if(page==='master')renderMaster();if(page==='transfer')renderTransferPage();if(page==='kasbon')renderKasbon();if(page==='forecast')renderForecast();if(page==='piutang')renderPiutang();if(page==='invest')renderInvest();if(page==='forex'){renderForex();renderKurs();}if(page==='dashboard')renderDashboard();}
+function renderAll(){renderDashboard();renderTxnMonthTabs();filterTxn();renderProject();renderCCBillReminder();renderPiutangReminder();updatePiutangBadge();if(state.currentPage==='master')renderMaster();if(state.currentPage==='transfer')renderTransferPage();if(state.currentPage==='kasbon')renderKasbon();if(state.currentPage==='forecast')renderForecast();if(state.currentPage==='piutang')renderPiutang();if(state.currentPage==='invest')renderInvest();if(state.currentPage==='forex'){renderForex();renderKurs();}}
 if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{});}
 let logoTimer;
 document.querySelector('.topbar-title').addEventListener('touchstart',()=>{logoTimer=setTimeout(()=>openDrawer('settings'),800);});

@@ -21,6 +21,11 @@
 - **index.html:** forexCalc → group per AKUN_VALAS + total (avg-cost per akun). renderForex tampil rincian per akun. Form: input "Akun valas" (datalist BCA/BNI, bisa tambah) + opsi rekening "(saldo awal/luar)". Kartu Dashboard `#dashForex` + `renderForexDash()` (total USD + nilai live + U/R + rincian per akun, klik→halaman Forex; sembunyi bila belum ada data). sw.js → **v23**.
 - **Verifikasi:** simulasi 2 akun (BCA beli 1500/jual600, BNI beli2000, live 16.2k) → BCA holding900 unreal+780k realized+700k; BNI holding2000 unreal+1.4jt; TOTAL holding2900 live46,98jt unreal+2,18jt realized+700k = PASS. node --check backend+UI OK. Backup `*-pre-forexakun-*`.
 
+### v26.2 Fix dashboard forex 0 + gabung tab Forex & Kurs (CLIENT-ONLY, sw.js v24)
+- **Bug:** kartu Tabungan Forex di Dashboard tampil 0 padahal halaman Forex benar. **Akar:** `goPage('dashboard')` tidak memanggil renderDashboard → kartu stale dari render lama. **Fix:** goPage kini `if(page==='dashboard')renderDashboard()` → kartu selalu fresh saat buka Dashboard.
+- **Gabung tab (req Eddy):** halaman `page-kurs` DIHAPUS; isinya (Kurs BCA + tombol Perbarui + #kursList) dipindah ke bawah `page-forex` (dipisah garis). Menu Lainnya: entry "Kurs BCA" dihapus, "Pocket Forex" → "Forex & Kurs". goPage('forex') & renderAll kini render `renderForex()`+`renderKurs()`. navKey map + forex→'lainnya'. #kursList tetap unik.
+- **Deploy:** CLIENT-ONLY — cukup push index.html + sw.js **v24** (GitHub Desktop), TANPA redeploy Code.gs.
+
 ---
 
 ## SESSION — 2026-06-23 (Bug filter rekening + v25 Kurs BCA)
