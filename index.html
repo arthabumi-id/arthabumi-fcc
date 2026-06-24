@@ -490,8 +490,9 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v27.6';
+const APP_VERSION = 'v27.7';
 const CHANGELOG = [
+  { v:'v27.7', d:'24 Jun 2026', t:'Dashboard: kartu Investasi (nilai portofolio + U/R) di grup Aset.' },
   { v:'v27.6', d:'24 Jun 2026', t:'Forex: tombol Edit per transaksi (ubah jenis/akun/jumlah/kurs/tanggal).' },
   { v:'v27.5', d:'24 Jun 2026', t:'Forex: average rate modal (total & per bank) + rincian transaksi dikelompokkan per bank.' },
   { v:'v27.4', d:'24 Jun 2026', t:'Tarik ke bawah untuk refresh (Sync) — tetap di tab yang sama.' },
@@ -1131,7 +1132,10 @@ function renderDashboard() {
   state.txns.forEach(t=>{ if(String(t.TANGGAL).slice(0,7)!==ym) return; if(t.TIPE_LOG==='Pemasukan') mIn+=Number(t.NOMINAL)||0; else if(t.TIPE_LOG==='Pengeluaran') mOut+=Number(t.NOMINAL)||0; });
   const mNet=mIn-mOut;
   const fx=(typeof forexCalc==='function')?forexCalc():{total:{holding:0,liveValue:0},hasKurs:false};
-  const asetWide=fx.total.holding>0.0001?'':' wide';
+  const inv=(typeof investTotals==='function')?investTotals():{nilai:0,rp:0,modal:0};
+  const invHas=(state.investAkun||[]).length>0;
+  const asetExtra=(fx.total.holding>0.0001?1:0)+(invHas?1:0);
+  const asetWide=asetExtra===0?' wide':'';
 
   document.getElementById('dashMetrics').innerHTML = `
     <div class="card" style="padding:11px 14px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
@@ -1157,6 +1161,11 @@ function renderDashboard() {
         <div class="metric-label">Tabungan Forex <i class="ti ti-chevron-right" style="font-size:11px;vertical-align:middle"></i></div>
         <div class="metric-value num" style="color:var(--gold)">${fx.hasKurs?fmt(fx.total.liveValue):'—'}</div>
         <div class="metric-sub">${usdFmt(fx.total.holding)} USD</div>
+      </div>`:''}
+      ${invHas?`<div class="metric" onclick="goPage('invest')" style="cursor:pointer">
+        <div class="metric-label">Investasi <i class="ti ti-chevron-right" style="font-size:11px;vertical-align:middle"></i></div>
+        <div class="metric-value num" style="color:var(--purple)">${fmt(inv.nilai)}</div>
+        <div class="metric-sub" style="color:${inv.rp>=0?'var(--green)':'var(--red)'}">${inv.rp>=0?'+':'-'}${fmt(Math.abs(inv.rp))} U/R</div>
       </div>`:''}
     </div>
 

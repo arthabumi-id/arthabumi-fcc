@@ -108,6 +108,10 @@
 - `saveForexConvert`: bila editing → `deleteForex(oldRef)` lalu `addForexConvert(new)` (reverse TXN lama + tulis baru → saldo bank tetap benar). fxEditRef di-reset; buka Convert baru reset null (aman dari cancel).
 - **Verifikasi:** openForexConvert+saveForexConvert+renderForex node --check OK.
 
+### v27.7 Dashboard: kartu Investasi — CLIENT-ONLY, sw.js v38
+- Grup Aset Dashboard kini: Total Saldo Bank + Tabungan Forex (bila ada) + **Investasi** (bila ada akun). Kartu invest: nilai portofolio `fmt(investTotals().nilai)` (ungu) + U/R `inv.rp`. Klik → goPage('invest'). `asetWide` bank full-width hanya bila tak ada forex & invest.
+- **Verifikasi:** renderDashboard node --check OK.
+
 ---
 
 ## SESSION — 2026-06-23 (Bug filter rekening + v25 Kurs BCA)
