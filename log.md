@@ -69,6 +69,14 @@
 - **Catatan:** kartu hero gradient & chip aksi kecil (#0a2a1e) tetap gelap di light mode (by design, aksen). Mungkin perlu setel halus bila ada elemen kurang kontras — tunggu feedback Eddy.
 - **Verifikasi:** style brace 126/126; formatter+toggle node --check OK; 18 marker. Backup `index-pre-polish-*` (sesi sama).
 
+### v27.0 Light mode dirombak premium (warna adaptif dua tema) — CLIENT-ONLY, sw.js v31
+- **Akar masalah light mode:** banyak warna gelap di-hardcode inline (chip ikon txn, kartu hero, tombol aksi) → tak ikut berubah. Solusi: jadikan token semantik.
+- **Token baru** (:root dark + body.light): `--hero-bg/-bd` (+ red/blue/amber varian), `--ic-green/red/blue/purple/amber` (chip ikon), `--shadow-card`. Light = tint lembut + bayangan halus; dark = gradient/chip gelap seperti semula.
+- **Konversi (replace_all):** hero gradient `linear-gradient(...0E2A1F...)`→`var(--hero-bg)` (5 kartu: dashboard NetCash, belum-reserve, forecast, kasbon, reserve-detail, transfer-strip); chip ikon `#0a2a1a/#0a2a1e/#0a1f14→var(--ic-green)`, `#2a0a0a→ic-red`, `#0a1a3a/#0a2040→ic-blue`, `#1a0a3a→ic-purple`, `#2a1a0a/#241a05→ic-amber`. ⚠️ hex ini juga ada di :root def → setelah replace_all, baris :root dipulihkan manual ke hex asli.
+- **CSS light polish:** `.card`/`.metric` box-shadow var; `.light` override topbar/nav/toast/sync putih + topbar shadow lembut.
+- Kartu hero pakai metric-label/value/sub (var-driven) → teks adaptif, bukan putih hardcode.
+- **Verifikasi:** style brace 132/132; 0 stray hero gradient di usage; 24 var(--ic-*); renderDashboard node --check OK. Backup `index-pre-light2-*`.
+
 ---
 
 ## SESSION — 2026-06-23 (Bug filter rekening + v25 Kurs BCA)

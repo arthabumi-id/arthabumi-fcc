@@ -20,12 +20,6 @@
   --green:#2EE6A6;--red:#F0726A;--blue:#5B9CF6;--amber:#F5A623;--purple:#a78bfa;
   --gold:#E7C778;--coral:#FF6B5C;
   --inset:#0E1611;--glow:#13231C;
-  --hero-bg:linear-gradient(140deg,#0E2A1F,#0A1712);--hero-bd:#2EE6A633;
-  --hero-red-bg:linear-gradient(140deg,#2A0E0C,#1A0A0C);--hero-red-bd:#F0726A40;
-  --hero-blue-bg:linear-gradient(140deg,#0C2233,#0A1620);--hero-blue-bd:#5b9cf630;
-  --hero-amber-bg:linear-gradient(140deg,#2A1F0A,#180F06);--hero-amber-bd:#f5a62330;
-  --ic-green:#0a2a1a;--ic-red:#2a0a0a;--ic-blue:#0a1a3a;--ic-purple:#1a0a3a;--ic-amber:#2a1a0a;
-  --shadow-card:none;
   --radius:11px;--radius-lg:16px;
   --font:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;
 }
@@ -36,12 +30,6 @@ body.light{
   --green:#10A875;--red:#D84C44;--blue:#2F6FD0;--amber:#B97D08;--purple:#7C5CD6;
   --gold:#B98A1E;--coral:#E8553F;
   --inset:#EFF3EF;--glow:#FFFFFF;
-  --hero-bg:#E8F6EF;--hero-bd:#C3E9D8;
-  --hero-red-bg:#FCEBE9;--hero-red-bd:#F2C9C4;
-  --hero-blue-bg:#E8F0FB;--hero-blue-bd:#CADCF4;
-  --hero-amber-bg:#F8F0DA;--hero-amber-bd:#EBD9AE;
-  --ic-green:#DEF3EA;--ic-red:#FBE3E1;--ic-blue:#E1ECFB;--ic-purple:#ECE6FA;--ic-amber:#F6EBCC;
-  --shadow-card:0 1px 3px rgba(20,45,33,.07),0 1px 2px rgba(20,45,33,.04);
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;overflow:hidden;font-feature-settings:'tnum' 1,'cv01' 1;-webkit-font-smoothing:antialiased}
@@ -89,7 +77,7 @@ body{display:flex;flex-direction:column}
 .nav-item span{font-size:11px;font-weight:600}
 
 /* CARDS */
-.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;margin-bottom:12px;transition:border-color .15s,transform .12s;box-shadow:var(--shadow-card)}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;margin-bottom:12px;transition:border-color .15s,transform .12s}
 .card[onclick]:active{transform:scale(.99)}
 .card-title{font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px}
 .metric-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
@@ -121,13 +109,7 @@ tr:last-child td{border-bottom:none}
 .light .badge-amber{background:#F6EBCC;color:#8A5E08}
 .light .badge-purple{background:#ECE6FA;color:#5E45B0}
 .light .btn-danger{background:#FBE3E1;color:#B23A33;border-color:#F0C7C2}
-.light .btn-primary{box-shadow:0 4px 14px rgba(16,168,117,.2)}
-.light .topbar{box-shadow:0 1px 10px rgba(20,45,33,.06)}
-.light .bottom-nav,.light .topbar{background:#FFFFFF}
-.light .toast{background:#FFFFFF;border-color:var(--border2);color:var(--text)}
-.light .drawer-handle{background:var(--border2)}
-.light .sync-btn{background:#FFFFFF}
-.light .metric{box-shadow:var(--shadow-card)}
+.light .btn-primary{box-shadow:0 4px 14px rgba(16,168,117,.18)}
 
 /* AMOUNTS */
 .pos{color:var(--green)!important}
@@ -508,9 +490,8 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v27.0';
+const APP_VERSION = 'v26.9';
 const CHANGELOG = [
-  { v:'v27.0', d:'24 Jun 2026', t:'Light mode dirombak premium: warna chip/kartu/ikon adaptif dua tema + bayangan halus.' },
   { v:'v26.9', d:'24 Jun 2026', t:'Mode mata (sembunyikan nominal ••••) + tema terang/gelap di header.' },
   { v:'v26.8', d:'24 Jun 2026', t:'Poles halaman dalam: latar glow halus, kartu/metrik/form/nav lebih premium & konsisten.' },
   { v:'v26.7', d:'24 Jun 2026', t:'Dashboard ditata ulang: hero tunggal, grup Aset/Kewajiban/Bisnis, strip bulan ini, menu Lainnya dikelompokkan.' },
@@ -807,7 +788,7 @@ function bankReserveCardHTML(bankName){
   if(locked <= 0) return '';
   const saldo = getSaldo(bankName).saldo;
   const bebas = saldo - locked, kurang = bebas < 0;
-  return `<div style="padding:9px 11px;border-radius:8px;margin-bottom:10px;background:${kurang?'var(--ic-red)':'#0a1a2a'};border:1px solid ${kurang?'#ef444440':'#3b82f640'}">
+  return `<div style="padding:9px 11px;border-radius:8px;margin-bottom:10px;background:${kurang?'#2a0a0a':'#0a1a2a'};border:1px solid ${kurang?'#ef444440':'#3b82f640'}">
     <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px"><span style="color:var(--text2)"><i class="ti ti-lock" style="font-size:11px;vertical-align:middle"></i> Reserve CC (terkunci)</span><b style="color:var(--blue)">${fmt(locked)}</b></div>
     <div style="display:flex;justify-content:space-between;font-size:11px"><span style="color:var(--text2)"><i class="ti ti-wallet" style="font-size:11px;vertical-align:middle"></i> Bisa dipakai</span><b style="color:${kurang?'var(--red)':'var(--green)'}">${fmt(bebas)}</b></div>
     ${kurang?`<div style="font-size:10px;color:var(--red);margin-top:5px">Saldo kurang ${fmtS(-bebas)} dari total yang dicentang — transfer lagi ke rekening ini.</div>`:''}
@@ -1150,7 +1131,7 @@ function renderDashboard() {
       <span style="font-size:12px;color:var(--text2)">masuk <b class="num" style="color:var(--green)">${fmtS(mIn)}</b> · keluar <b class="num" style="color:var(--red)">${fmtS(mOut)}</b> · net <b class="num" style="color:${mNet>=0?'var(--green)':'var(--red)'}">${mNet>=0?'+':'-'}${fmtS(Math.abs(mNet))}</b></span>
     </div>
 
-    <div class="metric wide" style="background:var(--hero-bg);border:1px solid var(--hero-bd);margin-bottom:4px">
+    <div class="metric wide" style="background:linear-gradient(140deg,#0E2A1F,#0A1712);border:1px solid #2EE6A633;margin-bottom:4px">
       <div style="height:2px;width:40px;background:var(--gold);border-radius:2px;margin-bottom:9px"></div>
       <div class="metric-label">Net Cash Position</div>
       <div class="metric-value num" style="font-size:30px;color:${(totBank-totRes) >= 0?'var(--green)':'var(--red)'}">${fmt(totBank-totRes)}</div>
@@ -1183,7 +1164,7 @@ function renderDashboard() {
         <div class="metric-value num info">${fmt(totRes)}</div>
         <div class="metric-sub">reserve di rekening penyimpan</div>
       </div>
-      ${totBelumRes>0?`<div class="metric" onclick="gotoCCReserve()" style="cursor:pointer;background:var(--hero-red-bg);border:1px solid var(--hero-red-bd)">
+      ${totBelumRes>0?`<div class="metric" onclick="gotoCCReserve()" style="cursor:pointer;background:linear-gradient(140deg,#2A0E0C,#1A0A0C);border:1px solid #F0726A40">
         <div class="metric-label">Belum di-reserve <i class="ti ti-chevron-right" style="font-size:11px;vertical-align:middle"></i></div>
         <div class="metric-value num neg">${fmt(totBelumRes)}</div>
         <div class="metric-sub">perlu transfer ke bank reserve</div>
@@ -1217,7 +1198,7 @@ function renderDashboard() {
       ${state.banks.map(b => {
         const r = getSaldo(b.NAMA);
         return `<div class="list-item" style="cursor:pointer" onclick="openAccountDetail('bank','${esc(b.NAMA)}')">
-          <div class="list-icon" style="background:${b.TIPE==='Kas'?'var(--ic-amber)':'var(--ic-blue)'}">
+          <div class="list-icon" style="background:${b.TIPE==='Kas'?'#2a1a0a':'#0a2040'}">
             <i class="ti ti-${b.TIPE==='Kas'?'cash':'building-bank'}" style="color:${b.TIPE==='Kas'?'var(--amber)':'var(--blue)'}"></i>
           </div>
           <div class="list-body">
@@ -1252,7 +1233,7 @@ function renderDashboard() {
           const lbl = dd===null?'':(dd<0?`<span style="color:var(--red)">lewat ${Math.abs(dd)} hr</span>`:dd===0?`<span style="color:var(--red)">hari ini</span>`:`<span style="color:var(--amber)">${dd} hr lagi</span>`);
           billStrip = `<div style="width:100%;margin-top:8px;padding:7px 9px;border-radius:8px;background:#1a1206;border:1px solid #f59e0b40;display:flex;align-items:center;justify-content:space-between;gap:8px">
             <div style="min-width:0"><div style="font-size:12px;font-weight:700;color:var(--amber)">Tagihan ${fmt(bill.NOMINAL)}</div><div style="font-size:10px;color:var(--text3)">jth tempo ${due||'—'} · ${lbl}</div></div>
-            <div style="display:flex;gap:5px;flex-shrink:0"><button class="btn-danger" style="background:var(--ic-green);color:var(--green);border-color:#2EE6A640" onclick="event.stopPropagation();payCCFromReminder('${esc(c.NAMA)}')">Bayar</button><button class="btn-danger" onclick="event.stopPropagation();clearCCBill('${bill.ID}','${esc(bill.CC||c.NAMA||'')}')">Lunas</button></div>
+            <div style="display:flex;gap:5px;flex-shrink:0"><button class="btn-danger" style="background:#0a2a1e;color:var(--green);border-color:#2EE6A640" onclick="event.stopPropagation();payCCFromReminder('${esc(c.NAMA)}')">Bayar</button><button class="btn-danger" onclick="event.stopPropagation();clearCCBill('${bill.ID}','${esc(bill.CC||c.NAMA||'')}')">Lunas</button></div>
           </div>`;
         }
         return `<div class="list-item" style="flex-wrap:wrap;cursor:pointer" onclick="openAccountDetail('cc','${esc(c.NAMA)}')">
@@ -1286,7 +1267,7 @@ function renderDashboard() {
       ${recent.map(t => {
         const isTr = t.TIPE_LOG === 'Transfer', isRes = t.TIPE_LOG === 'Reserve';
         return `<div class="list-item">
-          <div class="list-icon" style="background:${t.JENIS==='Pemasukan'?'var(--ic-green)':isTr?'var(--ic-blue)':isRes?'var(--ic-purple)':'var(--ic-red)'}">
+          <div class="list-icon" style="background:${t.JENIS==='Pemasukan'?'#0a2a1a':isTr?'#0a1a3a':isRes?'#1a0a3a':'#2a0a0a'}">
             <i class="ti ti-${t.JENIS==='Pemasukan'?'arrow-down-left':isTr?'arrows-exchange':isRes?'shield-check':'arrow-up-right'}" style="color:${t.JENIS==='Pemasukan'?'var(--green)':isTr?'var(--blue)':isRes?'var(--purple)':'var(--red)'}"></i>
           </div>
           <div class="list-body">
@@ -1528,7 +1509,7 @@ function renderForecast(){
   const col=v=> v>=th?'var(--green)':'var(--red)';
   const breach=f.min.balance<th;
   let html=`<div class="metric-grid" style="margin-bottom:12px">
-    <div class="metric wide" style="background:var(--hero-blue-bg);border:1px solid var(--hero-blue-bd)">
+    <div class="metric wide" style="background:linear-gradient(140deg,#0C2233,#0A1620);border:1px solid #5b9cf630">
       <div class="metric-label">Saldo Kas Sekarang</div>
       <div class="metric-value" style="font-size:24px">${fmt(f.start)}</div>
       <div class="metric-sub">Estimasi keluar rutin ${fmt(f.burn)}/hari (rata-rata 90 hari)</div>
@@ -1542,7 +1523,7 @@ function renderForecast(){
       <div style="font-weight:700;color:var(--red)"><i class="ti ti-alert-triangle"></i> Peringatan kas</div>
       <div style="font-size:12px;color:var(--text2);margin-top:4px">Kas diproyeksi turun ke ${fmtSigned(f.min.balance)} pada ${f.min.date}${th>0?' (di bawah ambang aman '+fmt(th)+')':''}. Pertimbangkan percepat termin masuk atau tunda pengeluaran besar.</div></div>`;
   } else {
-    html+=`<div class="card" style="margin-bottom:12px;background:var(--ic-green);border:1px solid var(--green)">
+    html+=`<div class="card" style="margin-bottom:12px;background:#0a2a1e;border:1px solid var(--green)">
       <div style="font-weight:700;color:var(--green)"><i class="ti ti-circle-check"></i> Kas aman</div>
       <div style="font-size:12px;color:var(--text2);margin-top:4px">Titik kas terendah ${fmtSigned(f.min.balance)} pada ${f.min.date}.</div></div>`;
   }
@@ -1713,7 +1694,7 @@ function renderCCBillReminder(){
       return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
         <div style="min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(b.CC)}</div><div style="font-size:10px;color:var(--text3)">${due||'—'} · ${lbl}</div></div>
         <div style="display:flex;align-items:center;gap:6px;flex-shrink:0"><span style="font-size:13px;font-weight:700;color:var(--red)">${fmt(b.NOMINAL)}</span>
-          <button class="btn-danger" style="background:var(--ic-green);color:var(--green);border-color:#2EE6A640" onclick="payCCFromReminder('${esc(b.CC)}')">Bayar</button>
+          <button class="btn-danger" style="background:#0a2a1e;color:var(--green);border-color:#2EE6A640" onclick="payCCFromReminder('${esc(b.CC)}')">Bayar</button>
           <button class="btn-danger" onclick="clearCCBill('${b.ID}','${esc(b.CC||'')}')">Lunas</button></div>
       </div>`;}).join('')}
     </div></div>`;
@@ -1757,7 +1738,7 @@ function renderPiutang(){
   const list=(state.piutang||[]).slice();
   const belum=list.filter(p=>String(p.STATUS)!=='Lunas').sort((a,b)=>_piuDue(a).localeCompare(_piuDue(b)));
   const lunas=list.filter(p=>String(p.STATUS)==='Lunas').sort((a,b)=>String(b.TGL_BAYAR||'').localeCompare(String(a.TGL_BAYAR||'')));
-  let html=`<div class="card" style="margin-bottom:12px;background:var(--hero-bg);border:1px solid var(--hero-bd)">
+  let html=`<div class="card" style="margin-bottom:12px;background:linear-gradient(140deg,#0E2A1F,#0A1712);border:1px solid #2EE6A640">
     <div class="metric-label">Total Piutang Beredar</div>
     <div class="metric-value" style="font-size:24px;color:${ag.beredar>0?'var(--amber)':'var(--green)'}">${fmt(ag.beredar)}</div>
     <div class="metric-sub">${ag.cntBelum} termin belum lunas</div></div>
@@ -1991,7 +1972,7 @@ function renderForex(){
   if(!lots.length){ html+='<div class="empty">Belum ada konversi. Tekan "Convert" untuk mulai.</div>'; }
   else { html+=lots.map(f=>{ const beli=f.JENIS!=='Jual';
     return `<div class="card" style="padding:10px 12px;margin-bottom:8px"><div style="display:flex;align-items:center;gap:10px">
-      <div style="width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;background:${beli?'var(--ic-blue)':'var(--ic-green)'};flex-shrink:0"><i class="ti ti-${beli?'arrow-down-left':'arrow-up-right'}" style="font-size:15px;color:${beli?'var(--blue)':'var(--green)'}"></i></div>
+      <div style="width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;background:${beli?'#0a1a3a':'#0a2a1a'};flex-shrink:0"><i class="ti ti-${beli?'arrow-down-left':'arrow-up-right'}" style="font-size:15px;color:${beli?'var(--blue)':'var(--green)'}"></i></div>
       <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">${beli?'Beli':'Jual'} ${usdFmt(f.JUMLAH_VALAS)} USD <span style="font-size:11px;color:var(--text3)">@ ${usdFmt(f.KURS)}</span></div>
         <div style="font-size:11px;color:var(--text2)">${esc(f.REKENING||'')} · ${String(f.TANGGAL).slice(0,10)}</div>${f.NOTES?`<div style="font-size:10px;color:var(--text3)">${esc(f.NOTES)}</div>`:''}</div>
       <div style="text-align:right;flex-shrink:0"><div style="font-size:13px;font-weight:700;color:${beli?'var(--red)':'var(--green)'}">${beli?'-':'+'}${fmt(Number(f.NOMINAL_RP)||0)}</div>
@@ -2373,10 +2354,10 @@ function cicilanRowHTML(c){
         <div style="height:5px;background:#222;border-radius:3px;margin-top:5px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${lunas?'var(--green)':'#7c5cff'}"></div></div>
       </div>
       <div style="text-align:right;flex-shrink:0">
-        <span class="badge" style="background:${lunas?'var(--ic-green)':'var(--ic-amber)'};color:${lunas?'var(--green)':'var(--amber)'}">${lunas?'Lunas':'Jalan'}</span>
+        <span class="badge" style="background:${lunas?'#0a2a1e':'#241a05'};color:${lunas?'var(--green)':'var(--amber)'}">${lunas?'Lunas':'Jalan'}</span>
         <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">
-          ${!lunas?`<button class="btn-danger" style="background:var(--ic-green);color:var(--green);border-color:#2EE6A640" onclick="doPayCicilan('${c.ID}')">Bayar angsuran</button>`:''}
-          ${!lunas?`<button class="btn-danger" style="background:var(--ic-blue);color:var(--blue);border-color:#3b82f640" onclick="openChangeReserveBank('${c.ID}')">Ganti bank</button>`:''}
+          ${!lunas?`<button class="btn-danger" style="background:#0a2a1e;color:var(--green);border-color:#2EE6A640" onclick="doPayCicilan('${c.ID}')">Bayar angsuran</button>`:''}
+          ${!lunas?`<button class="btn-danger" style="background:#0a1a3a;color:var(--blue);border-color:#3b82f640" onclick="openChangeReserveBank('${c.ID}')">Ganti bank</button>`:''}
           ${terbayar===0?`<button class="btn-danger" onclick="delCicilan('${c.ID}')">Hapus</button>`:''}
         </div>
       </div>
@@ -2408,7 +2389,7 @@ function paycCicilanHTML(ccName){
       return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0;border-top:1px solid #ffffff10">
         <div style="min-width:0"><div style="font-size:12px;font-weight:600">${esc(c.DESKRIPSI||'Cicilan')}</div>
         <div style="font-size:10px;color:var(--text3)">angsuran ke-${Math.min(tenor,terbayar+1)}/${tenor} · ${fmt(per)}</div></div>
-        <button class="btn-danger" style="background:var(--ic-green);color:var(--green);border-color:#2EE6A640;flex-shrink:0" onclick="doPayCicilan('${c.ID}')">Bayar</button>
+        <button class="btn-danger" style="background:#0a2a1e;color:var(--green);border-color:#2EE6A640;flex-shrink:0" onclick="doPayCicilan('${c.ID}')">Bayar</button>
       </div>`;
     }).join('')}
   </div>`;
@@ -2753,7 +2734,7 @@ function renderCCBill(from,to){
       <div style="display:flex;justify-content:space-between"><span style="font-size:12px">Belanja + Cicilan periode</span><span style="font-weight:700;color:var(--red)">${fmt(sumCharge+sumCic)}</span></div>
       ${sumPay>0?`<div style="display:flex;justify-content:space-between;margin-top:3px"><span style="font-size:12px">− Pembayaran</span><span style="font-weight:700;color:var(--green)">${fmt(sumPay)}</span></div>`:''}
     </div>
-    <div class="card" style="padding:10px 12px;margin:10px 0 0;background:var(--ic-green);border:1px solid #2EE6A640">
+    <div class="card" style="padding:10px 12px;margin:10px 0 0;background:#0a1f14;border:1px solid #2EE6A640">
       <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Cocokkan dengan statement cetak</div>
       <div class="form-group" style="margin:0 0 8px"><label class="form-label">Total tagihan di statement (Rp)</label><input class="form-input" id="ccb_stmt" type="text" inputmode="numeric" placeholder="ketik total dari cetakan" oninput="fmtMoneyInput(this);ccbTick()"></div>
       <div style="display:flex;justify-content:space-between"><span style="font-size:12px">Sudah dicentang (<span id="ccb_cnt">0</span> baris)</span><span id="ccb_checkedSum" style="font-weight:700;color:#b9a3ff">${fmt(0)}</span></div>
@@ -2774,7 +2755,7 @@ function renderTxn(filtered) {
     const isTr = t.TIPE_LOG === 'Transfer', isRes = t.TIPE_LOG === 'Reserve';
     return `<div class="card" style="padding:10px 12px;margin-bottom:8px">
       <div style="display:flex;align-items:center;gap:10px">
-        <div style="width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;background:${t.JENIS==='Pemasukan'?'var(--ic-green)':isTr?'var(--ic-blue)':isRes?'var(--ic-purple)':'var(--ic-red)'};flex-shrink:0">
+        <div style="width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;background:${t.JENIS==='Pemasukan'?'#0a2a1a':isTr?'#0a1a3a':isRes?'#1a0a3a':'#2a0a0a'};flex-shrink:0">
           <i class="ti ti-${t.JENIS==='Pemasukan'?'arrow-down-left':isTr?'arrows-exchange':isRes?'shield-check':'arrow-up-right'}" style="font-size:15px;color:${t.JENIS==='Pemasukan'?'var(--green)':isTr?'var(--blue)':isRes?'var(--purple)':'var(--red)'}"></i>
         </div>
         <div style="flex:1;min-width:0">
@@ -2986,7 +2967,7 @@ function renderKasbon(){
   const agg = kasbonAgg();
   const names = Object.keys(agg).sort((a,b)=> agg[b].saldo - agg[a].saldo);
   const totalOut = Object.values(agg).reduce((s,a)=>s+a.saldo,0);
-  let html = `<div class="card" style="margin-bottom:12px;background:var(--hero-amber-bg);border:1px solid var(--hero-amber-bd)">
+  let html = `<div class="card" style="margin-bottom:12px;background:linear-gradient(140deg,#2A1F0A,#180F06);border:1px solid #f5a62330">
       <div class="metric-label">Total Kasbon Beredar (piutang)</div>
       <div class="metric-value" style="font-size:24px;color:${totalOut>0?'var(--amber)':'var(--green)'}">${fmt(totalOut)}</div>
       <div class="metric-sub">${names.length} karyawan</div>
@@ -3079,7 +3060,7 @@ function openKasbonDetail(nama){
 function kasbonRow(k){
   const isPin = k.JENIS==='Pinjam';
   return `<div class="card" style="padding:9px 11px;margin-bottom:6px;display:flex;align-items:center;gap:9px">
-    <div style="width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:${isPin?'var(--ic-red)':'var(--ic-green)'}"><i class="ti ti-${isPin?'arrow-up-right':'arrow-down-left'}" style="font-size:13px;color:${isPin?'var(--red)':'var(--green)'}"></i></div>
+    <div style="width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:${isPin?'#2a0a0a':'#0a2a1a'}"><i class="ti ti-${isPin?'arrow-up-right':'arrow-down-left'}" style="font-size:13px;color:${isPin?'var(--red)':'var(--green)'}"></i></div>
     <div style="flex:1;min-width:0">
       <div style="font-size:12px;font-weight:600">${k.JENIS} · ${esc(k.METODE||'Tunai')}</div>
       <div style="font-size:10px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${String(k.TANGGAL).slice(0,10)}${k.REKENING?' · '+esc(k.REKENING):''}${k.NOTES?' · '+esc(k.NOTES):''}</div>
@@ -3151,7 +3132,7 @@ function renderMaster() {
               ${res>0?`<div style="font-size:10px;color:var(--blue)">res: ${fmtS(res)}</div>`:''}
               <div style="display:flex;gap:5px;margin-top:6px;justify-content:flex-end;flex-wrap:wrap" onclick="event.stopPropagation()">
                 <button class="btn-danger" style="background:#1a1206;color:var(--amber);border-color:#f59e0b40" onclick="openCCBill('${c.ID}')">Rincian</button>
-                <button class="btn-danger" style="background:var(--ic-green);color:var(--green);border-color:#2EE6A640" onclick="openDrawer('paycc','${c.ID}')">Bayar</button>
+                <button class="btn-danger" style="background:#0a2a1e;color:var(--green);border-color:#2EE6A640" onclick="openDrawer('paycc','${c.ID}')">Bayar</button>
                 <button class="btn-danger" onclick="editCC('${c.ID}')">Edit</button>
                 <button class="btn-danger" onclick="deleteItem('ccs','${c.ID}','MASTER_CC')">Hapus</button>
               </div>
@@ -3245,16 +3226,16 @@ function openAccountDetail(type, nama) {
           </div>
         </div>
       </div>
-      ${isCC ? `<div style="position:sticky;top:0;z-index:5;padding:8px 10px;border-radius:8px;margin-bottom:10px;background:var(--ic-green);border:1px solid #2EE6A630;font-size:11px;color:var(--text2)">${sesCnt>0?`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding-bottom:5px;margin-bottom:5px;border-bottom:1px solid #ffffff14"><span style="color:#b9a3ff"><i class="ti ti-checkbox" style="font-size:12px;vertical-align:middle"></i> Ditandai sekarang · ${sesCnt} baris</span><strong style="color:#b9a3ff;font-size:15px">${fmt(sesSum)}</strong></div>`:''}<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span><i class="ti ti-lock" style="font-size:11px;vertical-align:middle;color:var(--green)"></i> Total ditandai kartu ini · ${markCountCC(nama)} transaksi</span><strong style="color:var(--green);font-size:14px">${fmt(markTotalCC(nama))}</strong></div>${(()=>{const hold=ccHoldingBank(nama),gap=reserveGapBank(hold),n=cardsOnReserveBank(hold);return gap>0?`<div style="margin-top:5px;padding-top:5px;border-top:1px solid #ffffff12;font-size:11px;color:var(--amber)"><i class="ti ti-arrow-right" style="font-size:11px;vertical-align:middle"></i> Perlu transfer sekarang ke <b>${esc(hold)}</b>: <b>${fmt(gap)}</b>${n>1?` <span style="color:var(--text3)">(gabungan ${n} kartu di rekening ini)</span>`:''}</div>`:`<div style="margin-top:5px;padding-top:5px;border-top:1px solid #ffffff12;font-size:11px;color:var(--green)"><i class="ti ti-circle-check" style="font-size:11px;vertical-align:middle"></i> Reserve di <b>${esc(hold)}</b> sudah cukup</div>`;})()}</div>
+      ${isCC ? `<div style="position:sticky;top:0;z-index:5;padding:8px 10px;border-radius:8px;margin-bottom:10px;background:#0a1f14;border:1px solid #2EE6A630;font-size:11px;color:var(--text2)">${sesCnt>0?`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding-bottom:5px;margin-bottom:5px;border-bottom:1px solid #ffffff14"><span style="color:#b9a3ff"><i class="ti ti-checkbox" style="font-size:12px;vertical-align:middle"></i> Ditandai sekarang · ${sesCnt} baris</span><strong style="color:#b9a3ff;font-size:15px">${fmt(sesSum)}</strong></div>`:''}<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span><i class="ti ti-lock" style="font-size:11px;vertical-align:middle;color:var(--green)"></i> Total ditandai kartu ini · ${markCountCC(nama)} transaksi</span><strong style="color:var(--green);font-size:14px">${fmt(markTotalCC(nama))}</strong></div>${(()=>{const hold=ccHoldingBank(nama),gap=reserveGapBank(hold),n=cardsOnReserveBank(hold);return gap>0?`<div style="margin-top:5px;padding-top:5px;border-top:1px solid #ffffff12;font-size:11px;color:var(--amber)"><i class="ti ti-arrow-right" style="font-size:11px;vertical-align:middle"></i> Perlu transfer sekarang ke <b>${esc(hold)}</b>: <b>${fmt(gap)}</b>${n>1?` <span style="color:var(--text3)">(gabungan ${n} kartu di rekening ini)</span>`:''}</div>`:`<div style="margin-top:5px;padding-top:5px;border-top:1px solid #ffffff12;font-size:11px;color:var(--green)"><i class="ti ti-circle-check" style="font-size:11px;vertical-align:middle"></i> Reserve di <b>${esc(hold)}</b> sudah cukup</div>`;})()}</div>
       ${unmarkedRegularCC(nama)>0?`<div style="padding:6px 10px;border-radius:8px;margin-bottom:10px;background:#1a1206;border:1px solid #f59e0b40;font-size:11px;color:var(--amber)"><i class="ti ti-bell" style="font-size:11px;vertical-align:middle"></i> Belum dicentang: <b>${fmt(unmarkedRegularCC(nama))}</b> — tandai belanja yg dananya sudah disiapkan.</div>`:''}
-      ${paidExpCount>0?`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px;border-radius:8px;margin-bottom:10px;background:#0a1424;border:1px solid var(--border2);font-size:11px;color:var(--text2)"><span><i class="ti ti-circle-check" style="font-size:12px;vertical-align:middle"></i> ${paidExpCount} belanja ditandai lunas</span><button onclick="window._acctHidePaid=!window._acctHidePaid;acctFilter()" style="font-size:10px;padding:3px 9px;border-radius:10px;cursor:pointer;border:1px solid ${window._acctHidePaid?'#2EE6A660':'var(--border2)'};background:${window._acctHidePaid?'var(--ic-green)':'transparent'};color:${window._acctHidePaid?'var(--green)':'var(--text3)'}">${window._acctHidePaid?'✅ disembunyikan':'Sembunyikan'}</button></div>`:''}` : bankReserveCardHTML(nama)}
+      ${paidExpCount>0?`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px;border-radius:8px;margin-bottom:10px;background:#0a1424;border:1px solid var(--border2);font-size:11px;color:var(--text2)"><span><i class="ti ti-circle-check" style="font-size:12px;vertical-align:middle"></i> ${paidExpCount} belanja ditandai lunas</span><button onclick="window._acctHidePaid=!window._acctHidePaid;acctFilter()" style="font-size:10px;padding:3px 9px;border-radius:10px;cursor:pointer;border:1px solid ${window._acctHidePaid?'#2EE6A660':'var(--border2)'};background:${window._acctHidePaid?'#0a2a1e':'transparent'};color:${window._acctHidePaid?'var(--green)':'var(--text3)'}">${window._acctHidePaid?'✅ disembunyikan':'Sembunyikan'}</button></div>`:''}` : bankReserveCardHTML(nama)}
       ${donutCardHTML('acctKatDonut', katEntries)}
       <div style="font-size:11px;color:var(--text3);margin-bottom:8px">${rows.length} transaksi ditampilkan${hidePaid&&paidExpCount>0?` · ${paidExpCount} lunas disembunyikan`:''}</div>
       ${rows.length ? rows.map(t => {
         const isTr = t.TIPE_LOG==='Transfer', isRes = t.TIPE_LOG==='Reserve';
         return `<div class="card" style="padding:9px 11px;margin-bottom:6px">
           <div style="display:flex;align-items:center;gap:9px">
-            <div style="width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:${t.JENIS==='Pemasukan'?'var(--ic-green)':isTr?'var(--ic-blue)':isRes?'var(--ic-purple)':'var(--ic-red)'}">
+            <div style="width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:${t.JENIS==='Pemasukan'?'#0a2a1a':isTr?'#0a1a3a':isRes?'#1a0a3a':'#2a0a0a'}">
               <i class="ti ti-${t.JENIS==='Pemasukan'?'arrow-down-left':isTr?'arrows-exchange':isRes?'shield-check':'arrow-up-right'}" style="font-size:13px;color:${t.JENIS==='Pemasukan'?'var(--green)':isTr?'var(--blue)':isRes?'var(--purple)':'var(--red)'}"></i>
             </div>
             <div style="flex:1;min-width:0">
@@ -3265,8 +3246,8 @@ function openAccountDetail(type, nama) {
             <div style="text-align:right;flex-shrink:0">
               <div style="font-size:13px;font-weight:700;color:${t.JENIS==='Pemasukan'?'var(--green)':'var(--red)'}">${t.JENIS==='Pemasukan'?'+':'-'}${fmt(Number(t.NOMINAL))}</div>
               ${(!isTr&&!isRes)?`<button style="font-size:10px;background:transparent;border:none;color:var(--text3);cursor:pointer;padding:0" onclick="closeDrawer();setTimeout(()=>editTxn('${t.ID}'),200)">edit</button>`:''}
-              ${(isCC && t.JENIS==='Pengeluaran' && !isTr && !isRes)?`<div><button onclick="toggleMark('${t.ID}','${esc(nama)}',${Number(t.NOMINAL)})" style="font-size:10px;margin-top:4px;padding:2px 8px;border-radius:10px;cursor:pointer;border:1px solid ${isMarked(t.ID)?'#2EE6A660':'var(--border2)'};background:${isMarked(t.ID)?'var(--ic-green)':'transparent'};color:${isMarked(t.ID)?'var(--green)':'var(--text3)'}">${isMarked(t.ID)?'✅ reserved':'☐ tandai'}</button></div>
-              <div style="display:flex;gap:4px;justify-content:flex-end;margin-top:4px"><button onclick="togglePaid('${t.ID}')" style="font-size:10px;padding:2px 8px;border-radius:10px;cursor:pointer;border:1px solid ${isPaid(t.ID)?'#3b82f660':'var(--border2)'};background:${isPaid(t.ID)?'var(--ic-blue)':'transparent'};color:${isPaid(t.ID)?'var(--blue)':'var(--text3)'}">${isPaid(t.ID)?'✅ lunas':'☐ lunas'}</button><button title="Tandai lunas s/d transaksi ini" onclick="markPaidUntil('${t.ID}','${esc(nama)}')" style="font-size:10px;padding:2px 6px;border-radius:10px;cursor:pointer;border:1px solid var(--border2);background:transparent;color:var(--text3)">s/d sini</button></div>`:''}
+              ${(isCC && t.JENIS==='Pengeluaran' && !isTr && !isRes)?`<div><button onclick="toggleMark('${t.ID}','${esc(nama)}',${Number(t.NOMINAL)})" style="font-size:10px;margin-top:4px;padding:2px 8px;border-radius:10px;cursor:pointer;border:1px solid ${isMarked(t.ID)?'#2EE6A660':'var(--border2)'};background:${isMarked(t.ID)?'#0a2a1e':'transparent'};color:${isMarked(t.ID)?'var(--green)':'var(--text3)'}">${isMarked(t.ID)?'✅ reserved':'☐ tandai'}</button></div>
+              <div style="display:flex;gap:4px;justify-content:flex-end;margin-top:4px"><button onclick="togglePaid('${t.ID}')" style="font-size:10px;padding:2px 8px;border-radius:10px;cursor:pointer;border:1px solid ${isPaid(t.ID)?'#3b82f660':'var(--border2)'};background:${isPaid(t.ID)?'#0a1a3a':'transparent'};color:${isPaid(t.ID)?'var(--blue)':'var(--text3)'}">${isPaid(t.ID)?'✅ lunas':'☐ lunas'}</button><button title="Tandai lunas s/d transaksi ini" onclick="markPaidUntil('${t.ID}','${esc(nama)}')" style="font-size:10px;padding:2px 6px;border-radius:10px;cursor:pointer;border:1px solid var(--border2);background:transparent;color:var(--text3)">s/d sini</button></div>`:''}
             </div>
           </div>
         </div>`;
@@ -3528,7 +3509,7 @@ function detailTxnCard(t) {
   const isTr = t.TIPE_LOG==='Transfer', isRes = t.TIPE_LOG==='Reserve';
   return `<div class="card" style="padding:9px 11px;margin-bottom:6px">
     <div style="display:flex;align-items:center;gap:9px">
-      <div style="width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:${t.JENIS==='Pemasukan'?'var(--ic-green)':isTr?'var(--ic-blue)':isRes?'var(--ic-purple)':'var(--ic-red)'}">
+      <div style="width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:${t.JENIS==='Pemasukan'?'#0a2a1a':isTr?'#0a1a3a':isRes?'#1a0a3a':'#2a0a0a'}">
         <i class="ti ti-${t.JENIS==='Pemasukan'?'arrow-down-left':isTr?'arrows-exchange':isRes?'shield-check':'arrow-up-right'}" style="font-size:13px;color:${t.JENIS==='Pemasukan'?'var(--green)':isTr?'var(--blue)':isRes?'var(--purple)':'var(--red)'}"></i>
       </div>
       <div style="flex:1;min-width:0">
@@ -3563,7 +3544,7 @@ function openProjectDetail(id) {
         <div class="detail-sum-item"><div class="detail-sum-label">Keluar</div><div class="detail-sum-val neg">${fmt(cf.keluar)}</div></div>
         <div class="detail-sum-item"><div class="detail-sum-label">Sisa CF</div><div class="detail-sum-val" style="color:${cf.sisa>=0?'var(--green)':'var(--red)'}">${cf.sisa>=0?'':'-'}${fmt(Math.abs(cf.sisa))}</div></div>
       </div>
-      <div style="display:flex;align-items:center;justify-content:space-between;background:var(--hero-bg);border:1px solid var(--hero-bd);border-radius:10px;padding:10px 14px;margin-bottom:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(140deg,#0E2A1F,#0A1712);border:1px solid #2EE6A630;border-radius:10px;padding:10px 14px;margin-bottom:12px">
         <span style="font-size:11px;color:var(--text2);text-transform:uppercase">Laba Bersih (Margin)</span>
         <span style="font-size:16px;font-weight:700;color:${pr.laba>=0?'var(--green)':'var(--red)'}">${pr.laba>=0?'+':'-'}${fmt(Math.abs(pr.laba))} <span style="font-size:13px;color:var(--text2)">(${pr.margin.toFixed(1)}%)</span></span>
       </div>
@@ -3620,7 +3601,7 @@ function addendumSectionHTML(p){
     h += `</div>`;
   }
   h += `<div style="display:flex;gap:8px;margin-top:10px">
-    <button onclick="openAddendumForm('${p.ID}','Tambah')" style="flex:1;background:var(--ic-green);border:1px solid #2EE6A640;color:var(--green);border-radius:8px;padding:8px;font-size:11px;font-weight:600;cursor:pointer">+ Kerja Tambah</button>
+    <button onclick="openAddendumForm('${p.ID}','Tambah')" style="flex:1;background:#0a2a1e;border:1px solid #2EE6A640;color:var(--green);border-radius:8px;padding:8px;font-size:11px;font-weight:600;cursor:pointer">+ Kerja Tambah</button>
     <button onclick="openAddendumForm('${p.ID}','Kurang')" style="flex:1;background:#2a1414;border:1px solid #ff6b6b40;color:#ff6b6b;border-radius:8px;padding:8px;font-size:11px;font-weight:600;cursor:pointer">− Kerja Kurang</button>
   </div>`;
   h += `</div>`;
@@ -3858,7 +3839,7 @@ function renderTransferHist() {
   document.getElementById('transferHistList').innerHTML = state.transfers.length ?
     [...state.transfers].sort((a,b) => String(b.TANGGAL).localeCompare(String(a.TANGGAL))).slice(0,10).map(t => `
       <div class="list-item">
-        <div class="list-icon" style="background:var(--ic-blue)"><i class="ti ti-arrows-exchange" style="color:var(--blue)"></i></div>
+        <div class="list-icon" style="background:#0a1a3a"><i class="ti ti-arrows-exchange" style="color:var(--blue)"></i></div>
         <div class="list-body"><div class="list-title">${esc(t.DARI)} → ${esc(t.KE)}</div><div class="list-sub">${String(t.TANGGAL).slice(0,10)} · ${esc(t.NOTES||'')}</div></div>
         <div class="list-right" style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
           <div style="font-size:13px;font-weight:700;color:var(--blue)">${fmt(Number(t.NOMINAL))}</div>
@@ -3876,7 +3857,7 @@ function renderReserveDetail() {
     const out = getCCOut(c.NAMA), res = state.reserveFunds[c.NAMA] || 0;
     const pct = out > 0 ? Math.min(100, Math.round(res/out*100)) : 100;
     return `<div class="list-item">
-      <div class="list-icon" style="background:var(--ic-purple)"><i class="ti ti-shield-check" style="color:var(--purple)"></i></div>
+      <div class="list-icon" style="background:#1a0a3a"><i class="ti ti-shield-check" style="color:var(--purple)"></i></div>
       <div class="list-body">
         <div class="list-title" style="font-size:12px">${esc(c.NAMA)}</div>
         <div class="list-sub">Tagihan: ${out>0?fmtS(out):'—'} · Reserve: ${res>0?fmtS(res):'—'}</div>
@@ -5286,147 +5267,4 @@ function exportHTMLReport() {
     H+='var PDATA='+JSON.stringify(pribDataObj)+';';
     H+='function pmClick(c){';
     H+='var b=c.dataset.base,k=c.dataset.cat,m=c.dataset.month,r=document.getElementById(b),body=r.querySelector(".prib-detail-body");';
-    H+='if(r.classList.contains("open")&&r.dataset.m===m){r.classList.remove("open");r.dataset.m="";document.querySelectorAll(".pm-on").forEach(function(x){x.classList.remove("pm-on");});return;}';
-    H+='r.classList.add("open");r.dataset.m=m;';
-    H+='document.querySelectorAll(".pm-on").forEach(function(x){x.classList.remove("pm-on");});c.classList.add("pm-on");';
-    H+='var tx=(PDATA[k]&&PDATA[k][m])||[],ml=m.slice(5)+"/"+m.slice(2,4),tot=tx.reduce(function(s,t){return s+t.n;},0);';
-    H+='var fm=function(n){return Math.round(n||0).toLocaleString("id");};';
-    H+='var ex=function(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");};';
-    H+='body.innerHTML="";';
-    H+='var wrap=document.createElement("div");';
-    H+='wrap.style.cssText="border-left:3px solid #6A1B9A;background:#F3E5F5;padding:8px 0 8px 8px";';
-    H+='var hdr=document.createElement("div");';
-    H+='hdr.style.cssText="padding:0 8px 8px;font-weight:700;color:#6A1B9A;font-size:12px";';
-    H+='hdr.textContent=ex(k)+" · "+ml+" · "+tx.length+" transaksi · Rp "+fm(tot);';
-    H+='wrap.appendChild(hdr);';
-    H+='if(tx.length>0){';
-    H+='var tbl=document.createElement("table");tbl.style.cssText="width:100%;border-collapse:collapse;font-size:11px";';
-    H+='var hrow=tbl.createTHead().insertRow();';
-    H+='["Tgl","Rekening","Project / Notes","Nominal"].forEach(function(h,i){var th=document.createElement("th");th.textContent=h;th.style.cssText="background:#6A1B9A;color:#fff;padding:5px 8px;text-align:"+(i===3?"right":"left");hrow.appendChild(th);});';
-    H+='tx.forEach(function(t,ti){var bg=ti%2===0?"#F5F0FF":"#FFF",row=tbl.insertRow();[t.d,t.r,(t.p||t.x||"—")+(t.p&&t.x?" · "+t.x:""),fm(t.n)].forEach(function(v,i){var td=row.insertCell();td.textContent=v;td.style.cssText="background:"+bg+";padding:5px 8px;border-bottom:1px solid #E1BEE7;"+(i===3?"text-align:right;color:#C62828;font-weight:600":"");});});';
-    H+='var fr=tbl.insertRow();["TOTAL "+ml,"","",fm(tot)].forEach(function(v,i){var td=fr.insertCell();td.textContent=v;td.style.cssText="background:#EDE7F6;padding:5px 8px;font-weight:700;color:#6A1B9A;"+(i===3?"text-align:right":"");});';
-    H+='wrap.appendChild(tbl);';
-    H+='}else{var em=document.createElement("div");em.style.cssText="padding:8px;color:#9AA5B4;font-size:11px";em.textContent="Tidak ada transaksi bulan ini.";wrap.appendChild(em);}';
-    H+='body.appendChild(wrap);}';
-        H+='(function(){var tb=document.querySelector(".topbar"),pg=document.querySelector(".page");';
-    H+='function adj(){if(tb&&pg)pg.style.paddingTop=(tb.offsetHeight+8)+"px";}';
-    H+='adj();window.addEventListener("resize",adj);';
-    H+='})();';
-        H+='document.querySelectorAll("table").forEach(function(t){';
-    H+='if(!t.closest(".tbl-scroll")){var w=document.createElement("div");w.className="tbl-scroll";t.parentNode.insertBefore(w,t);w.appendChild(t);}';
-    H+='});';
-        H+='<\/script></body></html>';
-
-    var w=window.open('','_blank');
-    if(!w){showToast('Pop-up diblokir. Izinkan pop-up untuk FCC.','error');return;}
-    w.document.write(H);
-    w.document.close();
-    showToast('Laporan siap! Klik "Print / PDF" di halaman baru.','ok');
-  } catch(e){
-    console.error('exportHTMLReport error',e);
-    showToast('Gagal buat laporan: '+e.message,'error');
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-
-function handleImportFile(ev){
-  const file=ev.target.files[0]; ev.target.value=''; if(!file)return;
-  if(!API_URL){showToast('API URL belum diset','error');return;}
-  const rd=new FileReader();
-  rd.onload=e=>{
-    try{
-      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true});
-      const shName=wb.SheetNames.find(n=>/transaksi/i.test(n))||wb.SheetNames[0];
-      const rows=XLSX.utils.sheet_to_json(wb.Sheets[shName],{header:1,raw:true,defval:''});
-      parseImport(rows);
-    }catch(err){showToast('Gagal baca file: '+err.message,'error');}
-  };
-  rd.readAsArrayBuffer(file);
-}
-function parseImport(rows){
-  if(!rows||rows.length<2){showToast('File kosong / tidak ada data','error');return;}
-  const hdr=rows[0].map(h=>String(h||'').trim().toUpperCase());
-  const ix=name=>hdr.indexOf(name);
-  const iT=ix('TANGGAL'),iJ=ix('JENIS'),iP=ix('PROJECT'),iR=ix('REKENING'),iK=ix('KATEGORI'),iKel=ix('KELOMPOK'),iN=ix('NOMINAL'),iNo=ix('NOTES');
-  if(iT<0||iJ<0||iR<0||iK<0||iN<0){showToast('Header tidak lengkap. Pakai template (TANGGAL,JENIS,REKENING,KATEGORI,NOMINAL).','error');return;}
-  const acctNames=new Set([...state.banks.map(b=>b.NAMA),...state.ccs.map(c=>c.NAMA)]);
-  const projNames=new Set(state.projects.map(p=>p.NAMA));
-  const katNames=new Set(state.kategori.map(k=>k.NAMA));
-  const valid=[],errors=[],newProjMap={},newKatMap={};
-  for(let r=1;r<rows.length;r++){
-    const row=rows[r]; if(!row||row.every(c=>String(c||'').trim()===''))continue;
-    const excelRow=r+1;
-    const tgl=impDateISO(row[iT]);
-    const jenis=String(row[iJ]||'').trim();
-    const proj=String(iP>=0?row[iP]:'').trim();
-    const rek=String(row[iR]||'').trim();
-    const kat=String(row[iK]||'').trim();
-    const kel=String(iKel>=0?row[iKel]:'').trim().toUpperCase();
-    const nominal=unfmtNum(row[iN]);
-    const notes=String(iNo>=0?row[iNo]:'').trim();
-    const errs=[];
-    if(!tgl)errs.push('tanggal tidak valid');
-    if(jenis!=='Pemasukan'&&jenis!=='Pengeluaran')errs.push('JENIS harus Pemasukan/Pengeluaran');
-    if(!rek)errs.push('rekening kosong'); else if(!acctNames.has(rek))errs.push('rekening "'+rek+'" tidak ada di master');
-    if(!kat)errs.push('kategori kosong');
-    if(!nominal||nominal<=0)errs.push('nominal kosong/0');
-    if(errs.length){errors.push({row:excelRow,msg:errs.join(', ')});continue;}
-    if(proj&&!projNames.has(proj)&&!newProjMap[proj])newProjMap[proj]={NAMA:proj,KLIEN:'',STATUS:'Jalan'};
-    if(!katNames.has(kat)&&!newKatMap[kat])newKatMap[kat]={NAMA:kat,KELOMPOK:(kel||(jenis==='Pemasukan'?'PEMASUKAN':'OPERASIONAL')),TIPE:jenis};
-    valid.push({TANGGAL:tgl,JENIS:jenis,PROJECT:proj,REKENING:rek,KATEGORI:kat,NOMINAL:nominal,NOTES:notes});
-  }
-  const newProjs=Object.values(newProjMap),newKats=Object.values(newKatMap);
-  importPayload={txns:valid,newProjs,newKats};
-  showImportPreview(valid,errors,newProjs,newKats);
-}
-function showImportPreview(valid,errors,newProjs,newKats){
-  const totMasuk=valid.filter(t=>t.JENIS==='Pemasukan').reduce((s,t)=>s+t.NOMINAL,0);
-  const totKeluar=valid.filter(t=>t.JENIS==='Pengeluaran').reduce((s,t)=>s+t.NOMINAL,0);
-  document.getElementById('drawerTitle').textContent='Preview Import';
-  let html=`
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
-      <div class="metric"><div class="metric-label">Baris valid</div><div class="metric-value" style="color:var(--green)">${valid.length}</div></div>
-      <div class="metric"><div class="metric-label">Baris error</div><div class="metric-value" style="color:${errors.length?'var(--red)':'inherit'}">${errors.length}</div></div>
-    </div>
-    <div class="settings-row"><div class="settings-label">Total Pemasukan</div><div style="color:var(--green);font-weight:600">${fmt(totMasuk)}</div></div>
-    <div class="settings-row"><div class="settings-label">Total Pengeluaran</div><div style="color:var(--red);font-weight:600">${fmt(totKeluar)}</div></div>`;
-  if(newProjs.length)html+=`<div style="margin-top:10px"><b>Project baru (${newProjs.length}) akan dibuat:</b><div class="settings-sub">${newProjs.map(p=>esc(p.NAMA)).join(', ')}</div></div>`;
-  if(newKats.length)html+=`<div style="margin-top:10px"><b>Kategori baru (${newKats.length}) akan dibuat:</b><div class="settings-sub">${newKats.map(k=>esc(k.NAMA)+' ['+k.KELOMPOK+']').join(', ')}</div></div>`;
-  if(errors.length){
-    html+=`<div style="margin-top:12px;color:var(--red)"><b>Baris ditolak — perbaiki di Excel lalu import ulang:</b></div>
-      <div style="max-height:180px;overflow:auto;font-size:13px;margin-top:6px">${errors.map(e=>`<div style="padding:4px 0;border-bottom:1px solid #2a2a2a">Baris ${e.row}: ${esc(e.msg)}</div>`).join('')}</div>`;
-  }
-  html+=`<div style="margin-top:16px;display:flex;gap:8px">
-      <button class="btn-primary" style="flex:1" onclick="confirmImport()" ${valid.length?'':'disabled'}><i class="ti ti-database-import"></i> Konfirmasi Import (${valid.length})</button>
-      <button class="btn-secondary" onclick="closeDrawer()">Batal</button></div>`;
-  if(!valid.length)html+=`<div class="settings-sub" style="margin-top:8px;color:var(--red)">Tidak ada baris valid untuk diimport.</div>`;
-  document.getElementById('drawerBody').innerHTML=html;
-  drawerMode='import';
-  document.getElementById('drawerBg').classList.add('open');
-}
-async function confirmImport(){
-  if(!importPayload||!importPayload.txns.length){showToast('Tidak ada data','error');return;}
-  const n=importPayload.txns.length;
-  document.getElementById('drawerBody').innerHTML='<div style="text-align:center;padding:30px"><div class="spin" style="margin:0 auto 12px"></div>Mengimport '+n+' transaksi...</div>';
-  const res=await apiPost({action:'addTxnBatch',data:{...importPayload,USER:state.user}});
-  if(res&&!res.error){
-    importPayload=null;closeDrawer();
-    showToast('Import berhasil: '+(res.txn||n)+' transaksi ✓','success');
-    await syncAll();
-  }else{
-    showToast('Gagal import: '+((res&&res.error)||'koneksi'),'error');
-    closeDrawer();
-  }
-}
-function showToast(msg,type){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(type||'success');setTimeout(()=>t.classList.add('show'),10);setTimeout(()=>t.classList.remove('show'),2800);}
-function goPage(page){closeFabMenu();closeLainnyaMenu();state.currentPage=page;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+page).classList.add('active');document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));const navKey=({kasbon:'lainnya',forecast:'lainnya',piutang:'lainnya',invest:'lainnya',forex:'lainnya'})[page]||page;const _ab=document.querySelector('.nav-item[data-nav="'+navKey+'"]');if(_ab)_ab.classList.add('active');document.getElementById('content').scrollTop=0;if(page==='master')renderMaster();if(page==='transfer')renderTransferPage();if(page==='kasbon')renderKasbon();if(page==='forecast')renderForecast();if(page==='piutang')renderPiutang();if(page==='invest')renderInvest();if(page==='forex'){renderForex();renderKurs();}if(page==='dashboard')renderDashboard();}
-function renderAll(){setAppVer();setEyeIcon();applyTheme();renderDashboard();renderTxnMonthTabs();filterTxn();renderProject();renderCCBillReminder();renderPiutangReminder();updatePiutangBadge();if(state.currentPage==='master')renderMaster();if(state.currentPage==='transfer')renderTransferPage();if(state.currentPage==='kasbon')renderKasbon();if(state.currentPage==='forecast')renderForecast();if(state.currentPage==='piutang')renderPiutang();if(state.currentPage==='invest')renderInvest();if(state.currentPage==='forex'){renderForex();renderKurs();}}
-if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{});}
-applyTheme();setEyeIcon();
-let logoTimer;
-document.querySelector('.topbar-title').addEventListener('touchstart',()=>{logoTimer=setTimeout(()=>openDrawer('settings'),800);});
-document.querySelector('.topbar-title').addEventListener('touchend',()=>clearTimeout(logoTimer));
-document.querySelector('.topbar-title').addEventListener('click',()=>openDrawer('settings'));
-</script>
-</body>
+    H+='if(r.classList.contains("open")&&r.dataset.m===m){r.classList.remove("open");r.dataset.m="";document.querySelectorAll(".pm-on").forEach(function(x){x.classList.remove("pm-on")
