@@ -14,17 +14,15 @@
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <style>
 :root{
-  --bg:#0A0E0C;--bg2:#111A15;--bg3:#16211B;--bg4:#1E2C24;
-  --border:#1F2B25;--border2:#2C3C33;
-  --text:#EAF2EE;--text2:#8B9C93;--text3:#566A60;
-  --green:#2EE6A6;--red:#F0726A;--blue:#5B9CF6;--amber:#F5A623;--purple:#a78bfa;
-  --gold:#E7C778;--coral:#FF6B5C;
-  --radius:11px;--radius-lg:16px;
+  --bg:#0f0f13;--bg2:#16161d;--bg3:#1e1e28;--bg4:#252532;
+  --border:#2e2e3e;--border2:#3a3a4e;
+  --text:#e8e8f0;--text2:#9090a8;--text3:#5a5a72;
+  --green:#2dd4a0;--red:#f06a6a;--blue:#5b9cf6;--amber:#f5a623;--purple:#a78bfa;
+  --radius:10px;--radius-lg:14px;
   --font:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;overflow:hidden;font-feature-settings:'tnum' 1,'cv01' 1;-webkit-font-smoothing:antialiased}
-.num{font-variant-numeric:tabular-nums;letter-spacing:-.3px}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;overflow:hidden}
 body{display:flex;flex-direction:column}
 
 /* LOGIN */
@@ -221,7 +219,7 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
   <!-- TOPBAR -->
   <div class="topbar">
     <div>
-      <div class="topbar-title" style="display:flex;align-items:center;gap:7px"><span style="width:24px;height:24px;border-radius:8px;background:var(--coral);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-building-skyscraper" style="color:#2A0E0A;font-size:14px"></i></span>FCC Arthabumi <span id="appVer" onclick="goPage('master')" style="font-size:10px;font-weight:600;color:var(--text3);background:var(--bg);border:1px solid var(--border2);border-radius:6px;padding:1px 6px;cursor:pointer;vertical-align:middle"></span></div>
+      <div class="topbar-title">🏗 FCC Arthabumi <span id="appVer" onclick="goPage('master')" style="font-size:10px;font-weight:600;color:var(--text3);background:var(--bg);border:1px solid var(--border2);border-radius:6px;padding:1px 6px;margin-left:4px;cursor:pointer;vertical-align:middle"></span></div>
       <div class="topbar-sub" id="topbarSub">Memuat data...</div>
     </div>
     <div class="topbar-right">
@@ -460,9 +458,8 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v26.5';
+const APP_VERSION = 'v26.4';
 const CHANGELOG = [
-  { v:'v26.5', d:'24 Jun 2026', t:'Tampilan premium BaZi-tuned (hijau · emas · coral) — tema global + Dashboard.' },
   { v:'v26.4', d:'24 Jun 2026', t:'Penanda versi + "What\'s new" di app (header & Master).' },
   { v:'v26.3', d:'24 Jun 2026', t:'Fix data forex geser kolom + tombol hapus; backend self-healing.' },
   { v:'v26.2', d:'24 Jun 2026', t:'Fix kartu Forex Dashboard 0; gabung tab Forex & Kurs.' },
@@ -1081,10 +1078,9 @@ function renderDashboard() {
 
   document.getElementById('dashMetrics').innerHTML = `
     <div class="metric-grid">
-      <div class="metric wide" style="background:linear-gradient(140deg,#0E2A1F,#0A1712);border:1px solid #2EE6A633">
-        <div style="height:2px;width:40px;background:var(--gold);border-radius:2px;margin-bottom:9px"></div>
+      <div class="metric wide" style="background:linear-gradient(135deg,#0a2a1e,#0d1f2d);border:1px solid #2dd4a030">
         <div class="metric-label">Net Cash Position</div>
-        <div class="metric-value num" style="font-size:30px;color:${(totBank-totRes) >= 0?'var(--green)':'var(--red)'}">${fmt(totBank-totRes)}</div>
+        <div class="metric-value" style="font-size:28px;color:${(totBank-totRes) >= 0?'var(--green)':'var(--red)'}">${fmt(totBank-totRes)}</div>
         <div class="metric-sub">Kas bebas = Bank ${fmtS(totBank)} − Reserve ${fmtS(totRes)} (reserve diparkir di rekening penyimpan)</div>
       </div>
       <div class="metric">
@@ -1102,7 +1098,7 @@ function renderDashboard() {
         <div class="metric-value info">${fmt(totRes)}</div>
         <div class="metric-sub">ketuk untuk rincian per kartu${totCicilan>0?` · cicilan ${fmtS(totCicilan)}`:''}</div>
       </div>
-      ${totBelumRes>0?`<div class="metric" onclick="gotoCCReserve()" style="cursor:pointer;background:linear-gradient(140deg,#2A0E0C,#1A0A0C);border:1px solid #F0726A40">
+      ${totBelumRes>0?`<div class="metric" onclick="gotoCCReserve()" style="cursor:pointer;background:linear-gradient(135deg,#2a0a0a,#1f0d12);border:1px solid #ef444440">
         <div class="metric-label">Belum di-reserve (semua kartu) <i class="ti ti-chevron-right" style="font-size:11px;vertical-align:middle"></i></div>
         <div class="metric-value neg">${fmt(totBelumRes)}</div>
         <div class="metric-sub">perlu kamu transfer ke bank reserve · ketuk untuk rincian</div>
@@ -1117,10 +1113,9 @@ function renderDashboard() {
         <div class="metric-value warn">${projAktif}</div>
         <div class="metric-sub">dari ${state.projects.length} total</div>
       </div>
-      <div class="metric wide" style="background:linear-gradient(140deg,#0E2A1F,#0A1712);border:1px solid #2EE6A633">
-        <div style="height:2px;width:40px;background:var(--gold);border-radius:2px;margin-bottom:9px"></div>
+      <div class="metric wide" style="background:linear-gradient(135deg,#0a2a1e,#0d1f2d);border:1px solid #2dd4a030">
         <div class="metric-label">Laba Bersih · Project Selesai</div>
-        <div class="metric-value num" style="font-size:26px;color:${dp.laba>=0?'var(--green)':'var(--red)'}">${dp.laba>=0?'':'-'}${fmt(Math.abs(dp.laba))} <span style="font-size:15px;color:var(--text2)">(${dp.margin.toFixed(1)}%)</span></div>
+        <div class="metric-value" style="font-size:24px;color:${dp.laba>=0?'var(--green)':'var(--red)'}">${dp.laba>=0?'':'-'}${fmt(Math.abs(dp.laba))} <span style="font-size:15px;color:var(--text2)">(${dp.margin.toFixed(1)}%)</span></div>
         <div class="metric-sub">Masuk ${fmtS(dp.masuk)} − Keluar ${fmtS(dp.keluar)} · ${dp.count} project selesai</div>
       </div>
     </div>
@@ -1894,7 +1889,7 @@ function renderForex(){
   let html=`<div class="card" style="margin-bottom:12px">
     <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
       <div><div style="font-size:10px;color:var(--text3);text-transform:uppercase">Total dipegang</div><div style="font-size:22px;font-weight:700">${usdFmt(T.holding)} <span style="font-size:13px;color:var(--text2)">USD</span></div></div>
-      <div style="text-align:right"><div style="font-size:10px;color:var(--text3);text-transform:uppercase">Nilai live (Rp)</div><div style="font-size:18px;font-weight:700;color:var(--gold)">${c.hasKurs?fmt(T.liveValue):'—'}</div></div>
+      <div style="text-align:right"><div style="font-size:10px;color:var(--text3);text-transform:uppercase">Nilai live (Rp)</div><div style="font-size:18px;font-weight:700;color:var(--blue)">${c.hasKurs?fmt(T.liveValue):'—'}</div></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
       <div style="background:#12121a;border-radius:8px;padding:8px 10px"><div style="color:var(--text3);font-size:10px">Modal (cost)</div><div style="font-weight:600">${fmt(T.costHolding)}</div></div>
@@ -1930,7 +1925,7 @@ function renderForexDash(){
     <div class="card-title">Tabungan Forex <span style="font-size:11px;font-weight:500;color:var(--text3);margin-left:4px">USD</span><i class="ti ti-chevron-right" style="float:right;color:var(--text3)"></i></div>
     <div style="display:flex;justify-content:space-between;align-items:baseline;margin:2px 0 6px">
       <div style="font-size:20px;font-weight:700">${usdFmt(T.holding)} <span style="font-size:12px;color:var(--text2)">USD</span></div>
-      <div style="text-align:right"><div style="font-size:16px;font-weight:700;color:var(--gold)">${c.hasKurs?fmt(T.liveValue):'—'}</div>${c.hasKurs?`<div style="font-size:10px;color:${T.unreal>=0?'var(--green)':'var(--red)'}">${T.unreal>=0?'+':'-'}${fmt(Math.abs(T.unreal))} U/R</div>`:''}</div>
+      <div style="text-align:right"><div style="font-size:16px;font-weight:700;color:var(--blue)">${c.hasKurs?fmt(T.liveValue):'—'}</div>${c.hasKurs?`<div style="font-size:10px;color:${T.unreal>=0?'var(--green)':'var(--red)'}">${T.unreal>=0?'+':'-'}${fmt(Math.abs(T.unreal))} U/R</div>`:''}</div>
     </div>
     ${akunRows?`<div style="border-top:1px solid var(--border2);padding-top:6px">${akunRows}</div>`:''}
     ${!c.hasKurs?'<div style="font-size:10px;color:var(--amber);margin-top:6px">⚠ Kurs belum ada — buka Kurs BCA & Perbarui</div>':''}
@@ -5297,51 +5292,4 @@ function parseImport(rows){
   showImportPreview(valid,errors,newProjs,newKats);
 }
 function showImportPreview(valid,errors,newProjs,newKats){
-  const totMasuk=valid.filter(t=>t.JENIS==='Pemasukan').reduce((s,t)=>s+t.NOMINAL,0);
-  const totKeluar=valid.filter(t=>t.JENIS==='Pengeluaran').reduce((s,t)=>s+t.NOMINAL,0);
-  document.getElementById('drawerTitle').textContent='Preview Import';
-  let html=`
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
-      <div class="metric"><div class="metric-label">Baris valid</div><div class="metric-value" style="color:var(--green)">${valid.length}</div></div>
-      <div class="metric"><div class="metric-label">Baris error</div><div class="metric-value" style="color:${errors.length?'var(--red)':'inherit'}">${errors.length}</div></div>
-    </div>
-    <div class="settings-row"><div class="settings-label">Total Pemasukan</div><div style="color:var(--green);font-weight:600">${fmt(totMasuk)}</div></div>
-    <div class="settings-row"><div class="settings-label">Total Pengeluaran</div><div style="color:var(--red);font-weight:600">${fmt(totKeluar)}</div></div>`;
-  if(newProjs.length)html+=`<div style="margin-top:10px"><b>Project baru (${newProjs.length}) akan dibuat:</b><div class="settings-sub">${newProjs.map(p=>esc(p.NAMA)).join(', ')}</div></div>`;
-  if(newKats.length)html+=`<div style="margin-top:10px"><b>Kategori baru (${newKats.length}) akan dibuat:</b><div class="settings-sub">${newKats.map(k=>esc(k.NAMA)+' ['+k.KELOMPOK+']').join(', ')}</div></div>`;
-  if(errors.length){
-    html+=`<div style="margin-top:12px;color:var(--red)"><b>Baris ditolak — perbaiki di Excel lalu import ulang:</b></div>
-      <div style="max-height:180px;overflow:auto;font-size:13px;margin-top:6px">${errors.map(e=>`<div style="padding:4px 0;border-bottom:1px solid #2a2a2a">Baris ${e.row}: ${esc(e.msg)}</div>`).join('')}</div>`;
-  }
-  html+=`<div style="margin-top:16px;display:flex;gap:8px">
-      <button class="btn-primary" style="flex:1" onclick="confirmImport()" ${valid.length?'':'disabled'}><i class="ti ti-database-import"></i> Konfirmasi Import (${valid.length})</button>
-      <button class="btn-secondary" onclick="closeDrawer()">Batal</button></div>`;
-  if(!valid.length)html+=`<div class="settings-sub" style="margin-top:8px;color:var(--red)">Tidak ada baris valid untuk diimport.</div>`;
-  document.getElementById('drawerBody').innerHTML=html;
-  drawerMode='import';
-  document.getElementById('drawerBg').classList.add('open');
-}
-async function confirmImport(){
-  if(!importPayload||!importPayload.txns.length){showToast('Tidak ada data','error');return;}
-  const n=importPayload.txns.length;
-  document.getElementById('drawerBody').innerHTML='<div style="text-align:center;padding:30px"><div class="spin" style="margin:0 auto 12px"></div>Mengimport '+n+' transaksi...</div>';
-  const res=await apiPost({action:'addTxnBatch',data:{...importPayload,USER:state.user}});
-  if(res&&!res.error){
-    importPayload=null;closeDrawer();
-    showToast('Import berhasil: '+(res.txn||n)+' transaksi ✓','success');
-    await syncAll();
-  }else{
-    showToast('Gagal import: '+((res&&res.error)||'koneksi'),'error');
-    closeDrawer();
-  }
-}
-function showToast(msg,type){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(type||'success');setTimeout(()=>t.classList.add('show'),10);setTimeout(()=>t.classList.remove('show'),2800);}
-function goPage(page){closeFabMenu();closeLainnyaMenu();state.currentPage=page;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+page).classList.add('active');document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));const navKey=({kasbon:'lainnya',forecast:'lainnya',piutang:'lainnya',invest:'lainnya',forex:'lainnya'})[page]||page;const _ab=document.querySelector('.nav-item[data-nav="'+navKey+'"]');if(_ab)_ab.classList.add('active');document.getElementById('content').scrollTop=0;if(page==='master')renderMaster();if(page==='transfer')renderTransferPage();if(page==='kasbon')renderKasbon();if(page==='forecast')renderForecast();if(page==='piutang')renderPiutang();if(page==='invest')renderInvest();if(page==='forex'){renderForex();renderKurs();}if(page==='dashboard')renderDashboard();}
-function renderAll(){setAppVer();renderDashboard();renderTxnMonthTabs();filterTxn();renderProject();renderCCBillReminder();renderPiutangReminder();updatePiutangBadge();if(state.currentPage==='master')renderMaster();if(state.currentPage==='transfer')renderTransferPage();if(state.currentPage==='kasbon')renderKasbon();if(state.currentPage==='forecast')renderForecast();if(state.currentPage==='piutang')renderPiutang();if(state.currentPage==='invest')renderInvest();if(state.currentPage==='forex'){renderForex();renderKurs();}}
-if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{});}
-let logoTimer;
-document.querySelector('.topbar-title').addEventListener('touchstart',()=>{logoTimer=setTimeout(()=>openDrawer('settings'),800);});
-document.querySelector('.topbar-title').addEventListener('touchend',()=>clearTimeout(logoTimer));
-document.querySelector('.topbar-title').addEventListener('click',()=>openDrawer('settings'));
-</script>
-</body>
+  const totMasuk=valid.filter(t=>t.JENIS==='P

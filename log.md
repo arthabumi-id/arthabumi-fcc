@@ -38,6 +38,13 @@
 - **Maintenance:** tiap rilis baru → bump APP_VERSION + tambah 1 entri di CHANGELOG (paling atas) + bump sw.js. Riwayat lengkap tetap di log.md ini.
 - **Deploy:** CLIENT-ONLY — push index.html + sw.js v25.
 
+### v26.5 Tampilan premium BaZi-tuned — tahap 1 (Dashboard) — CLIENT-ONLY, sw.js v26
+- **Konteks BaZi Eddy** (dari family-blueprint-santoso.md): DM 壬 Air; Five Elements Tanah51/Air23/Kayu20/Logam6/**Api0**. Warna anjuran: hijau/teal (rezeki/branding), merah-coral (Api=wealth 0%), putih/emas (Logam). Hindari kuning/cokelat (Tanah dominan) & biru dominan (itu warna Novia/Audrey). → palet **A+ = hijau base + emas highlight + coral spark**.
+- **Design tokens (:root):** bg deepen ke hijau-hitam (#0A0E0C/#111A15/#16211B), border hijau-gelap, text hijau-tint; --green→#2EE6A6; +`--gold:#E7C778` +`--coral:#FF6B5C`; radius 11/16. body `font-feature-settings tnum` + `.num` tabular. **Global** (semua halaman dapat palet baru).
+- **Dashboard (bespoke premium):** brand chip coral di topbar (ti-building-skyscraper); 2 kartu hero (Net Cash, Laba) gradient hijau premium + garis emas + angka `.num` lebih besar; kartu belum-reserve tone merah baru; nilai live Forex (dash & halaman) biru→**emas** (wealth=Logam). Semantik tetap: hijau=masuk, merah=keluar.
+- **Belum disentuh (rollout berikutnya):** gradient lama #0a2a1e di renderReserveDetail (1676), transfer (3482), drawer detail CC (3164); login logo emoji. Tetap kebaca di bg baru.
+- **Verifikasi:** renderDashboard node --check OK; backtick/brace balanced. Backup `index-pre-design-*`.
+
 ---
 
 ## SESSION — 2026-06-23 (Bug filter rekening + v25 Kurs BCA)
