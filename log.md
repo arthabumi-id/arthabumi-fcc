@@ -82,6 +82,12 @@
 - **Tab Kartu Kredit:** `#1a1030`→`var(--ic-purple)` (Beli Cicilan), `#1a1206`→`var(--ic-amber)` (Rincian ×4), `#b9a3ff`→`var(--purple)` (×14 teks cicilan), bar progress `#222`→`var(--inset)` + `#7c5cff`→`var(--purple)`.
 - **Verifikasi:** 0 sisa `color:'#1F2B25'`; 0 sisa blok gelap CC; renderCharts & applyTheme node --check OK; style 132/132.
 
+### v27.2 Fix PWA install (buka sbg app, bukan browser) — sw.js v33
+- **Akar:** ada `<script>` yg inject manifest BLOB (canvas icon 180px, branding biru #1F4E79 lama) → menimpa manifest.json statik. Android Chrome butuh ikon 192 & 512 utk WebAPK; krn cuma ada 180px data-URL → cuma bikin shortcut (buka di Chrome). File icon-192/512.png yg dirujuk manifest asli juga TIDAK ADA.
+- **Fix:** (1) generate ikon asli `icon-192.png`,`icon-512.png`,`apple-touch-icon.png` (coral + gedung, on-brand) via PIL; (2) HAPUS script blob manifest + canvas; ganti `<link rel=apple-touch-icon/icon>` statik; (3) theme-color → #0A0E0C (buang #1F4E79); (4) manifest.json: bg/theme #0A0E0C, +scope, +purpose any & maskable; (5) sw ASSETS + ikon, cache v33.
+- **Eddy harus:** hapus shortcut lama → buka situs di Chrome → menu ⋮ → **Install app / Tambahkan ke layar utama** (sekarang muncul opsi install WebAPK) → buka standalone tanpa address bar.
+- File baru di repo: icon-192.png, icon-512.png, apple-touch-icon.png (perlu di-push).
+
 ---
 
 ## SESSION — 2026-06-23 (Bug filter rekening + v25 Kurs BCA)

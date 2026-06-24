@@ -1,5 +1,5 @@
-const CACHE = 'fcc-arthabumi-v32';
-const ASSETS = ['./index.html', './manifest.json'];
+const CACHE = 'fcc-arthabumi-v33';
+const ASSETS = ['./index.html', './manifest.json', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
   self.skipWaiting();

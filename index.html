@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<meta name="theme-color" content="#0f0f13">
+<meta name="theme-color" content="#0A0E0C">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="FCC Arthabumi">
@@ -215,31 +215,8 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="FCC Arthabumi">
-<meta name="theme-color" content="#1F4E79">
-<script>
-(function(){
-  // Dynamic app icon
-  var cv=document.createElement('canvas'); cv.width=cv.height=180;
-  var c=cv.getContext('2d');
-  c.beginPath(); c.roundRect(0,0,180,180,28); c.fillStyle='#1F4E79'; c.fill();
-  c.fillStyle='#fff'; c.font='bold 52px sans-serif'; c.textAlign='center'; c.textBaseline='middle';
-  c.fillText('FCC',90,78);
-  c.font='bold 22px sans-serif'; c.fillStyle='#90CAF9';
-  c.fillText('Arthabumi',90,118);
-  var lnk=document.createElement('link'); lnk.rel='apple-touch-icon'; lnk.href=cv.toDataURL();
-  document.head.appendChild(lnk);
-  // Manifest blob for Android Chrome
-  try{
-    var mf={name:'FCC Arthabumi',short_name:'FCC',display:'standalone',
-      background_color:'#F5F6FA',theme_color:'#1F4E79',
-      start_url:location.href.split('?')[0],
-      icons:[{src:cv.toDataURL(),sizes:'180x180',type:'image/png'}]};
-    var blob=new Blob([JSON.stringify(mf)],{type:'application/manifest+json'});
-    var mlink=document.createElement('link'); mlink.rel='manifest';
-    mlink.href=URL.createObjectURL(blob); document.head.appendChild(mlink);
-  }catch(e){}
-})();
-</script>
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 </head>
 <body>
 
@@ -508,8 +485,9 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v27.1';
+const APP_VERSION = 'v27.2';
 const CHANGELOG = [
+  { v:'v27.2', d:'24 Jun 2026', t:'Fix PWA: ikon 192/512 asli + manifest bersih → bisa "Install app" (buka tanpa browser).' },
   { v:'v27.1', d:'24 Jun 2026', t:'Garis chart abu adaptif + tombol/blok gelap di tab Kartu Kredit jadi clean (light).' },
   { v:'v27.0', d:'24 Jun 2026', t:'Light mode dirombak premium: warna chip/kartu/ikon adaptif dua tema + bayangan halus.' },
   { v:'v26.9', d:'24 Jun 2026', t:'Mode mata (sembunyikan nominal ••••) + tema terang/gelap di header.' },
