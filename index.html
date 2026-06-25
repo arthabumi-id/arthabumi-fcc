@@ -359,6 +359,7 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
         <button class="ttab" onclick="switchMasterTab('kat')" id="mTab-kat" style="flex:none;padding:8px 14px;border-radius:20px;border:1px solid var(--border2);font-size:12px">Kategori</button>
       </div>
       <div id="masterContent"></div>
+      <div id="masterBackup" style="margin-top:20px"></div>
       <div id="masterVersi" style="margin-top:20px"></div>
     </div>
 
@@ -464,6 +465,7 @@ let state = {
   txns: [], transfers: [], reserves: [], kasbon: [], jadwal: [],
   reserveFunds: {}, // computed: cc_name -> total
   safeThreshold: Number(localStorage.getItem('fcc_safe_threshold')) || 0, // ambang aman kas (forecast)
+  fcExtra: Number(localStorage.getItem('fcc_fc_extra')) || 0, // simulasi beban tetap baru/bln (forecast what-if)
   summary: null,    // agregat penuh dari server (saldo/proj/bulan/kategori)
   txnsSince: null,  // batas tanggal txn terlama yg sudah dimuat ke client
   online: false,
@@ -492,8 +494,9 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v28.1';
+const APP_VERSION = 'v29';
 const CHANGELOG = [
+  { v:'v29', d:'25 Jun 2026', t:'Backup & Restore (salinan data otomatis ke Drive) + Forecast disempurnakan: simulasi "berani rekrut?", pita optimis/pesimis, panel cara baca.' },
   { v:'v28.1', d:'24 Jun 2026', t:'Tab Forex & Kurs: Kurs dipindah ke atas dengan frame emas, Pocket Forex di bawah.' },
   { v:'v28.0', d:'24 Jun 2026', t:'Detail akun: klik bagian chart kategori → filter daftar transaksinya (mis. Transfer Keluar).' },
   { v:'v27.9', d:'24 Jun 2026', t:'Komposisi Pengeluaran Dashboard bisa diklik → rincian per periode & drill-down (Master Kategori).' },
@@ -527,6 +530,36 @@ function renderVersiBox(){
       <div style="flex:1"><div style="font-size:12px;color:var(--text)">${c.t}</div><div style="font-size:10px;color:var(--text3)">${c.d}</div></div>
     </div>`).join('')}
   </div>`;
+}
+// ── BACKUP & RESTORE (v29) ────────────────────────────────────
+async function loadBackups(){
+  const el=document.getElementById('backupList'); if(!el) return;
+  el.innerHTML='<div style="font-size:11px;color:var(--text3)">Memuat daftar backup…</div>';
+  const r=await apiGet({action:'listBackups'});
+  if(!r || r.error || !r.backups){ el.innerHTML='<div style="font-size:11px;color:var(--text3)">Belum bisa memuat daftar (perlu online / izin Drive).</div>'; return; }
+  if(!r.backups.length){ el.innerHTML='<div style="font-size:11px;color:var(--text3)">Belum ada backup. Tekan "Backup sekarang" atau tunggu backup harian.</div>'; return; }
+  el.innerHTML=r.backups.map((b,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;${i?'border-top:1px solid var(--border2)':''}">
+    <i class="ti ti-history" style="color:var(--text3);font-size:15px"></i>
+    <div style="flex:1;font-size:12px;color:var(--text)">${(b.name||'').replace('FCC Backup ','')}${i===0?' <span style="font-size:9px;color:var(--green);font-weight:700">TERBARU</span>':''}</div>
+    <a href="${b.url}" target="_blank" rel="noopener" style="font-size:11px;color:var(--green);text-decoration:none">Buka</a>
+  </div>`).join('') + `<div style="font-size:10px;color:var(--text3);margin-top:8px">Disimpan ${r.keep} salinan terbaru · <a href="${r.folder}" target="_blank" rel="noopener" style="color:var(--text2)">buka folder Drive</a></div>`;
+}
+async function doBackupNow(){
+  const btn=document.getElementById('btnBackup'); if(btn){ btn.disabled=true; btn.textContent='Membackup…'; }
+  const r=await apiPost({action:'backupNow'});
+  if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-cloud-up"></i> Backup sekarang'; }
+  if(r && r.ok){ showToast('Backup dibuat: '+r.at,'success'); loadBackups(); }
+  else { showToast('Backup gagal'+(r&&r.error?': '+r.error:'')); }
+}
+function renderBackupBox(){
+  const el=document.getElementById('masterBackup'); if(!el) return;
+  el.innerHTML=`<div class="card">
+    <div class="card-title"><i class="ti ti-shield-lock" style="color:var(--gold);margin-right:5px"></i>Backup &amp; Restore</div>
+    <div style="font-size:11px;color:var(--text2);line-height:1.55;margin:2px 0 10px">Salinan seluruh data disimpan otomatis tiap hari ke Google Drive (folder <b>"FCC Backups"</b>). Kalau ada data yang rusak/terhapus, buka salinan terbaru lalu salin balik bagian yang perlu. <b>Salinan tidak pernah menimpa data hidup</b> — restore selalu kamu putuskan manual, jadi aman.</div>
+    <button id="btnBackup" class="btn-primary" onclick="doBackupNow()" style="width:100%;margin-bottom:12px"><i class="ti ti-cloud-up"></i> Backup sekarang</button>
+    <div id="backupList"></div>
+  </div>`;
+  loadBackups();
 }
 function setAppVer(){ const el=document.getElementById('appVer'); if(el) el.textContent=APP_VERSION; }
 function setEyeIcon(){ const b=document.getElementById('eyeBtn'); if(b) b.innerHTML='<i class="ti ti-'+(state.hideAmounts?'eye-off':'eye')+'"></i>'; }
@@ -1468,8 +1501,10 @@ function _monthlyDates(day, horizon){
   return out;
 }
 
-function buildForecast(horizon){
-  horizon=horizon||90;
+// opt: { extraMonthly:Rp beban tetap baru/bln (what-if), burnMult:pengali burn (pesimis),
+//        includeOverdue:true→piutang lewat tempo ikut diproyeksi masuk hari ini (optimis) }
+function buildForecast(horizon, opt){
+  horizon=horizon||90; opt=opt||{};
   const start=state.banks.reduce((s,b)=>s+getSaldo(b.NAMA).saldo,0);
   const events=[];
   // v18: reserve diparkir di bank (bukan virtual) → akan dibelanjakan utk bayar CC, jadi
@@ -1511,8 +1546,15 @@ function buildForecast(horizon){
     const due=String(p.JATUH_TEMPO||'').slice(0,10); if(!due) return;
     const diff=_daysBetween(today(),due);
     if(diff>=0 && diff<=horizon) events.push({date:due,amount:amt,label:(p.KLIEN||p.PROJECT||'Termin')+' · '+(p.TERMIN||''),type:'piutang',jenis:'Pemasukan',id:p.ID});
+    // Optimis: piutang sudah lewat tempo diasumsikan akhirnya tertagih (masuk hari ini).
+    else if(diff<0 && opt.includeOverdue) events.push({date:today(),amount:amt,label:(p.KLIEN||p.PROJECT||'Termin')+' · '+(p.TERMIN||'')+' (telat)',type:'piutang',jenis:'Pemasukan',id:p.ID});
   });
-  const burn=dailyBurn();
+  // What-if: beban tetap baru (mis. gaji karyawan) — keluar tiap bulan dalam horizon.
+  if(Number(opt.extraMonthly)>0){
+    _monthlyDates(new Date(today()+'T00:00:00').getDate(),horizon).forEach(d=>
+      events.push({date:d,amount:-Math.abs(opt.extraMonthly),label:'Beban tetap baru (simulasi)',type:'whatif',jenis:'Pengeluaran'}));
+  }
+  const burn=dailyBurn()*(Number(opt.burnMult)||1);
   const series=[]; let bal=start;
   for(let i=0;i<=horizon;i++){
     const d=_addDaysISO(today(),i);
@@ -1527,59 +1569,108 @@ function buildForecast(horizon){
   return {start,burn,events,series,d30:at(30),d60:at(60),d90:at(90),min};
 }
 
+// What-if: simpan/hapus nilai simulasi beban tetap baru.
+function setFcExtra(v){ state.fcExtra=Math.max(0,Math.round(Number(v)||0)); localStorage.setItem('fcc_fc_extra',state.fcExtra||''); renderForecast(); }
+function clearFcExtra(){ state.fcExtra=0; localStorage.setItem('fcc_fc_extra',''); renderForecast(); }
+// Tanggal pertama saldo turun di bawah ambang (null bila aman sepanjang horizon).
+function _breachDate(series,th){ for(const p of series){ if(p.balance<th) return p; } return null; }
+// Panel penjelasan awam (task: cara baca Forecast).
+function forecastHelpHTML(){
+  return `<details class="card" style="margin-bottom:12px"${localStorage.getItem('fcc_fc_help_seen')?'':' open'} ontoggle="localStorage.setItem('fcc_fc_help_seen','1')">
+    <summary style="cursor:pointer;font-size:12px;font-weight:700"><i class="ti ti-help-circle" style="color:var(--gold)"></i> Cara baca halaman ini</summary>
+    <div style="font-size:11.5px;color:var(--text2);line-height:1.65;margin-top:10px">
+      <p style="margin:0"><b>Apa ini?</b> Perkiraan saldo kas (uang di semua rekening bank) untuk 90 hari ke depan, dihitung dari pola pengeluaranmu + tagihan + termin yang sudah tercatat. Ini <b>tebakan terdidik</b>, bukan kepastian.</p>
+      <p style="margin:8px 0 0"><b>Angka 30 / 60 / 90 hari:</b> perkiraan sisa kas pada titik waktu itu. <span style="color:var(--green)">Hijau</span> = di atas ambang aman, <span style="color:var(--red)">merah</span> = di bawah (hati-hati).</p>
+      <p style="margin:8px 0 0"><b>"Aman sampai …":</b> tanggal pertama kas diperkirakan turun di bawah ambang amanmu. Kalau tertulis "Aman ≥ 90 hari" berarti aman sepanjang yang terlihat.</p>
+      <p style="margin:8px 0 0"><b>Tiga garis di grafik:</b> <b>Normal</b> = perkiraan tengah. <span style="color:var(--green)">Optimis</span> = anggap piutang yang telat akhirnya tertagih. <span style="color:var(--red)">Pesimis</span> = pengeluaran membengkak 15%. Kenyataan biasanya di antara dua garis ini.</p>
+      <p style="margin:8px 0 0"><b>Kotak Simulasi (kuning):</b> mau tahu kalau menggaji karyawan baru? Isi gaji per bulan → app hitung ulang apakah kas-mu tetap aman. Ini langsung menjawab "berani rekrut atau belum".</p>
+      <p style="margin:8px 0 0"><b>Biar makin akurat:</b> catat termin masuk lewat <b>Jadwal</b>/<b>Piutang</b>, dan pastikan tanggal jatuh tempo CC benar. Makin lengkap datanya, makin tepat perkiraannya.</p>
+    </div>
+  </details>`;
+}
+
 function renderForecast(){
-  const f=buildForecast(90);
   const th=state.safeThreshold||0;
+  const extra=state.fcExtra||0;
+  const base=buildForecast(90,{extraMonthly:extra});
+  const opti=buildForecast(90,{extraMonthly:extra,includeOverdue:true});
+  const pess=buildForecast(90,{extraMonthly:extra,burnMult:1.15});
   const col=v=> v>=th?'var(--green)':'var(--red)';
-  const breach=f.min.balance<th;
-  let html=`<div class="metric-grid" style="margin-bottom:12px">
+  const breach=_breachDate(base.series,th);
+  const amanLabel=breach?('Aman sampai '+breach.date):'Aman ≥ 90 hari ke depan';
+  const vColor=breach?'var(--red)':'var(--green)';
+  let html='';
+  // ── Simulasi what-if (recruit readiness) ──
+  html+=`<div class="card" style="margin-bottom:12px;background:var(--hero-amber-bg);border:1px solid var(--hero-amber-bd)">
+    <div style="font-size:12px;font-weight:700;margin-bottom:6px"><i class="ti ti-flask"></i> Simulasi: berani nambah beban tetap?</div>
+    <div style="font-size:11px;color:var(--text2);line-height:1.5;margin-bottom:8px">Isi rencana gaji/sewa baru per bulan, lalu lihat kas-mu masih aman sampai kapan.</div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <input class="form-input" id="fcExtraInp" inputmode="numeric" placeholder="cth: 5.000.000" value="${extra?extra.toLocaleString('id-ID'):''}" oninput="this.value=this.value.replace(/[^0-9]/g,'').replace(/\\B(?=(\\d{3})+(?!\\d))/g,'.')" style="flex:1" />
+      <button class="btn-primary" style="margin:0;white-space:nowrap" onclick="setFcExtra(document.getElementById('fcExtraInp').value.replace(/[^0-9]/g,''))">Hitung</button>
+      ${extra?`<button class="btn-secondary" style="margin:0" onclick="clearFcExtra()">Reset</button>`:''}
+    </div>
+    ${extra?`<div style="font-size:12px;color:var(--text);margin-top:10px;line-height:1.55">Dengan tambahan <b>${fmt(extra)}/bln</b>: kas terendah jadi <b style="color:${col(base.min.balance)}">${fmtSigned(base.min.balance)}</b> pada ${base.min.date}. <b style="color:${vColor}">${breach?'⚠️ Tembus ambang aman':'✓ Masih aman'}.</b></div>`:''}
+  </div>`;
+  // ── Verdict utama ──
+  html+=`<div class="card" style="margin-bottom:12px;background:${breach?'var(--hero-red-bg)':'var(--ic-green)'};border:1px solid ${vColor}">
+    <div style="font-weight:700;color:${vColor}"><i class="ti ti-${breach?'alert-triangle':'circle-check'}"></i> ${amanLabel}</div>
+    <div style="font-size:12px;color:var(--text2);margin-top:4px">Titik kas terendah (perkiraan normal): ${fmtSigned(base.min.balance)} pada ${base.min.date}.${th>0?' Ambang aman: '+fmt(th)+'.':''}</div>
+    <div style="font-size:11px;color:var(--text3);margin-top:6px;display:flex;gap:14px;flex-wrap:wrap">
+      <span>🟢 Optimis: <b style="color:var(--green)">${fmtSigned(opti.min.balance)}</b></span>
+      <span>🔴 Pesimis: <b style="color:var(--red)">${fmtSigned(pess.min.balance)}</b></span>
+    </div>
+  </div>`;
+  // ── Metric 30/60/90 (normal) ──
+  html+=`<div class="metric-grid" style="margin-bottom:12px">
     <div class="metric wide" style="background:var(--hero-blue-bg);border:1px solid var(--hero-blue-bd)">
       <div class="metric-label">Saldo Kas Sekarang</div>
-      <div class="metric-value" style="font-size:24px">${fmt(f.start)}</div>
-      <div class="metric-sub">Estimasi keluar rutin ${fmt(f.burn)}/hari (rata-rata 90 hari)</div>
+      <div class="metric-value" style="font-size:24px">${fmt(base.start)}</div>
+      <div class="metric-sub">Perkiraan keluar rutin ${fmt(base.burn)}/hari</div>
     </div>
-    <div class="metric"><div class="metric-label">Proyeksi 30 hari</div><div class="metric-value" style="color:${col(f.d30)}">${fmtSigned(f.d30)}</div><div class="metric-sub">${_addDaysISO(today(),30)}</div></div>
-    <div class="metric"><div class="metric-label">Proyeksi 60 hari</div><div class="metric-value" style="color:${col(f.d60)}">${fmtSigned(f.d60)}</div><div class="metric-sub">${_addDaysISO(today(),60)}</div></div>
-    <div class="metric"><div class="metric-label">Proyeksi 90 hari</div><div class="metric-value" style="color:${col(f.d90)}">${fmtSigned(f.d90)}</div><div class="metric-sub">${_addDaysISO(today(),90)}</div></div>
+    <div class="metric"><div class="metric-label">30 hari</div><div class="metric-value" style="color:${col(base.d30)}">${fmtSigned(base.d30)}</div><div class="metric-sub">${_addDaysISO(today(),30)}</div></div>
+    <div class="metric"><div class="metric-label">60 hari</div><div class="metric-value" style="color:${col(base.d60)}">${fmtSigned(base.d60)}</div><div class="metric-sub">${_addDaysISO(today(),60)}</div></div>
+    <div class="metric"><div class="metric-label">90 hari</div><div class="metric-value" style="color:${col(base.d90)}">${fmtSigned(base.d90)}</div><div class="metric-sub">${_addDaysISO(today(),90)}</div></div>
   </div>`;
-  if(breach){
-    html+=`<div class="card" style="margin-bottom:12px;background:#2a0d0d;border:1px solid var(--red)">
-      <div style="font-weight:700;color:var(--red)"><i class="ti ti-alert-triangle"></i> Peringatan kas</div>
-      <div style="font-size:12px;color:var(--text2);margin-top:4px">Kas diproyeksi turun ke ${fmtSigned(f.min.balance)} pada ${f.min.date}${th>0?' (di bawah ambang aman '+fmt(th)+')':''}. Pertimbangkan percepat termin masuk atau tunda pengeluaran besar.</div></div>`;
-  } else {
-    html+=`<div class="card" style="margin-bottom:12px;background:var(--ic-green);border:1px solid var(--green)">
-      <div style="font-weight:700;color:var(--green)"><i class="ti ti-circle-check"></i> Kas aman</div>
-      <div style="font-size:12px;color:var(--text2);margin-top:4px">Titik kas terendah ${fmtSigned(f.min.balance)} pada ${f.min.date}.</div></div>`;
-  }
-  html+=`<div class="card" style="margin-bottom:12px"><div style="font-size:12px;font-weight:700;margin-bottom:8px">Proyeksi Saldo Kas 90 Hari</div><div style="height:200px"><canvas id="fcChart"></canvas></div></div>`;
+  // ── Grafik ──
+  html+=`<div class="card" style="margin-bottom:12px"><div style="font-size:12px;font-weight:700;margin-bottom:8px">Proyeksi Saldo Kas 90 Hari</div><div style="height:210px"><canvas id="fcChart"></canvas></div>
+    <div style="font-size:10px;color:var(--text3);margin-top:8px;display:flex;gap:14px;flex-wrap:wrap"><span>━ Normal</span><span style="color:var(--green)">┈ Optimis</span><span style="color:var(--red)">┈ Pesimis</span><span style="color:var(--red)">┈ Ambang aman</span></div></div>`;
+  // ── Cara baca ──
+  html+=forecastHelpHTML();
+  // ── Kejadian terjadwal ──
   html+=`<div style="font-size:12px;font-weight:700;margin:14px 0 8px">Kejadian terjadwal (90 hari)</div>`;
-  if(!f.events.length) html+=`<div class="empty">Belum ada kejadian. Tambah jadwal termin / pengeluaran rutin — tagihan CC muncul otomatis.</div>`;
-  else html+=f.events.map(e=>{
+  if(!base.events.length) html+=`<div class="empty">Belum ada kejadian. Tambah jadwal termin / pengeluaran rutin — tagihan CC muncul otomatis.</div>`;
+  else html+=base.events.map(e=>{
     const inc=e.amount>=0;
     const del=(e.type==='jadwal'&&e.id)?`<button class="btn-secondary" style="padding:5px 9px;font-size:11px;color:var(--red);margin:0" onclick="delJadwal('${e.id}')">Hapus</button>`:'';
     const tap=(e.type==='jadwal'&&e.id)?`onclick="openJadwal('${e.id}')" style="cursor:pointer;`:(e.type==='piutang'&&e.id)?`onclick="goPage('piutang')" style="cursor:pointer;`:`style="`;
+    const tlabel=e.type==='cc'?'Tagihan CC':e.type==='piutang'?'Termin klien':e.type==='whatif'?'Simulasi':(e.jenis||'');
     return `<div class="card" ${tap}padding:10px 12px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:10px">
-      <div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.label)}</div><div style="font-size:10px;color:var(--text3)">${e.date} · ${e.type==='cc'?'Tagihan CC':e.type==='piutang'?'Termin klien':(e.jenis||'')}</div></div>
+      <div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.label)}</div><div style="font-size:10px;color:var(--text3)">${e.date} · ${tlabel}</div></div>
       <div style="font-weight:700;color:${inc?'var(--green)':'var(--red)'};white-space:nowrap">${inc?'+':'−'}${fmt(e.amount)}</div>
       ${del}
     </div>`;
   }).join('');
-  html+=`<div class="settings-sub" style="margin-top:12px;line-height:1.6">Asumsi: titik awal = total saldo bank. Keluar rutin = rata-rata pengeluaran operasional 90 hari terakhir (termasuk gaji mingguan; tidak termasuk transfer/reserve/kasbon). Tagihan CC saat ini dibayar pada jatuh tempo terdekat (reserve dipakai dulu). Pemasukan dari jadwal termin yang kamu input + piutang termin belum lunas (jatuh tempo dalam 90 hari) — proyeksi sengaja konservatif (termin yg sudah lewat tempo tidak diproyeksi). Ambang aman bisa diatur di Settings.</div>`;
+  html+=`<div class="settings-sub" style="margin-top:12px;line-height:1.6">Asumsi: titik awal = total saldo bank. Keluar rutin = rata-rata pengeluaran operasional 90 hari terakhir (termasuk gaji mingguan; tidak termasuk transfer/reserve/kasbon). Tagihan CC dibayar pada jatuh tempo terdekat. Pemasukan dari jadwal termin yang kamu input + piutang termin belum lunas (jatuh tempo dalam 90 hari). Garis Normal sengaja konservatif (termin lewat tempo tidak dihitung); garis Optimis/Pesimis adalah rentang kemungkinan. Ambang aman diatur di Settings.</div>`;
   document.getElementById('forecastContent').innerHTML=html;
-  // grafik (ambil tiap 3 hari supaya label tidak padat)
-  const pts=f.series.filter((_,i)=>i%3===0);
-  const labels=pts.map(p=>p.date.slice(5)), data=pts.map(p=>p.balance/1e6);
+  // ── grafik 3 garis (ambil tiap 3 hari) ──
+  const sample=s=>s.series.filter((_,i)=>i%3===0);
+  const pts=sample(base);
+  const labels=pts.map(p=>p.date.slice(5));
+  const dBase=pts.map(p=>p.balance/1e6);
+  const dOpti=sample(opti).map(p=>p.balance/1e6);
+  const dPess=sample(pess).map(p=>p.balance/1e6);
   destroyChart('fcChart');
   const el=document.getElementById('fcChart'); if(!el) return;
-  Chart.defaults.color='#9090a8';
   _chartInstances['fcChart']=new Chart(el,{
     type:'line',
     data:{labels,datasets:[
-      {label:'Saldo proyeksi',data,borderColor:'#5b9cf6',backgroundColor:'rgba(91,156,246,0.12)',fill:true,tension:0.25,pointRadius:0,borderWidth:2},
+      {label:'Optimis',data:dOpti,borderColor:'#2EE6A6',borderDash:[4,3],pointRadius:0,borderWidth:1.5,fill:false,tension:0.25},
+      {label:'Pesimis',data:dPess,borderColor:'#FF6B5C',borderDash:[4,3],pointRadius:0,borderWidth:1.5,fill:false,tension:0.25},
+      {label:'Normal',data:dBase,borderColor:'#5b9cf6',backgroundColor:'rgba(91,156,246,0.12)',fill:true,tension:0.25,pointRadius:0,borderWidth:2.5},
       {label:'Ambang aman',data:labels.map(()=>th/1e6),borderColor:'#f06a6a',borderDash:[5,4],pointRadius:0,borderWidth:1,fill:false}
     ]},
     options:{responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>' '+ctx.raw.toFixed(1)+'jt'}}},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+ctx.raw.toFixed(1)+'jt'}}},
       scales:{x:{grid:{color:gridCol()},ticks:{maxTicksLimit:8,font:{size:9}}},y:{grid:{color:gridCol()},ticks:{callback:v=>v+'jt'}}}}
   });
 }
@@ -3136,6 +3227,7 @@ async function delKasbon(ref){
 
 // ── RENDER MASTER ─────────────────────────────────────
 function renderMaster() {
+  renderBackupBox();
   renderVersiBox();
   const tab = state.currentMasterTab;
   if (tab === 'bank') {

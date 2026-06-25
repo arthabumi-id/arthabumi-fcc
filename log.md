@@ -3,6 +3,25 @@
 
 ---
 
+## SESSION — 2026-06-25 (v29 Backup/Restore + Forecast disempurnakan)
+**Konteks:** Eddy minta input upgrade. Flag: "Cash runway 30/60/90" SUDAH ADA (halaman Forecast/buildForecast). Sepakat → (1) Backup/Restore baru, (2) UPGRADE Forecast (bukan bangun ulang) + panel cara baca. PRD sign-off "Proceed keduanya".
+
+### v29a Backup & Restore — ⚠️ WAJIB REDEPLOY + izin Drive baru + Run installBackupTrigger
+- **Problem:** DB = 1 Google Sheet tanpa snapshot; 1 edit salah bisa korup permanen (pernah hampir: forex kolom geser).
+- **Code.gs (baru):** `backupNow()` = `DriveApp.getFileById(SHEET_ID).makeCopy('FCC Backup yyyy-MM-dd HHmm', folder 'FCC Backups')`; `_pruneBackups` sisakan BACKUP_KEEP=14 (sisanya setTrashed); `listBackups()` (terbaru dulu + url folder); `installBackupTrigger()` = trigger harian 02:00 WIB (JALANKAN SEKALI di editor). Routing: GET `listBackups`, POST `backupNow`.
+- **Restore = MANUAL terpandu** (buka salinan, salin balik). TIDAK ada auto-overwrite sheet hidup (irreversible).
+- **index.html:** kartu "Backup & Restore" di Master (`renderBackupBox`/`loadBackups`/`doBackupNow`, `#masterBackup`), tombol "Backup sekarang" + daftar salinan (link buka) + link folder Drive.
+- **⚠️ Izin baru `DriveApp`** → saat pertama Run akan minta otorisasi (mirip isu UrlFetchApp kurs). Bila nyangkut: cabut akses di myaccount/permissions lalu Run ulang.
+
+### v29b Forecast upgrade (CLIENT-ONLY) — what-if + pita optimis/pesimis + cara baca
+- **buildForecast(horizon, opt)** kini terima opt `{extraMonthly, burnMult, includeOverdue}` (default {} = perilaku lama, backward-compat). extraMonthly→event keluar bulanan (simulasi); burnMult→pengali daily burn; includeOverdue→piutang lewat tempo diproyeksi masuk hari ini.
+- **renderForecast:** hitung 3 skenario (base/optimis includeOverdue/pesimis burn×1.15). Kotak **Simulasi "berani nambah beban tetap?"** (input Rp/bln, persist `fcc_fc_extra`, `setFcExtra`/`clearFcExtra`) → verdict kas terendah & aman/tembus. Verdict utama "Aman sampai <tgl>" (`_breachDate`) + ringkas optimis/pesimis. Grafik 3 garis (Normal solid + Optimis/Pesimis dashed + ambang). Panel **`forecastHelpHTML`** (details, auto-open sekali) penjelasan awam.
+- **Fix:** regex pemisah ribuan di input simulasi pakai `\\B`/`\\d` (single-backslash termakan template literal → diverifikasi via node).
+- **Verifikasi:** node --check blok buildForecast+renderForecast+backup client OK; emit HTML attribute backslash preserved OK.
+- **Deploy:** Backup = redeploy Code.gs + Run installBackupTrigger; Forecast = client-only. APP_VERSION→v29, CHANGELOG +1, sw.js → **v43**.
+
+---
+
 ## SESSION — 2026-06-24 (Trigger kurs 10-menit + v26 Pocket Forex)
 ### Kurs trigger → tiap 10 menit, jam 09:00–15:00 WIB (⚠️ re-Run installKursTrigger)
 - `kursAutoFetch()` baru: handler trigger, cek jam Jakarta (Utilities.formatDate) → fetch hanya bila 540≤menit≤900 (09:00–15:00), di luar itu skip. `installKursTrigger` diubah: hapus trigger lama (fetchKursBCA & kursAutoFetch) → pasang `everyMinutes(10)` ke kursAutoFetch. Manual `fetchKurs` tetap tanpa batas jam. **Eddy: update Code.gs + Save + Run installKursTrigger sekali** (tak perlu redeploy utk trigger).

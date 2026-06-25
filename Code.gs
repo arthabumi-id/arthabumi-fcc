@@ -187,6 +187,7 @@ function doGet(e) {
       case 'getInvest':    return json({ investAkun: getSheet(ss, S.INVEST), investLog: getSheet(ss, S.INVESTLOG), investValue: getSheet(ss, S.INVESTVAL) });
       case 'getKurs':      return json(getSheet(ss, S.KURS));
       case 'getForex':     return json(getSheet(ss, S.FOREX));
+      case 'listBackups':  return json(listBackups());
       default:             return json({ error: 'Unknown action' });
     }
   } catch (err) { return json({ error: err.message }); }
@@ -236,6 +237,7 @@ function doPost(e) {
       case 'fetchKurs':   res = fetchKursBCA(); break;
       case 'addForexConvert': res = addForexConvert(ss, data); break;
       case 'deleteForex':     res = deleteForex(ss, data); break;
+      case 'backupNow':   res = backupNow(); break;
       case 'updateRow':   res = updateRow(ss, data); break;
       case 'deleteRow':   res = deleteRow(ss, data); break;
       case 'init':        res = initSheets(); break;
@@ -1340,6 +1342,64 @@ function daysAgoISO(days) {
   const d = new Date();
   d.setDate(d.getDate() - days);
   return d.toISOString().slice(0, 10);
+}
+
+// ── BACKUP / RESTORE POINT (v29) ─────────────────────────────
+// Snapshot SELURUH spreadsheet DB ke folder Drive "FCC Backups".
+// Simpan max BACKUP_KEEP terbaru (auto-hapus tertua → Trash).
+// Restore = MANUAL terpandu (buka salinan, salin balik bila perlu).
+// TIDAK ada auto-overwrite sheet hidup (irreversible/berbahaya).
+var BACKUP_FOLDER = 'FCC Backups';
+var BACKUP_KEEP   = 14;
+
+function _backupFolder() {
+  var it = DriveApp.getFoldersByName(BACKUP_FOLDER);
+  return it.hasNext() ? it.next() : DriveApp.createFolder(BACKUP_FOLDER);
+}
+
+// Buat 1 salinan spreadsheet sekarang. Dipanggil manual (UI) atau via trigger harian.
+function backupNow() {
+  var folder = _backupFolder();
+  var src    = DriveApp.getFileById(SHEET_ID);
+  var stamp  = Utilities.formatDate(new Date(), 'Asia/Jakarta', 'yyyy-MM-dd HHmm');
+  var name   = 'FCC Backup ' + stamp;
+  var copy   = src.makeCopy(name, folder);
+  _pruneBackups(folder);
+  return { ok: true, name: name, id: copy.getId(), url: copy.getUrl(), at: stamp };
+}
+
+// Sisakan BACKUP_KEEP terbaru; sisanya dibuang ke Trash.
+function _pruneBackups(folder) {
+  folder = folder || _backupFolder();
+  var files = [], it = folder.getFilesByType(MimeType.GOOGLE_SHEETS);
+  while (it.hasNext()) {
+    var f = it.next();
+    if (f.getName().indexOf('FCC Backup ') === 0) files.push(f);
+  }
+  files.sort(function(a, b){ return b.getDateCreated() - a.getDateCreated(); });
+  for (var i = BACKUP_KEEP; i < files.length; i++) files[i].setTrashed(true);
+}
+
+// Daftar backup yang ada (terbaru dulu) + link folder.
+function listBackups() {
+  var folder = _backupFolder(), files = [], it = folder.getFilesByType(MimeType.GOOGLE_SHEETS);
+  while (it.hasNext()) {
+    var f = it.next();
+    if (f.getName().indexOf('FCC Backup ') === 0)
+      files.push({ name: f.getName(), id: f.getId(), url: f.getUrl(), created: f.getDateCreated().toISOString() });
+  }
+  files.sort(function(a, b){ return a.created < b.created ? 1 : -1; });
+  return { backups: files, folder: folder.getUrl(), keep: BACKUP_KEEP };
+}
+
+// JALANKAN SEKALI di editor Apps Script untuk pasang backup harian 02:00 WIB.
+function installBackupTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function(t){
+    if (t.getHandlerFunction() === 'backupNow') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('backupNow').timeBased().everyDays(1).atHour(2).inTimezone('Asia/Jakarta').create();
+  var r = backupNow();
+  return 'Trigger backup harian (02:00 WIB) terpasang. Backup awal: ' + JSON.stringify(r);
 }
 
 function json(obj) {
