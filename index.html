@@ -494,8 +494,9 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v29';
+const APP_VERSION = 'v29.1';
 const CHANGELOG = [
+  { v:'v29.1', d:'25 Jun 2026', t:'Fix bug: ganti nama Kartu Kredit kini memindahkan semua riwayat (transaksi, cicilan, tagihan) ke nama baru — data tidak hilang lagi.' },
   { v:'v29', d:'25 Jun 2026', t:'Backup & Restore (salinan data otomatis ke Drive) + Forecast disempurnakan: simulasi "berani rekrut?", pita optimis/pesimis, panel cara baca.' },
   { v:'v28.1', d:'24 Jun 2026', t:'Tab Forex & Kurs: Kurs dipindah ke atas dengan frame emas, Pocket Forex di bawah.' },
   { v:'v28.0', d:'24 Jun 2026', t:'Detail akun: klik bagian chart kategori → filter daftar transaksinya (mis. Transfer Keluar).' },
@@ -714,6 +715,23 @@ function getCCOut(namaCC) {
   // + porsi cicilan bulan berjalan yg belum dibayar (tagihan cicilan bersifat virtual,
   //   pembelian Cicilan-Beli REKENING kosong jadi tdk masuk acct di atas)
   return base + cicilanDueAmt(namaCC);
+}
+
+// v29.1: relabel nama CC lama→baru di state lokal (mirror server renameCC) supaya UI
+// langsung benar tanpa reload. Server tetap recompute summary saat sync berikutnya.
+function relabelCCLocal(from, to){
+  if(!from || !to || from===to) return;
+  (state.txns||[]).forEach(t=>{ if(t.REKENING===from) t.REKENING=to; });
+  (state.cicilan||[]).forEach(c=>{ if(c.CC===from) c.CC=to; });
+  (state.ccbills||[]).forEach(b=>{ if(b.CC===from) b.CC=to; });
+  (state.marks||[]).forEach(m=>{ if(m.CC===from) m.CC=to; });
+  (state.reserves||[]).forEach(r=>{ if(r.UNTUK_CC===from) r.UNTUK_CC=to; });
+  if(state.reserveFunds && Object.prototype.hasOwnProperty.call(state.reserveFunds,from)){
+    state.reserveFunds[to]=state.reserveFunds[from]; delete state.reserveFunds[from];
+  }
+  if(state.summary && state.summary.acct && state.summary.acct[from]){
+    state.summary.acct[to]=state.summary.acct[from]; delete state.summary.acct[from];
+  }
 }
 
 // Jumlah bulan penuh yg sudah lewat sejak tanggal mulai (utk hitung angsuran jatuh tempo).
@@ -4104,7 +4122,7 @@ function openDrawer(mode, editId = null, preset = null) {
   } else if (mode === 'cc') {
     const c = editId ? state.ccs.find(x=>x.ID===editId) : null;
     document.getElementById('drawerBody').innerHTML = `
-      <div class="form-group"><label class="form-label">Nama Kartu</label><input class="form-input" id="fc_nama" value="${c?esc(c.NAMA):''}" placeholder="CC-BCA-KRIS..."></div>
+      <div class="form-group"><label class="form-label">Nama Kartu</label><input class="form-input" id="fc_nama" value="${c?esc(c.NAMA):''}" placeholder="CC-BCA-KRIS...">${c?`<div style="font-size:10px;color:var(--gold);margin-top:3px"><i class="ti ti-info-circle"></i> Mengubah nama akan memindahkan semua riwayat (transaksi, cicilan, tagihan) ke nama baru secara otomatis.</div>`:''}</div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Bank</label><input class="form-input" id="fc_bank" value="${c?esc(c.BANK):''}" placeholder="BCA..."></div>
         <div class="form-group"><label class="form-label">Jatuh Tempo</label><input class="form-input" type="number" id="fc_tempo" value="${c?c.JATUH_TEMPO:25}" placeholder="25" inputmode="numeric"></div>
@@ -4223,9 +4241,15 @@ async function saveDrawer() {
   } else if (mode === 'cc') {
     const obj={ID:eid||uid(),NAMA:document.getElementById('fc_nama').value,BANK:document.getElementById('fc_bank').value,LIMIT:unfmtNum(document.getElementById('fc_limit').value),JATUH_TEMPO:parseInt(document.getElementById('fc_tempo').value)||25,RESERVE_BANK:(document.getElementById('fc_reserve')?document.getElementById('fc_reserve').value:''),CREATED_AT:now};
     if(!obj.NAMA){showToast('Nama kartu wajib diisi','error');return;}
-    if(eid){const i=state.ccs.findIndex(x=>x.ID===eid);state.ccs[i]=obj;}else state.ccs.push(obj);
-    if(API_URL)bgPost({action:eid?'updateRow':'addCC',data:eid?{sheet:'MASTER_CC',id:eid,updates:obj}:obj},(eid?'Edit ':'')+'Kartu '+obj.NAMA);
-    saveLocal();renderMaster();renderDashboard();showToast(eid?'Kartu diperbarui':'Kartu ditambahkan','success');
+    let ccOldName=null;
+    if(eid){const i=state.ccs.findIndex(x=>x.ID===eid); if(i>=0){ccOldName=state.ccs[i].NAMA; state.ccs[i]=obj;} else state.ccs.push(obj);}else state.ccs.push(obj);
+    const ccRenamed = eid && ccOldName && ccOldName!==obj.NAMA;
+    if(ccRenamed) relabelCCLocal(ccOldName, obj.NAMA);  // v29.1: pindahkan semua data ke nama baru (lokal)
+    if(API_URL){
+      if(ccRenamed) bgPost({action:'renameCC',data:{from:ccOldName,to:obj.NAMA}},'Pindah data kartu '+ccOldName+' → '+obj.NAMA);
+      bgPost({action:eid?'updateRow':'addCC',data:eid?{sheet:'MASTER_CC',id:eid,updates:obj}:obj},(eid?'Edit ':'')+'Kartu '+obj.NAMA);
+    }
+    saveLocal();renderMaster();renderDashboard();showToast(ccRenamed?('Kartu diubah ke "'+obj.NAMA+'" — semua riwayat ikut dipindah'):(eid?'Kartu diperbarui':'Kartu ditambahkan'),'success');
   } else if (mode === 'kat') {
     const obj={ID:eid||uid(),NAMA:document.getElementById('fk_nama').value,KELOMPOK:document.getElementById('fk_kelompok').value,TIPE:document.getElementById('fk_tipe').value,CREATED_AT:now};
     if(!obj.NAMA){showToast('Nama kategori wajib diisi','error');return;}

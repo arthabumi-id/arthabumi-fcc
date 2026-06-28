@@ -208,6 +208,7 @@ function doPost(e) {
       case 'addProj':     res = addRow(ss, S.PROJ, data); break;
       case 'addAddendum': res = addAddendum(ss, data); break;
       case 'reassignProject': res = reassignProject(ss, data); break;
+      case 'renameCC':    res = renameCC(ss, data); break;
       case 'addKat':      res = addRow(ss, S.KAT, data); break;
       case 'addTransfer': res = addTransfer(ss, data); break;
       case 'deleteTransfer': res = deleteTransfer(ss, data); break;
@@ -1030,6 +1031,35 @@ function reassignProject(ss, data) {
       }
     }
   }
+  return out;
+}
+
+// ── v29.1: ganti nama CC AMAN (relabel semua referensi) ─────────────────────
+// Bug: data CC dicocokkan by NAMA, bukan ID. Ganti nama di MASTER_CC saja → transaksi/
+// cicilan/tagihan/mark/reserve masih menunjuk nama lama → kartu tampak kosong.
+// renameCC relabel nama lama→baru di SEMUA tabel terkait + baris MASTER_CC. Reversible (rename balik).
+function renameCC(ss, data) {
+  const from = String(data.from || '');
+  const to   = String(data.to || '');
+  if (!from || !to) return { error: 'from/to kosong' };
+  if (from === to)  return { ok: true, unchanged: true };
+  const out = { ok: true, from: from, to: to, txn: 0, cicilan: 0, ccbill: 0, mark: 0, reserve: 0, master: 0 };
+  // [sheet, nama kolom berisi nama CC, key output]
+  [[S.TXN, 'REKENING', 'txn'], [S.CICILAN, 'CC', 'cicilan'], [S.CCBILL, 'CC', 'ccbill'],
+   [S.MARK, 'CC', 'mark'], [S.RESERVE, 'UNTUK_CC', 'reserve'], [S.CC, 'NAMA', 'master']].forEach(function (t) {
+    const sh = ss.getSheetByName(t[0]);
+    if (!sh || sh.getLastRow() <= 1) return;
+    const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    const col = headers.indexOf(t[1]);
+    if (col < 0) return;
+    const rng = sh.getRange(2, col + 1, sh.getLastRow() - 1, 1);
+    const vals = rng.getValues();
+    let changed = 0;
+    for (let i = 0; i < vals.length; i++) {
+      if (String(vals[i][0]) === from) { vals[i][0] = to; changed++; }
+    }
+    if (changed) { rng.setValues(vals); out[t[2]] = changed; }
+  });
   return out;
 }
 

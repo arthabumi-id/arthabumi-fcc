@@ -3,6 +3,17 @@
 
 ---
 
+## SESSION — 2026-06-25 (v29.1 Fix bug rename CC orphan data)
+**Bug (Eddy):** edit nama di Master Kartu Kredit → data CC (outstanding/riwayat) hilang setelah nama diganti.
+**Akar:** semua data CC dicocokkan by NAMA, bukan ID (`getCCOut` → `t.REKENING===nama`; `acctAgg`→`summary.acct[nama]`). Ganti nama hanya di baris MASTER_CC → transaksi/cicilan/tagihan/mark/reserve masih menunjuk nama lama → kartu tampak kosong. **Data tidak hilang** (workaround: rename balik ke nama lama persis). Smell sama dgn rename project (lihat reassignProject).
+**Fix (mirror reassignProject) — ⚠️ WAJIB REDEPLOY Code.gs:**
+- **Code.gs `renameCC(ss,{from,to})`** + route `case 'renameCC'`: relabel from→to di `TRANSAKSI.REKENING`, `CICILAN.CC`, `CC_TAGIHAN.CC`, `RESERVE_MARK.CC`, `RESERVE_LOG.UNTUK_CC`, dan `MASTER_CC.NAMA`. Reversible (rename balik).
+- **index.html:** save CC deteksi `ccRenamed` (nama berubah) → `bgPost renameCC` + `relabelCCLocal(from,to)` (relabel state.txns/cicilan/ccbills/marks/reserves + reserveFunds + summary.acct key) supaya UI langsung benar tanpa reload. Warning emas di form edit CC ("mengubah nama memindahkan semua riwayat"). updateRow MASTER_CC tetap jalan (set field lain).
+- **Verifikasi:** node --check renameCC OK; seluruh inline JS index.html node --check OK. APP_VERSION→v29.1, CHANGELOG +1, sw.js → **v44**.
+- **Deploy:** redeploy Code.gs (New Version) + push index.html/sw.js v44.
+
+---
+
 ## SESSION — 2026-06-25 (v29 Backup/Restore + Forecast disempurnakan)
 **Konteks:** Eddy minta input upgrade. Flag: "Cash runway 30/60/90" SUDAH ADA (halaman Forecast/buildForecast). Sepakat → (1) Backup/Restore baru, (2) UPGRADE Forecast (bukan bangun ulang) + panel cara baca. PRD sign-off "Proceed keduanya".
 
