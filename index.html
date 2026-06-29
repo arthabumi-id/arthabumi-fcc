@@ -497,8 +497,9 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v29.2';
+const APP_VERSION = 'v29.3';
 const CHANGELOG = [
+  { v:'v29.3', d:'25 Jun 2026', t:'Baris transaksi dirapikan: kategori tak dobel, tanggal ringkas (29 Jun), saldo berjalan dikecilkan & dilabeli, tombol edit jadi ikon.' },
   { v:'v29.2', d:'25 Jun 2026', t:'Pengaturan Ukuran Tampilan (Kecil/Normal/Besar/Sangat Besar) di Master + tombol cepat di header — biar tulisan mudah dibaca.' },
   { v:'v29.1', d:'25 Jun 2026', t:'Fix bug: ganti nama Kartu Kredit kini memindahkan semua riwayat (transaksi, cicilan, tagihan) ke nama baru — data tidak hilang lagi.' },
   { v:'v29', d:'25 Jun 2026', t:'Backup & Restore (salinan data otomatis ke Drive) + Forecast disempurnakan: simulasi "berani rekrut?", pita optimis/pesimis, panel cara baca.' },
@@ -2951,13 +2952,15 @@ function renderTxn(filtered) {
         </div>
         <div style="flex:1;min-width:0">
           <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.PROJECT||t.KATEGORI||'—')}</div>
-          <div style="font-size:11px;color:var(--text2)">${esc(t.REKENING)} · ${esc(t.KATEGORI)} · ${String(t.TANGGAL).slice(0,10)}</div>
+          <div style="font-size:11px;color:var(--text2)">${esc(t.REKENING)}${t.PROJECT&&t.KATEGORI?(' · '+esc(t.KATEGORI)):''} · ${shortDate(t.TANGGAL)}</div>
           ${t.NOTES ? `<div style="font-size:10px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.NOTES)}</div>` : ''}
         </div>
         <div style="text-align:right;flex-shrink:0">
           <div style="font-size:14px;font-weight:700;color:${t.JENIS==='Pemasukan'?'var(--green)':'var(--red)'}">${t.JENIS==='Pemasukan'?'+':'-'}${fmt(Number(t.NOMINAL))}</div>
-          ${runBal[t.ID]!==undefined ? `<div style="font-size:10px;color:var(--text3);margin-top:1px"><i class="ti ti-businessplan" style="font-size:10px;vertical-align:middle"></i> ${fmt(runBal[t.ID])}</div>` : ''}
-          ${(!isTr&&!isRes) ? `<button style="font-size:10px;margin-top:3px;background:transparent;border:none;color:var(--text3);cursor:pointer" onclick="editTxn('${t.ID}')">edit</button>` : '<div style="font-size:10px;color:var(--text3)">auto</div>'}
+          <div style="display:flex;align-items:center;justify-content:flex-end;gap:7px;margin-top:3px">
+            ${runBal[t.ID]!==undefined ? `<span style="font-size:10px;color:var(--text3)">saldo ${fmtS(runBal[t.ID])}</span>` : ''}
+            ${(!isTr&&!isRes) ? `<button aria-label="Edit transaksi" style="font-size:14px;line-height:1;background:transparent;border:none;color:var(--text3);cursor:pointer;padding:0" onclick="editTxn('${t.ID}')"><i class="ti ti-pencil"></i></button>` : '<span style="font-size:10px;color:var(--text3)">auto</span>'}
+          </div>
         </div>
       </div>
     </div>`;
@@ -2994,6 +2997,8 @@ async function loadMoreTxns(btn) {
 }
 
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+// Tanggal ringkas "29 Jun" dari ISO yyyy-mm-dd (fallback ke string asli bila format aneh).
+function shortDate(iso){ const p=String(iso||'').slice(0,10).split('-'); if(p.length<3||!p[2]) return String(iso||''); return (+p[2])+' '+(MONTH_NAMES[(+p[1])-1]||p[1]); }
 function monthLabel(ym){ const p = ym.split('-'); return MONTH_NAMES[(+p[1])-1] + " '" + p[0].slice(2); }
 function renderTxnMonthTabs(){
   fillRekFilter();

@@ -3,6 +3,13 @@
 
 ---
 
+## SESSION — 2026-06-25 (v29.3 Baris transaksi dirapikan) — CLIENT-ONLY, sw.js v46
+- **Eddy:** baris transaksi susah dibaca (kategori dobel, 2 angka bertumpuk di kanan, tanggal ISO). Pilih layout "Bersih".
+- **renderTxn:** subline kini `REKENING [· KATEGORI bila ada PROJECT] · shortDate` (buang kategori dobel saat judul = kategori). Tanggal `shortDate(iso)` → "29 Jun". Kanan: nominal besar; baris kedua flex kanan = `saldo <fmtS>` (disingkat jt/M, redup) + tombol **ikon pensil** (ti-pencil) ganti teks "edit"; transfer/reserve tetap "auto". Helper `shortDate` ditaruh dekat MONTH_NAMES.
+- Client-only. APP_VERSION→v29.3, CHANGELOG +1, sw.js → v46.
+
+---
+
 ## SESSION — 2026-06-25 (v29.2 Ukuran Tampilan / font scale) — CLIENT-ONLY, sw.js v45
 - **Eddy:** font kekecilan, susah baca. Minta setelan font besar/kecil.
 - **Pendekatan:** font px hardcode di seluruh app → tak bisa andalkan root font-size. Pakai **zoom dokumen** (`document.documentElement.style.zoom`) → skala seluruh UI proporsional (seperti Ctrl-+), andal di PWA Chromium, fixed topbar/nav tetap benar.
