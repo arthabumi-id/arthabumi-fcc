@@ -250,6 +250,7 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
     <div class="topbar-right">
       <div class="online-dot" id="onlineDot" style="background:var(--text3)"></div>
       <button class="sync-btn" id="eyeBtn" onclick="toggleHide()" aria-label="Sembunyikan nominal" style="padding:6px 9px"><i class="ti ti-eye"></i></button>
+      <button class="sync-btn" id="fontBtn" onclick="cycleFontScale()" aria-label="Ukuran tampilan" style="padding:6px 9px"><i class="ti ti-text-size"></i></button>
       <button class="sync-btn" id="themeBtn" onclick="toggleTheme()" aria-label="Ganti tema" style="padding:6px 9px"><i class="ti ti-moon"></i></button>
       <button class="sync-btn" onclick="syncAll()"><i class="ti ti-refresh"></i> Sync</button>
     </div>
@@ -359,6 +360,7 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
         <button class="ttab" onclick="switchMasterTab('kat')" id="mTab-kat" style="flex:none;padding:8px 14px;border-radius:20px;border:1px solid var(--border2);font-size:12px">Kategori</button>
       </div>
       <div id="masterContent"></div>
+      <div id="masterDisplay" style="margin-top:20px"></div>
       <div id="masterBackup" style="margin-top:20px"></div>
       <div id="masterVersi" style="margin-top:20px"></div>
     </div>
@@ -466,6 +468,7 @@ let state = {
   reserveFunds: {}, // computed: cc_name -> total
   safeThreshold: Number(localStorage.getItem('fcc_safe_threshold')) || 0, // ambang aman kas (forecast)
   fcExtra: Number(localStorage.getItem('fcc_fc_extra')) || 0, // simulasi beban tetap baru/bln (forecast what-if)
+  fontScale: Number(localStorage.getItem('fcc_fontscale')) || 1, // ukuran tampilan (zoom) — aksesibilitas
   summary: null,    // agregat penuh dari server (saldo/proj/bulan/kategori)
   txnsSince: null,  // batas tanggal txn terlama yg sudah dimuat ke client
   online: false,
@@ -494,8 +497,9 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v29.1';
+const APP_VERSION = 'v29.2';
 const CHANGELOG = [
+  { v:'v29.2', d:'25 Jun 2026', t:'Pengaturan Ukuran Tampilan (Kecil/Normal/Besar/Sangat Besar) di Master + tombol cepat di header — biar tulisan mudah dibaca.' },
   { v:'v29.1', d:'25 Jun 2026', t:'Fix bug: ganti nama Kartu Kredit kini memindahkan semua riwayat (transaksi, cicilan, tagihan) ke nama baru — data tidak hilang lagi.' },
   { v:'v29', d:'25 Jun 2026', t:'Backup & Restore (salinan data otomatis ke Drive) + Forecast disempurnakan: simulasi "berani rekrut?", pita optimis/pesimis, panel cara baca.' },
   { v:'v28.1', d:'24 Jun 2026', t:'Tab Forex & Kurs: Kurs dipindah ke atas dengan frame emas, Pocket Forex di bawah.' },
@@ -567,6 +571,30 @@ function setEyeIcon(){ const b=document.getElementById('eyeBtn'); if(b) b.innerH
 function toggleHide(){ state.hideAmounts=!state.hideAmounts; localStorage.setItem('fcc_hide', state.hideAmounts?'1':''); setEyeIcon(); renderAll(); showToast(state.hideAmounts?'Nominal disembunyikan':'Nominal ditampilkan','success'); }
 function applyTheme(){ document.body.classList.toggle('light', state.theme==='light'); const b=document.getElementById('themeBtn'); if(b) b.innerHTML='<i class="ti ti-'+(state.theme==='light'?'sun':'moon')+'"></i>'; if(window.Chart){ Chart.defaults.color = state.theme==='light'?'#5B6E64':'#8B9C93'; } }
 function toggleTheme(){ state.theme=state.theme==='light'?'dark':'light'; localStorage.setItem('fcc_theme',state.theme); applyTheme(); renderAll(); showToast(state.theme==='light'?'Tema terang':'Tema gelap','success'); }
+// v29.2: ukuran tampilan (aksesibilitas) — pakai zoom dokumen (skala seluruh UI proporsional).
+const FONT_SIZES=[{v:0.9,l:'Kecil'},{v:1,l:'Normal'},{v:1.15,l:'Besar'},{v:1.3,l:'Sangat Besar'}];
+function applyFontScale(){
+  const v=Number(state.fontScale)||1;
+  document.documentElement.style.zoom = (v===1?'':String(v));
+}
+function setFontScale(v){
+  state.fontScale=Number(v)||1; localStorage.setItem('fcc_fontscale',String(state.fontScale));
+  applyFontScale(); if(state.currentPage==='master') renderDisplayBox();
+  const l=(FONT_SIZES.find(s=>s.v===state.fontScale)||{}).l||''; showToast('Ukuran tampilan: '+l,'success');
+}
+function cycleFontScale(){
+  const i=FONT_SIZES.findIndex(s=>s.v===(Number(state.fontScale)||1));
+  setFontScale(FONT_SIZES[(i+1)%FONT_SIZES.length].v);
+}
+function renderDisplayBox(){
+  const el=document.getElementById('masterDisplay'); if(!el) return;
+  const cur=Number(state.fontScale)||1;
+  el.innerHTML=`<div class="card">
+    <div class="card-title"><i class="ti ti-text-size" style="color:var(--gold);margin-right:5px"></i>Ukuran Tampilan</div>
+    <div style="font-size:11px;color:var(--text2);margin:2px 0 10px">Perbesar tulisan &amp; tampilan biar lebih mudah dibaca. Bisa juga ketuk tombol <i class="ti ti-text-size"></i> di atas.</div>
+    <div style="display:flex;gap:6px">${FONT_SIZES.map(s=>`<button onclick="setFontScale(${s.v})" style="flex:1;padding:10px 4px;border-radius:9px;border:1px solid ${s.v===cur?'var(--green)':'var(--border2)'};background:${s.v===cur?'var(--ic-green)':'transparent'};color:var(--text);font-family:var(--font);font-weight:${s.v===cur?'700':'500'};cursor:pointer"><div style="font-size:${Math.round(11+(s.v-0.9)*11)}px;line-height:1">A</div><div style="font-size:10px;margin-top:3px;color:${s.v===cur?'var(--green)':'var(--text3)'}">${s.l}</div></button>`).join('')}</div>
+  </div>`;
+}
 const HIDE_MASK = '••••';
 const fmt = n => state.hideAmounts ? ('Rp ' + HIDE_MASK) : ('Rp ' + Math.round(Math.abs(n)).toLocaleString('id-ID'));
 const fmtS = n => {
@@ -3245,6 +3273,7 @@ async function delKasbon(ref){
 
 // ── RENDER MASTER ─────────────────────────────────────
 function renderMaster() {
+  renderDisplayBox();
   renderBackupBox();
   renderVersiBox();
   const tab = state.currentMasterTab;
@@ -5579,7 +5608,7 @@ async function confirmImport(){
 }
 function showToast(msg,type){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(type||'success');setTimeout(()=>t.classList.add('show'),10);setTimeout(()=>t.classList.remove('show'),2800);}
 function goPage(page){closeFabMenu();closeLainnyaMenu();state.currentPage=page;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+page).classList.add('active');document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));const navKey=({kasbon:'lainnya',forecast:'lainnya',piutang:'lainnya',invest:'lainnya',forex:'lainnya'})[page]||page;const _ab=document.querySelector('.nav-item[data-nav="'+navKey+'"]');if(_ab)_ab.classList.add('active');document.getElementById('content').scrollTop=0;if(page==='master')renderMaster();if(page==='transfer')renderTransferPage();if(page==='kasbon')renderKasbon();if(page==='forecast')renderForecast();if(page==='piutang')renderPiutang();if(page==='invest')renderInvest();if(page==='forex'){renderForex();renderKurs();}if(page==='dashboard')renderDashboard();}
-function renderAll(){setAppVer();setEyeIcon();applyTheme();renderDashboard();renderTxnMonthTabs();filterTxn();renderProject();renderCCBillReminder();renderPiutangReminder();updatePiutangBadge();if(state.currentPage==='master')renderMaster();if(state.currentPage==='transfer')renderTransferPage();if(state.currentPage==='kasbon')renderKasbon();if(state.currentPage==='forecast')renderForecast();if(state.currentPage==='piutang')renderPiutang();if(state.currentPage==='invest')renderInvest();if(state.currentPage==='forex'){renderForex();renderKurs();}}
+function renderAll(){setAppVer();setEyeIcon();applyTheme();applyFontScale();renderDashboard();renderTxnMonthTabs();filterTxn();renderProject();renderCCBillReminder();renderPiutangReminder();updatePiutangBadge();if(state.currentPage==='master')renderMaster();if(state.currentPage==='transfer')renderTransferPage();if(state.currentPage==='kasbon')renderKasbon();if(state.currentPage==='forecast')renderForecast();if(state.currentPage==='piutang')renderPiutang();if(state.currentPage==='invest')renderInvest();if(state.currentPage==='forex'){renderForex();renderKurs();}}
 if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{});}
 applyTheme();setEyeIcon();
 // ── PULL-TO-REFRESH (tarik ke bawah = Sync, tetap di tab yang sama) ──

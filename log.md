@@ -3,6 +3,14 @@
 
 ---
 
+## SESSION — 2026-06-25 (v29.2 Ukuran Tampilan / font scale) — CLIENT-ONLY, sw.js v45
+- **Eddy:** font kekecilan, susah baca. Minta setelan font besar/kecil.
+- **Pendekatan:** font px hardcode di seluruh app → tak bisa andalkan root font-size. Pakai **zoom dokumen** (`document.documentElement.style.zoom`) → skala seluruh UI proporsional (seperti Ctrl-+), andal di PWA Chromium, fixed topbar/nav tetap benar.
+- **Implementasi:** `state.fontScale` (persist `fcc_fontscale`); `FONT_SIZES` [0.9 Kecil / 1 Normal / 1.15 Besar / 1.3 Sangat Besar]; `applyFontScale` (dipanggil di renderAll → ikut saat boot), `setFontScale`, `cycleFontScale`. Kartu **"Ukuran Tampilan"** di Master (`renderDisplayBox`, `#masterDisplay`, 4 tombol A) + tombol cepat `ti-text-size` (`#fontBtn`) di topbar (cycle).
+- **Verifikasi:** seluruh inline JS index.html node --check OK. APP_VERSION→v29.2, CHANGELOG +1, sw.js → v45. Client-only (push index.html + sw.js).
+
+---
+
 ## SESSION — 2026-06-25 (v29.1 Fix bug rename CC orphan data)
 **Bug (Eddy):** edit nama di Master Kartu Kredit → data CC (outstanding/riwayat) hilang setelah nama diganti.
 **Akar:** semua data CC dicocokkan by NAMA, bukan ID (`getCCOut` → `t.REKENING===nama`; `acctAgg`→`summary.acct[nama]`). Ganti nama hanya di baris MASTER_CC → transaksi/cicilan/tagihan/mark/reserve masih menunjuk nama lama → kartu tampak kosong. **Data tidak hilang** (workaround: rename balik ke nama lama persis). Smell sama dgn rename project (lihat reassignProject).
