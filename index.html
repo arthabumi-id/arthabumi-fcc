@@ -499,7 +499,7 @@ let state = {
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
 const APP_VERSION = 'v29.3';
 const CHANGELOG = [
-  { v:'v29.3', d:'25 Jun 2026', t:'Baris transaksi dirapikan: kategori tak dobel, tanggal ringkas (29 Jun), saldo berjalan dikecilkan & dilabeli, tombol edit jadi ikon.' },
+  { v:'v29.3', d:'25 Jun 2026', t:'Baris transaksi dirapikan & teks diperbesar: kategori tak dobel, tanggal ringkas (29 Jun), saldo penuh berlabel, tombol edit jadi ikon.' },
   { v:'v29.2', d:'25 Jun 2026', t:'Pengaturan Ukuran Tampilan (Kecil/Normal/Besar/Sangat Besar) di Master + tombol cepat di header — biar tulisan mudah dibaca.' },
   { v:'v29.1', d:'25 Jun 2026', t:'Fix bug: ganti nama Kartu Kredit kini memindahkan semua riwayat (transaksi, cicilan, tagihan) ke nama baru — data tidak hilang lagi.' },
   { v:'v29', d:'25 Jun 2026', t:'Backup & Restore (salinan data otomatis ke Drive) + Forecast disempurnakan: simulasi "berani rekrut?", pita optimis/pesimis, panel cara baca.' },
@@ -2945,21 +2945,21 @@ function renderTxn(filtered) {
   });
   document.getElementById('txnList').innerHTML = data.length ? data.map(t => {
     const isTr = t.TIPE_LOG === 'Transfer', isRes = t.TIPE_LOG === 'Reserve';
-    return `<div class="card" style="padding:10px 12px;margin-bottom:8px">
-      <div style="display:flex;align-items:center;gap:10px">
-        <div style="width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;background:${t.JENIS==='Pemasukan'?'var(--ic-green)':isTr?'var(--ic-blue)':isRes?'var(--ic-purple)':'var(--ic-red)'};flex-shrink:0">
-          <i class="ti ti-${t.JENIS==='Pemasukan'?'arrow-down-left':isTr?'arrows-exchange':isRes?'shield-check':'arrow-up-right'}" style="font-size:15px;color:${t.JENIS==='Pemasukan'?'var(--green)':isTr?'var(--blue)':isRes?'var(--purple)':'var(--red)'}"></i>
+    return `<div class="card" style="padding:13px 14px;margin-bottom:9px">
+      <div style="display:flex;align-items:center;gap:11px">
+        <div style="width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:${t.JENIS==='Pemasukan'?'var(--ic-green)':isTr?'var(--ic-blue)':isRes?'var(--ic-purple)':'var(--ic-red)'};flex-shrink:0">
+          <i class="ti ti-${t.JENIS==='Pemasukan'?'arrow-down-left':isTr?'arrows-exchange':isRes?'shield-check':'arrow-up-right'}" style="font-size:17px;color:${t.JENIS==='Pemasukan'?'var(--green)':isTr?'var(--blue)':isRes?'var(--purple)':'var(--red)'}"></i>
         </div>
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.PROJECT||t.KATEGORI||'—')}</div>
-          <div style="font-size:11px;color:var(--text2)">${esc(t.REKENING)}${t.PROJECT&&t.KATEGORI?(' · '+esc(t.KATEGORI)):''} · ${shortDate(t.TANGGAL)}</div>
-          ${t.NOTES ? `<div style="font-size:10px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.NOTES)}</div>` : ''}
+          <div style="font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.PROJECT||t.KATEGORI||'—')}</div>
+          <div style="font-size:13px;color:var(--text2);margin-top:2px">${esc(t.REKENING)}${t.PROJECT&&t.KATEGORI?(' · '+esc(t.KATEGORI)):''} · ${shortDate(t.TANGGAL)}</div>
+          ${t.NOTES ? `<div style="font-size:12px;color:var(--text3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.NOTES)}</div>` : ''}
         </div>
         <div style="text-align:right;flex-shrink:0">
-          <div style="font-size:14px;font-weight:700;color:${t.JENIS==='Pemasukan'?'var(--green)':'var(--red)'}">${t.JENIS==='Pemasukan'?'+':'-'}${fmt(Number(t.NOMINAL))}</div>
-          <div style="display:flex;align-items:center;justify-content:flex-end;gap:7px;margin-top:3px">
-            ${runBal[t.ID]!==undefined ? `<span style="font-size:10px;color:var(--text3)">saldo ${fmtS(runBal[t.ID])}</span>` : ''}
-            ${(!isTr&&!isRes) ? `<button aria-label="Edit transaksi" style="font-size:14px;line-height:1;background:transparent;border:none;color:var(--text3);cursor:pointer;padding:0" onclick="editTxn('${t.ID}')"><i class="ti ti-pencil"></i></button>` : '<span style="font-size:10px;color:var(--text3)">auto</span>'}
+          <div style="font-size:16px;font-weight:700;color:${t.JENIS==='Pemasukan'?'var(--green)':'var(--red)'}">${t.JENIS==='Pemasukan'?'+':'-'}${fmt(Number(t.NOMINAL))}</div>
+          <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:4px">
+            ${runBal[t.ID]!==undefined ? `<span style="font-size:12px;color:var(--text3);white-space:nowrap">saldo ${fmt(runBal[t.ID])}</span>` : ''}
+            ${(!isTr&&!isRes) ? `<button aria-label="Edit transaksi" style="font-size:17px;line-height:1;background:transparent;border:none;color:var(--text3);cursor:pointer;padding:0" onclick="editTxn('${t.ID}')"><i class="ti ti-pencil"></i></button>` : '<span style="font-size:11px;color:var(--text3)">auto</span>'}
           </div>
         </div>
       </div>
