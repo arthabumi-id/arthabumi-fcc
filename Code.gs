@@ -527,19 +527,22 @@ function migrateReserveToHolding(ss, data) {
 // TIPE_LOG TXN = 'Kasbon' → tidak masuk laba/komposisi, tapi saldo rekening tetap akurat.
 function addKasbon(ss, data) {
   const now = new Date().toISOString();
-  const ref = 'KB' + Date.now();
+  // v29.4: pakai ID/REF_ID/TXN_ID dari client bila ada → optimistic save (UI langsung, tak perlu syncAll;
+  //        ID sama dgn server → tak dobel saat sync berikutnya). Fallback generate bila kosong.
+  const ref = data.REF_ID || ('KB' + Date.now());
   const amt = Math.abs(Number(data.NOMINAL) || 0);
   const metode = data.METODE || 'Tunai';
   let kb = ss.getSheetByName(S.KASBON);
   if (!kb) { kb = ss.insertSheet(S.KASBON); kb.appendRow(HEADERS[S.KASBON]); kb.getRange(1,1,1,HEADERS[S.KASBON].length).setFontWeight('bold').setBackground('#1a1a2e').setFontColor('#ffffff'); kb.setFrozenRows(1); }
-  kb.appendRow(['ID'+Date.now(), data.TANGGAL, data.KARYAWAN, data.JENIS, amt, metode, data.REKENING||'', data.NOTES||'', ref, data.USER, now]);
+  kb.appendRow([data.ID || ('ID'+Date.now()), data.TANGGAL, data.KARYAWAN, data.JENIS, amt, metode, data.REKENING||'', data.NOTES||'', ref, data.USER, now]);
   // Gerak uang selalu terjadi bila rekening dipilih.
   // Pinjam = uang keluar; Kembali (Tunai ATAU Potong Gaji) = uang masuk ke rekening.
   if (data.REKENING) {
+    const txnId = data.TXN_ID || ('ID'+Date.now()+'K');
     if (data.JENIS === 'Pinjam') {
-      ss.getSheetByName(S.TXN).appendRow(['ID'+Date.now()+'K', data.TANGGAL, 'Pengeluaran', '', data.REKENING, 'Kasbon Keluar', amt, '[KASBON '+ref+'] pinjam '+data.KARYAWAN+' ('+metode+') '+(data.NOTES||''), 'Kasbon', data.USER, now]);
+      ss.getSheetByName(S.TXN).appendRow([txnId, data.TANGGAL, 'Pengeluaran', '', data.REKENING, 'Kasbon Keluar', amt, '[KASBON '+ref+'] pinjam '+data.KARYAWAN+' ('+metode+') '+(data.NOTES||''), 'Kasbon', data.USER, now]);
     } else {
-      ss.getSheetByName(S.TXN).appendRow(['ID'+Date.now()+'K', data.TANGGAL, 'Pemasukan', '', data.REKENING, 'Kasbon Masuk', amt, '[KASBON '+ref+'] kembali '+data.KARYAWAN+' ('+metode+') '+(data.NOTES||''), 'Kasbon', data.USER, now]);
+      ss.getSheetByName(S.TXN).appendRow([txnId, data.TANGGAL, 'Pemasukan', '', data.REKENING, 'Kasbon Masuk', amt, '[KASBON '+ref+'] kembali '+data.KARYAWAN+' ('+metode+') '+(data.NOTES||''), 'Kasbon', data.USER, now]);
     }
   }
   return { ok: true, ref: ref };

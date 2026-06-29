@@ -497,8 +497,9 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v29.3';
+const APP_VERSION = 'v29.4';
 const CHANGELOG = [
+  { v:'v29.4', d:'25 Jun 2026', t:'Input Kasbon kini instan (optimistic) — tidak lagi loading lama menunggu sinkronisasi penuh.' },
   { v:'v29.3', d:'25 Jun 2026', t:'Baris transaksi dirapikan & teks diperbesar: kategori tak dobel, tanggal ringkas (29 Jun), saldo penuh berlabel, tombol edit jadi ikon.' },
   { v:'v29.2', d:'25 Jun 2026', t:'Pengaturan Ukuran Tampilan (Kecil/Normal/Besar/Sangat Besar) di Master + tombol cepat di header — biar tulisan mudah dibaca.' },
   { v:'v29.1', d:'25 Jun 2026', t:'Fix bug: ganti nama Kartu Kredit kini memindahkan semua riwayat (transaksi, cicilan, tagihan) ke nama baru — data tidak hilang lagi.' },
@@ -3221,7 +3222,7 @@ function onKasbonMetode(){
   // Rekening selalu diperlukan: Pinjam = uang keluar, Kembali (Tunai/Potong Gaji) = uang masuk.
   document.getElementById('kb_rekWrap').style.display = 'block';
 }
-async function saveKasbon(){
+function saveKasbon(){
   const nama=(document.getElementById('kb_nama').value||'').trim();
   const jenis=document.getElementById('kb_jenis').value;
   let metode=document.getElementById('kb_metode').value;
@@ -3232,10 +3233,17 @@ async function saveKasbon(){
   const rek=document.getElementById('kb_rek').value;
   if(!nama||!nominal||!tgl){showToast('Nama, nominal, tanggal wajib diisi','error');return;}
   if(!rek){showToast('Pilih rekening','error');return;}
-  if(API_URL)await apiPost({action:'addKasbon',data:{TANGGAL:tgl,KARYAWAN:nama,JENIS:jenis,NOMINAL:nominal,METODE:metode,REKENING:rek,NOTES:notes,USER:state.user}});
-  closeDrawer();
+  // v29.4: optimistic (seperti Transaksi) — UI langsung, kirim di latar, tanpa syncAll penuh.
+  const now=new Date().toISOString();
+  const ref='KB'+Date.now(), id='ID'+Date.now(), txnId=id+'K';
+  state.kasbon.unshift({ID:id,TANGGAL:tgl,KARYAWAN:nama,JENIS:jenis,NOMINAL:nominal,METODE:metode,REKENING:rek,NOTES:notes,REF_ID:ref,CREATED_BY:state.user,CREATED_AT:now});
+  if(rek){
+    const ktxn={ID:txnId,TANGGAL:tgl,JENIS:(jenis==='Pinjam'?'Pengeluaran':'Pemasukan'),PROJECT:'',REKENING:rek,KATEGORI:(jenis==='Pinjam'?'Kasbon Keluar':'Kasbon Masuk'),NOMINAL:nominal,NOTES:'[KASBON '+ref+'] '+(jenis==='Pinjam'?'pinjam':'kembali')+' '+nama+' ('+metode+') '+(notes||''),TIPE_LOG:'Kasbon',CREATED_BY:state.user,CREATED_AT:now};
+    state.txns.unshift(ktxn); applySummaryDelta(ktxn,1);
+  }
+  if(API_URL)bgPost({action:'addKasbon',data:{ID:id,REF_ID:ref,TXN_ID:txnId,TANGGAL:tgl,KARYAWAN:nama,JENIS:jenis,NOMINAL:nominal,METODE:metode,REKENING:rek,NOTES:notes,USER:state.user}},'Kasbon '+nama);
+  saveLocal(); closeDrawer(); renderKasbon(); renderDashboard(); filterTxn();
   showToast('Kasbon '+jenis.toLowerCase()+' '+nama+' '+fmt(nominal)+' ✓','success');
-  if(API_URL)await syncAll(); else renderKasbon();
 }
 function openKasbonDetail(nama){
   const a = kasbonAgg()[nama] || {pinjam:0,kembali:0,saldo:0};

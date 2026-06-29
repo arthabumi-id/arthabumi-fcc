@@ -3,6 +3,17 @@
 
 ---
 
+## SESSION — 2026-06-25 (v29.4 Input Kasbon instan / optimistic) — ⚠️ REDEPLOY, sw.js v47
+- **Eddy:** input Kasbon loadingnya lama.
+- **Akar:** `saveKasbon` pakai pola blocking: `await apiPost(addKasbon)` LALU `await syncAll()` (tarik ulang seluruh bundle) → 2 round-trip beruntun. Transaksi cepat krn `bgPost` optimistic + ID dibuat client (addRow pakai data.ID).
+- **Kendala:** `addKasbon` backend generate ID sendiri (kasbon row, REF_ID, linked TXN) → kalau optimistic, ID lokal ≠ server → dobel saat sync.
+- **Fix — ⚠️ REDEPLOY Code.gs:** `addKasbon` kini pakai `data.ID || gen`, `data.REF_ID || gen`, `data.TXN_ID || gen` (fallback). Client `saveKasbon` jadi non-async optimistic: generate id/ref/txnId, unshift state.kasbon + (bila rek) linked TXN ke state.txns + `applySummaryDelta(+1)` (saldo instan), `bgPost addKasbon` (kirim latar), `closeDrawer/renderKasbon/renderDashboard/filterTxn` langsung. TANPA syncAll. ID sama dgn server → tak dobel.
+- **Catatan:** `deleteKasbon` masih pakai syncAll (belum disentuh) — bisa dioptimalkan nanti bila perlu.
+- **Verifikasi:** addKasbon node --check (via Grep balance) OK; saveKasbon dibaca balik seimbang. APP_VERSION→v29.4, CHANGELOG +1, sw.js → v47.
+- **Deploy:** redeploy Code.gs (New Version) + push index.html/sw.js v47.
+
+---
+
 ## SESSION — 2026-06-25 (v29.3 Baris transaksi dirapikan) — CLIENT-ONLY, sw.js v46
 - **Eddy:** baris transaksi susah dibaca (kategori dobel, 2 angka bertumpuk di kanan, tanggal ISO). Pilih layout "Bersih".
 - **renderTxn:** subline kini `REKENING [· KATEGORI bila ada PROJECT] · shortDate` (buang kategori dobel saat judul = kategori). Tanggal `shortDate(iso)` → "29 Jun". Kanan: nominal besar; baris kedua flex kanan = `saldo <fmtS>` (disingkat jt/M, redup) + tombol **ikon pensil** (ti-pencil) ganti teks "edit"; transfer/reserve tetap "auto". Helper `shortDate` ditaruh dekat MONTH_NAMES.
