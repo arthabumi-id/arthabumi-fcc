@@ -6,7 +6,7 @@
 ## SESSION — 2026-07-01 (v30.3 Invoice polish) — CLIENT-ONLY, sw.js v52
 - Eddy minta 3 hal di invoice: (1) nama customer bisa diedit + alamat customer opsional saat bikin invoice, (2) nominal pakai "Rp.", (3) tanda tangan.
 - **Done:** builder tambah field `#inv_cust` (prefill KLIEN) + `#inv_alamat` (prefill ALAMAT_KLIEN); genInvoice baca keduanya (override per-invoice, tak ubah project). invHTML: HARGA/TOTAL HARGA/TOTAL prefix "Rp.". Slot ttd `${o.ttd?<img>:''}` di area sign; const `INVOICE_TTD=''`.
-- **PENDING:** embed base64 tanda tangan Eddy setelah upload (PNG transparan ideal) → isi INVOICE_TTD (→ v30.4). node --check invoice OK. APP_VERSION→v30.3, sw.js→v52.
+- **v30.4 (sw.js v53):** tanda tangan Eddy (`Ttd Ko Eddy2.png`, sudah transparan) diproses (bersih latar >205 + trim + resize 120px PNG ~19KB b64) → embed ke `INVOICE_TTD`; tampil di area sign atas "EDDY SANTOSO". node --check invoice OK.
 
 ## SESSION — 2026-07-01 (v30.2 Auto-termin DIBATALKAN) — CLIENT-ONLY, sw.js v51
 - Eddy: fitur auto-termin kurang praktis → cancel. Hook di save project (`setTimeout offerTerminModal`) DIHAPUS. Blok modal (DEFAULT_TERMIN/offerTerminModal/tm*/saveTerminBatch) dibungkus `/* DISABLED v30.2 ... */` (kode mati dipertahankan, bisa diaktifkan lagi). Termin tetap bisa via Piutang "Tambah Termin" manual. Invoice TIDAK terpengaruh (baca dari state.piutang). node --check: komentar seimbang + invoice parse OK. APP_VERSION→v30.2, hapus entri changelog v30, sw.js→v51.
