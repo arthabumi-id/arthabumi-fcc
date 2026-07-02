@@ -237,6 +237,7 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
   <div style="font-size:11px;color:var(--text3);text-align:center;max-width:240px">
     Masukkan PIN Anda. Hubungi Eddy untuk mendapatkan PIN akses.
   </div>
+  <div style="font-size:11px;color:var(--text3);text-align:center;margin-top:2px">versi <span id="loginVer" style="font-weight:700;color:var(--green)">—</span></div>
 </div>
 
 <!-- MAIN APP -->
@@ -497,8 +498,11 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v30.4';
+const APP_VERSION = 'v30.5';
+// Tampilkan versi di halaman login (sebelum masuk) — berguna utk cek deploy tanpa login.
+try{ var _lv=document.getElementById('loginVer'); if(_lv) _lv.textContent=APP_VERSION; }catch(e){}
 const CHANGELOG = [
+  { v:'v30.5', d:'2 Jul 2026', t:'Nomor versi kini tampil di halaman login (bawah kolom PIN) — memudahkan cek versi yang aktif tanpa harus masuk.' },
   { v:'v30.4', d:'1 Jul 2026', t:'Invoice: tanda tangan Eddy terpasang otomatis di atas nama. Nama/alamat customer editable + nominal "Rp." (v30.3).' },
   { v:'v30.2', d:'1 Jul 2026', t:'Auto-termin dibatalkan (kurang praktis). Termin tetap bisa ditambah manual di Piutang; Invoice tetap berfungsi.' },
   { v:'v30.1', d:'1 Jul 2026', t:'Invoice generator: dari detail project → "Buat Invoice" (format Arthabumi + logo, nomor otomatis, terbilang, "Telah terima" otomatis) → cetak/simpan PDF. + field Alamat/Telp/Kode klien di project.' },
