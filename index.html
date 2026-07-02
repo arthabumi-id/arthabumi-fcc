@@ -497,8 +497,9 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v30';
+const APP_VERSION = 'v30.1';
 const CHANGELOG = [
+  { v:'v30.1', d:'1 Jul 2026', t:'Invoice generator: dari detail project → "Buat Invoice" (format Arthabumi, nomor otomatis, terbilang, "Telah terima" otomatis) → cetak/simpan PDF. + field Alamat/Telp/Kode klien di project.' },
   { v:'v30', d:'1 Jul 2026', t:'Auto-jadwal termin: buat project + nilai kontrak → app tawarkan bikin termin (DP/Progress/Pelunasan) jadi Piutang otomatis, langsung masuk Forecast.' },
   { v:'v29.4', d:'25 Jun 2026', t:'Input Kasbon kini instan (optimistic) — tidak lagi loading lama menunggu sinkronisasi penuh.' },
   { v:'v29.3', d:'25 Jun 2026', t:'Baris transaksi dirapikan & teks diperbesar: kategori tak dobel, tanggal ringkas (29 Jun), saldo penuh berlabel, tombol edit jadi ikon.' },
@@ -3762,6 +3763,7 @@ function openProjectDetail(id) {
         <span style="font-size:11px;color:var(--text2);text-transform:uppercase">Laba Bersih (Margin)</span>
         <span style="font-size:16px;font-weight:700;color:${pr.laba>=0?'var(--green)':'var(--red)'}">${pr.laba>=0?'+':'-'}${fmt(Math.abs(pr.laba))} <span style="font-size:13px;color:var(--text2)">(${pr.margin.toFixed(1)}%)</span></span>
       </div>
+      <button class="btn-primary" style="width:100%;margin-bottom:12px" onclick="openInvoiceBuilder('${p.ID}')"><i class="ti ti-file-invoice"></i> Buat Invoice</button>
       ${addendumSectionHTML(p)}
       ${donutCardHTML('projKatDonut', entries)}
       <div style="font-size:11px;color:var(--text3);margin-bottom:8px">${sorted.length} transaksi</div>
@@ -3874,6 +3876,138 @@ function saveTerminBatch(){ tmSync(); const p=_tmProj; if(!p) return; const noms
   if(typeof renderPiutang==='function')renderPiutang(); if(typeof renderPiutangReminder==='function')renderPiutangReminder(); if(typeof updatePiutangBadge==='function')updatePiutangBadge();
   if(state.currentPage==='forecast')renderForecast();
   showToast(made?(made+' termin dibuat ✓'):'Tidak ada termin dibuat','success');
+}
+
+// ── v30.1: Invoice generator (format Arthabumi) ───────────────
+// Logo di-embed base64 (data URI) supaya muncul di popup cetak. Kosong = fallback wordmark.
+const INVOICE_LOGO='data:image/jpeg;base64,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';
+function _invRp(n){ return Number(Math.round(Math.abs(n||0))).toLocaleString('id-ID'); }
+function tglIndo(iso){ const M=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember']; const p=String(iso||'').slice(0,10).split('-'); if(p.length<3||!p[2]) return String(iso||''); return (+p[2])+' '+(M[(+p[1])-1]||'')+' '+p[0]; }
+function terbilang(n){
+  n=Math.floor(Math.abs(Number(n)||0));
+  const sat=['','satu','dua','tiga','empat','lima','enam','tujuh','delapan','sembilan','sepuluh','sebelas'];
+  function t(x){
+    if(x<12) return sat[x];
+    if(x<20) return t(x-10)+' belas';
+    if(x<100) return t(Math.floor(x/10))+' puluh'+(x%10?' '+t(x%10):'');
+    if(x<200) return 'seratus'+(x%100?' '+t(x%100):'');
+    if(x<1000) return t(Math.floor(x/100))+' ratus'+(x%100?' '+t(x%100):'');
+    if(x<2000) return 'seribu'+(x%1000?' '+t(x%1000):'');
+    if(x<1000000) return t(Math.floor(x/1000))+' ribu'+(x%1000?' '+t(x%1000):'');
+    if(x<1000000000) return t(Math.floor(x/1000000))+' juta'+(x%1000000?' '+t(x%1000000):'');
+    if(x<1000000000000) return t(Math.floor(x/1000000000))+' miliar'+(x%1000000000?' '+t(x%1000000000):'');
+    return t(Math.floor(x/1000000000000))+' triliun'+(x%1000000000000?' '+t(x%1000000000000):'');
+  }
+  if(n===0) return 'nol';
+  return t(n).replace(/\s+/g,' ').trim();
+}
+function invHTML(o){
+  const rows=o.telah.map((x,i)=>`<tr><td style="padding:1px 6px 1px 0;width:14px;vertical-align:top">${String.fromCharCode(97+i)}</td><td style="padding:1px 0">${_esc(x.label)} : Rp. ${_invRp(x.amt)},-</td></tr>`).join('');
+  const telahBlock=o.telah.length?`<div style="margin-top:5px">Telah terima:</div><table style="border-collapse:collapse;font-size:11px">${rows}</table>`:'';
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Invoice ${_esc(o.invNo)}</title><style>
+    *{box-sizing:border-box;font-family:Arial,Helvetica,sans-serif}
+    body{margin:0;color:#111;background:#f3f3f3}
+    .page{background:#fff;width:210mm;min-height:297mm;margin:12px auto;padding:17mm 15mm;box-shadow:0 2px 12px rgba(0,0,0,.15)}
+    .top{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #16794f;padding-bottom:10px}
+    .title{font-size:34px;font-weight:800;letter-spacing:3px;color:#16794f}
+    .logo{height:62px}
+    .brand{font-size:22px;font-weight:800;color:#16794f;text-align:right;line-height:1.15}
+    .brand small{display:block;font-size:10px;font-weight:600;color:#777;letter-spacing:1.5px}
+    .parties{display:flex;justify-content:space-between;gap:20px;margin-top:16px;font-size:12px;line-height:1.5}
+    .lbl{font-weight:700;font-size:11px;color:#16794f;margin-bottom:3px}
+    table.items{width:100%;border-collapse:collapse;margin-top:18px;font-size:12px}
+    table.items th{background:#16794f;color:#fff;padding:7px 8px;text-align:left;font-size:10.5px;letter-spacing:.3px}
+    table.items td{border:1px solid #cfcfcf;padding:8px;vertical-align:top}
+    .r{text-align:right}.c{text-align:center}
+    .tot{margin-top:4px;text-align:right;font-size:13px}.tot b{display:inline-block;min-width:130px}
+    .terbilang{margin-top:10px;font-size:12px;font-style:italic}
+    .foot{display:flex;justify-content:space-between;gap:20px;margin-top:26px;font-size:12px;line-height:1.5}
+    .sign{text-align:center;min-width:190px}.sign .sp{height:58px}
+    @media print{ body{background:#fff} .page{box-shadow:none;margin:0} .noprint{display:none!important} }
+    .noprint{position:fixed;top:10px;right:10px;display:flex;gap:8px}
+    .btn{background:#16794f;color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer}.btn.sec{background:#e6e6e6;color:#333}
+  </style></head><body>
+  <div class="noprint"><button class="btn" onclick="window.print()">Cetak / Simpan PDF</button><button class="btn sec" onclick="window.close()">Tutup</button></div>
+  <div class="page">
+    <div class="top"><div class="title">INVOICE</div>${o.logo?`<img class="logo" src="${o.logo}">`:`<div class="brand">ARTHABUMI<small>KONTRAKTOR · INTERIOR · BESI</small></div>`}</div>
+    <div class="parties">
+      <div style="max-width:54%"><div class="lbl">CUSTOMER</div><div><b>${_esc(o.klien||'-')}</b></div><div>${_esc(o.alamat||'')}</div><div>${o.telp?('Telp: '+_esc(o.telp)):''}</div></div>
+      <div style="text-align:right;max-width:44%"><div><b>Eddy Santoso</b></div><div>0813-9086-1887</div><div>Daan Mogot KM 11 Perumahan Casa Jardin,<br>Cluster Dianella D3 No. 6, Jakarta Barat 11710</div><div style="margin-top:6px;font-weight:700">INV NO. ${_esc(o.invNo)}</div></div>
+    </div>
+    <table class="items"><thead><tr><th style="width:26px" class="c">No</th><th>NAMA BARANG</th><th class="c" style="width:42px">JMLH</th><th class="c" style="width:50px">SATUAN</th><th class="r" style="width:105px">HARGA</th><th class="r" style="width:118px">TOTAL HARGA</th></tr></thead>
+    <tbody><tr><td class="c">1</td><td><div style="font-weight:600">${_esc(o.namaBarang)}</div><div style="margin-top:8px;color:#333">Nilai Project Rp. ${_invRp(o.kontrak)},00</div>${telahBlock}</td><td class="c">1</td><td class="c">LS</td><td class="r">${_invRp(o.nominal)}</td><td class="r">${_invRp(o.nominal)}</td></tr></tbody></table>
+    <div class="tot">TOTAL&nbsp;&nbsp;<b>${_invRp(o.nominal)}</b></div>
+    <div class="terbilang"><b>TERBILANG:</b> ${_esc(o.terbilang)}</div>
+    ${o.note?`<div style="margin-top:10px;font-size:12px"><b>NOTE:</b> <span style="white-space:pre-wrap">${_esc(o.note)}</span></div>`:''}
+    <div class="foot"><div><div style="font-weight:700;margin-bottom:3px">PEMBAYARAN DI TRANSFER KE:</div><div>NAMA BANK: BCA (BANK CENTRAL ASIA)</div><div>CABANG: TAMAN SEMANAN INDAH</div><div>NO DAN NAMA REKENING: 549-082-6868 A/N EDDY SANTOSO</div></div>
+      <div class="sign"><div>Jakarta, ${_esc(o.tglIndo)}</div><div>Hormat saya,</div><div class="sp"></div><div style="font-weight:700;text-decoration:underline">EDDY SANTOSO</div></div></div>
+  </div></body></html>`;
+}
+function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function _invPct(p,nominal){ const k=Number(p.NILAI_CONTRACT||0); return k>0?Math.round(nominal/k*100):0; }
+function openInvoiceBuilder(projId){
+  const p=state.projects.find(x=>x.ID===projId); if(!p) return;
+  const termins=(state.piutang||[]).filter(x=>x.PROJECT===p.NAMA);
+  if(!termins.length){ showToast('Belum ada termin. Buat jadwal termin dulu.','error'); return; }
+  closeInvoiceBuilder();
+  const div=document.createElement('div'); div.id='invModal';
+  div.style.cssText='position:fixed;inset:0;z-index:330;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:16px';
+  div.onclick=(e)=>{ if(e.target===div) closeInvoiceBuilder(); };
+  const opts=termins.map((t,i)=>`<option value="${t.ID}">${esc(t.TERMIN||('Termin '+(i+1)))} — ${fmt(t.NOMINAL)} (${t.STATUS==='Lunas'?'Lunas':'Belum'})</option>`).join('');
+  div.innerHTML=`<div style="background:var(--bg2,#0E1611);border:1px solid var(--border2);border-radius:14px;padding:16px;width:100%;max-width:440px;max-height:88vh;overflow:auto;box-shadow:0 8px 30px rgba(0,0,0,.5)">
+    <div style="font-size:14px;font-weight:700">Buat Invoice</div>
+    <div style="font-size:11px;color:var(--text3);margin:2px 0 12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.NAMA)}</div>
+    <div class="form-group"><label class="form-label">Termin yang ditagih</label><select class="form-input" id="inv_termin" onchange="invOnTermin('${projId}')">${opts}</select></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Tanggal invoice</label><input class="form-input" type="date" id="inv_tgl" value="${today()}" oninput="invPreview('${projId}')"></div>
+      <div class="form-group"><label class="form-label">No urut</label><input class="form-input" id="inv_seq" value="01" oninput="invPreview('${projId}')" style="text-align:center"></div>
+    </div>
+    <div style="font-size:10px;color:var(--text3);margin:-4px 0 10px">No. Invoice: <span id="inv_no_prev" style="color:var(--gold)"></span>${p.KODE?'':' · ⚠️ Kode invoice kosong (isi di Edit Project)'}</div>
+    <div class="form-group"><label class="form-label">Nama Barang / Deskripsi</label><textarea class="form-input" id="inv_desc" rows="2" style="resize:vertical"></textarea></div>
+    <div class="form-group"><label class="form-label">Catatan (opsional)</label><input class="form-input" id="inv_note" placeholder="NOTE di invoice..."></div>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button onclick="closeInvoiceBuilder()" style="flex:1;background:var(--bg3,#1a1a2e);border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:11px;font-size:12px;cursor:pointer">Batal</button>
+      <button onclick="genInvoice('${projId}')" style="flex:2;background:var(--green);border:none;color:#06140D;border-radius:8px;padding:11px;font-size:12px;font-weight:700;cursor:pointer"><i class="ti ti-file-invoice"></i> Buat Invoice</button>
+    </div>
+  </div>`;
+  document.body.appendChild(div); invOnTermin(projId);
+}
+function closeInvoiceBuilder(){ const m=document.getElementById('invModal'); if(m) m.remove(); }
+function invOnTermin(projId){
+  const p=state.projects.find(x=>x.ID===projId); if(!p) return;
+  const tid=document.getElementById('inv_termin').value;
+  const t=(state.piutang||[]).find(x=>x.ID===tid); if(!t) return;
+  const pct=_invPct(p,Number(t.NOMINAL||0));
+  document.getElementById('inv_desc').value=`PEMBAYARAN ${(t.TERMIN||'').toUpperCase()} (${pct}%) ${(p.NAMA||'').toUpperCase()}`;
+  const termins=(state.piutang||[]).filter(x=>x.PROJECT===p.NAMA);
+  const idx=termins.findIndex(x=>x.ID===tid);
+  document.getElementById('inv_seq').value=String(idx+1).padStart(2,'0');
+  invPreview(projId);
+}
+function _invNo(p){
+  const d=document.getElementById('inv_tgl').value||today();
+  const pr=String(d).slice(0,10).split('-'); const dd=(pr[2]||''),mm=(pr[1]||''),yy=(pr[0]||'');
+  const seq=((document.getElementById('inv_seq').value||'').trim())||'01';
+  return `${dd}${mm}${yy}/${(p.KODE||'XX').toUpperCase()}/${seq}`;
+}
+function invPreview(projId){ const p=state.projects.find(x=>x.ID===projId); if(!p) return; const el=document.getElementById('inv_no_prev'); if(el) el.textContent=_invNo(p); }
+function genInvoice(projId){
+  const p=state.projects.find(x=>x.ID===projId); if(!p) return;
+  const tid=document.getElementById('inv_termin').value;
+  const t=(state.piutang||[]).find(x=>x.ID===tid); if(!t){ showToast('Pilih termin','error'); return; }
+  const nominal=Number(t.NOMINAL||0), kontrak=Number(p.NILAI_CONTRACT||0);
+  const dateISO=document.getElementById('inv_tgl').value||today();
+  const namaBarang=document.getElementById('inv_desc').value||'';
+  const note=document.getElementById('inv_note').value||'';
+  const invNo=_invNo(p);
+  const telah=(state.piutang||[]).filter(x=>x.PROJECT===p.NAMA && x.STATUS==='Lunas' && x.ID!==tid)
+    .sort((a,b)=>String(a.TGL_BAYAR||a.JATUH_TEMPO||'').localeCompare(String(b.TGL_BAYAR||b.JATUH_TEMPO||'')))
+    .map(x=>({label:(x.TERMIN||'Termin')+' '+tglIndo(x.TGL_BAYAR||x.JATUH_TEMPO||''), amt:Number(x.NOMINAL||0)}));
+  const html=invHTML({logo:INVOICE_LOGO,klien:p.KLIEN,alamat:p.ALAMAT_KLIEN,telp:p.TELP_KLIEN,invNo,namaBarang,note,kontrak,nominal,telah,terbilang:(terbilang(nominal).toUpperCase()+' RUPIAH'),tglIndo:tglIndo(dateISO)});
+  const w=window.open('','_blank');
+  if(!w){ showToast('Popup diblokir — izinkan popup untuk cetak invoice.','error'); return; }
+  w.document.open(); w.document.write(html); w.document.close();
+  closeInvoiceBuilder();
 }
 
 function openAddendumForm(projId, jenis){
@@ -4200,6 +4334,11 @@ function openDrawer(mode, editId = null, preset = null) {
         <div class="form-group"><label class="form-label">Status</label><select class="form-input" id="fp_status"><option ${!t||t.STATUS==='Jalan'?'selected':''}>Jalan</option><option ${t&&t.STATUS==='Selesai'?'selected':''}>Selesai</option><option ${t&&t.STATUS==='Hold'?'selected':''}>Hold</option><option ${t&&t.STATUS==='Abaikan'?'selected':''}>Abaikan</option></select></div>
       </div>
       <div class="form-group"><label class="form-label">Nilai Kontrak (Rp)</label><input class="form-input" type="text" inputmode="numeric" id="fp_nilai" value="${t?fmtInput(t.NILAI_CONTRACT):''}" placeholder="0" oninput="fmtMoneyInput(this)"></div>
+      <div class="form-group"><label class="form-label">Alamat Klien <span style="color:var(--text3);font-weight:400">(untuk invoice)</span></label><input class="form-input" id="fp_alamat" value="${t?esc(t.ALAMAT_KLIEN||''):''}" placeholder="Alamat klien..."></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Telp Klien</label><input class="form-input" id="fp_telp" value="${t?esc(t.TELP_KLIEN||''):''}" placeholder="08..."></div>
+        <div class="form-group"><label class="form-label">Kode Invoice</label><input class="form-input" id="fp_kode" value="${t?esc(t.KODE||''):''}" placeholder="mis. BC" style="text-transform:uppercase"></div>
+      </div>
       <div class="settings-sub" style="margin-bottom:8px"><b>Status "Abaikan"</b> = project dikeluarkan dari perhitungan Laba Bersih (pakai utk project yang datanya belum lengkap).</div>
       <button class="btn-primary" onclick="saveDrawer()"><i class="ti ti-device-floppy"></i> Simpan</button>
       ${editId?`<button class="btn-secondary" style="color:var(--red)" onclick="deleteProjectFlow('${editId}')">Hapus Project</button>`:''}
@@ -4324,7 +4463,8 @@ async function saveDrawer() {
     if(API_URL)bgPost({action:eid?'updateRow':'addTxn',data:eid?{sheet:'TRANSAKSI',id:eid,updates:obj}:obj},(eid?'Edit ':'')+'Transaksi '+fmt(nominal));
     saveLocal();renderDashboard();filterTxn();renderProject();showToast(eid?'Transaksi diperbarui':'Transaksi tersimpan','success');
   } else if (mode === 'proj') {
-    const obj={ID:eid||uid(),NAMA:document.getElementById('fp_nama').value,KLIEN:document.getElementById('fp_klien').value,TGL_MULAI:document.getElementById('fp_tgl').value,STATUS:document.getElementById('fp_status').value,NILAI_CONTRACT:unfmtNum(document.getElementById('fp_nilai').value),CREATED_AT:now};
+    const _fpAl=document.getElementById('fp_alamat'),_fpTe=document.getElementById('fp_telp'),_fpKo=document.getElementById('fp_kode');
+    const obj={ID:eid||uid(),NAMA:document.getElementById('fp_nama').value,KLIEN:document.getElementById('fp_klien').value,TGL_MULAI:document.getElementById('fp_tgl').value,STATUS:document.getElementById('fp_status').value,NILAI_CONTRACT:unfmtNum(document.getElementById('fp_nilai').value),ALAMAT_KLIEN:_fpAl?_fpAl.value:'',TELP_KLIEN:_fpTe?_fpTe.value:'',KODE:(_fpKo?_fpKo.value:'').toUpperCase(),CREATED_AT:now};
     if(!obj.NAMA){showToast('Nama project wajib diisi','error');return;}
     if(eid){const i=state.projects.findIndex(x=>x.ID===eid);state.projects[i]=obj;}else state.projects.unshift(obj);
     if(API_URL)bgPost({action:eid?'updateRow':'addProj',data:eid?{sheet:'MASTER_PROJECT',id:eid,updates:obj}:obj},(eid?'Edit ':'')+'Project '+obj.NAMA);

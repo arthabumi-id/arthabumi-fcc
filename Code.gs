@@ -29,7 +29,7 @@ const HEADERS = {
   [S.BANK]:     ['ID','NAMA','TIPE','BANK','SALDO_AWAL','CREATED_AT'],
   // RESERVE_BANK (v20) = rekening penyimpan reserve default kartu ini (boleh kosong → pakai default global).
   [S.CC]:       ['ID','NAMA','BANK','LIMIT','JATUH_TEMPO','CREATED_AT','RESERVE_BANK'],
-  [S.PROJ]:     ['ID','NAMA','KLIEN','TGL_MULAI','STATUS','NILAI_CONTRACT','CREATED_AT'],
+  [S.PROJ]:     ['ID','NAMA','KLIEN','TGL_MULAI','STATUS','NILAI_CONTRACT','CREATED_AT','ALAMAT_KLIEN','TELP_KLIEN','KODE'], // v30.1: +alamat/telp klien & kode invoice
   [S.KAT]:      ['ID','KELOMPOK','NAMA','TIPE','CREATED_AT'],
   [S.TRANSFER]: ['ID','TANGGAL','DARI','KE','NOMINAL','NOTES','REF_ID','CREATED_BY','CREATED_AT'],
   [S.RESERVE]:  ['ID','TANGGAL','DARI_REKENING','UNTUK_CC','NOMINAL','NOTES','CREATED_BY','CREATED_AT'],
@@ -253,6 +253,7 @@ function doPost(e) {
 function getBundle(ss, params) {
   const since = params.since || daysAgoISO(RECENT_DAYS);
   ensureCol(ss, S.CC, 'RESERVE_BANK');   // v20: pastikan kolom bank reserve per kartu ada
+  ensureCol(ss, S.PROJ, 'ALAMAT_KLIEN'); ensureCol(ss, S.PROJ, 'TELP_KLIEN'); ensureCol(ss, S.PROJ, 'KODE'); // v30.1: kolom invoice
   return {
     banks:     getSheet(ss, S.BANK),
     ccs:       getSheet(ss, S.CC),
