@@ -3,6 +3,15 @@
 
 ---
 
+## SESSION — 2026-07-01 (v30 Auto-jadwal termin dari kontrak) — CLIENT-ONLY, sw.js v48
+- **Konteks:** dari sesi "upgrade" → pilih Auto-termin + Invoice PDF (kwitansi di-skip). Feature 1 dibangun dulu.
+- **Auto-termin (client-only, pakai addPiutang yg ada):** saat SIMPAN PROJECT BARU dgn NILAI_CONTRACT>0 → `offerTerminModal(projId)` (setTimeout 140ms sesudah save). Modal template default `DEFAULT_TERMIN` = DP40/Progress1 35/Progress2 20/Pelunasan5 (=100%), tiap baris editable (nama/%/tanggal manual), tambah/hapus baris, nominal auto=%×kontrak, baris terakhir=sisa biar total pas. `saveTerminBatch` → buat N baris Piutang (STATUS Belum, PROJECT=nama) via bgPost addPiutang + push state.piutang → Forecast/badge refresh. Helper: tmSync/tmAddRow/tmDelRow/tmNominals/tmRender/tmRecalc. Hanya project baru (bukan retro).
+- **Sign-off Eddy:** template DP40/35/20/5 (koreksi dari 105% yg ke-typo), tanggal manual, project baru saja.
+- **Verifikasi:** blok termin dibaca balik seimbang (bash mount index.html sering stale → node-check via bash tak andal). APP_VERSION→v30, CHANGELOG +1, sw.js → v48. Client-only (push index.html+sw.js).
+- **PENDING Feature 2 (Invoice PDF):** contoh invoice Eddy sudah dianalisis (format tersimpan di log). Butuh: +3 kolom MASTER_PROJECT (ALAMAT_KLIEN/TELP_KLIEN/KODE) + redeploy; generator HTML print-to-PDF; no invoice auto DDMMYYYY/KODE/urut; terbilang; "Telah terima" dari termin lunas; logo diekstrak ke outputs/invoice-assets/. Format invoice: judul INVOICE + logo; CUSTOMER (Nama/Alamat/Telp) vs issuer Eddy Santoso/0813-9086-1887/Casa Jardin Daan Mogot; tabel No|NAMA BARANG|JMLH|SATUAN|HARGA|TOTAL; TERBILANG; NOTE; transfer BCA 549-082-6868 a/n Eddy Santoso; ttd EDDY SANTOSO.
+
+---
+
 ## SESSION — 2026-06-25 (v29.4 Input Kasbon instan / optimistic) — ⚠️ REDEPLOY, sw.js v47
 - **Eddy:** input Kasbon loadingnya lama.
 - **Akar:** `saveKasbon` pakai pola blocking: `await apiPost(addKasbon)` LALU `await syncAll()` (tarik ulang seluruh bundle) → 2 round-trip beruntun. Transaksi cepat krn `bgPost` optimistic + ID dibuat client (addRow pakai data.ID).
