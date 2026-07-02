@@ -3,7 +3,10 @@
 
 ---
 
-## SESSION — 2026-07-01 (v30 Auto-jadwal termin dari kontrak) — CLIENT-ONLY, sw.js v48
+## SESSION — 2026-07-01 (v30.2 Auto-termin DIBATALKAN) — CLIENT-ONLY, sw.js v51
+- Eddy: fitur auto-termin kurang praktis → cancel. Hook di save project (`setTimeout offerTerminModal`) DIHAPUS. Blok modal (DEFAULT_TERMIN/offerTerminModal/tm*/saveTerminBatch) dibungkus `/* DISABLED v30.2 ... */` (kode mati dipertahankan, bisa diaktifkan lagi). Termin tetap bisa via Piutang "Tambah Termin" manual. Invoice TIDAK terpengaruh (baca dari state.piutang). node --check: komentar seimbang + invoice parse OK. APP_VERSION→v30.2, hapus entri changelog v30, sw.js→v51.
+
+## SESSION — 2026-07-01 (v30 Auto-jadwal termin dari kontrak) — CLIENT-ONLY, sw.js v48 [DIBATALKAN di v30.2]
 - **Konteks:** dari sesi "upgrade" → pilih Auto-termin + Invoice PDF (kwitansi di-skip). Feature 1 dibangun dulu.
 - **Auto-termin (client-only, pakai addPiutang yg ada):** saat SIMPAN PROJECT BARU dgn NILAI_CONTRACT>0 → `offerTerminModal(projId)` (setTimeout 140ms sesudah save). Modal template default `DEFAULT_TERMIN` = DP40/Progress1 35/Progress2 20/Pelunasan5 (=100%), tiap baris editable (nama/%/tanggal manual), tambah/hapus baris, nominal auto=%×kontrak, baris terakhir=sisa biar total pas. `saveTerminBatch` → buat N baris Piutang (STATUS Belum, PROJECT=nama) via bgPost addPiutang + push state.piutang → Forecast/badge refresh. Helper: tmSync/tmAddRow/tmDelRow/tmNominals/tmRender/tmRecalc. Hanya project baru (bukan retro).
 - **Sign-off Eddy:** template DP40/35/20/5 (koreksi dari 105% yg ke-typo), tanggal manual, project baru saja.
