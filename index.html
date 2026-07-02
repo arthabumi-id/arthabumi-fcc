@@ -497,10 +497,10 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v30.1';
+const APP_VERSION = 'v30.2';
 const CHANGELOG = [
-  { v:'v30.1', d:'1 Jul 2026', t:'Invoice generator: dari detail project → "Buat Invoice" (format Arthabumi, nomor otomatis, terbilang, "Telah terima" otomatis) → cetak/simpan PDF. + field Alamat/Telp/Kode klien di project.' },
-  { v:'v30', d:'1 Jul 2026', t:'Auto-jadwal termin: buat project + nilai kontrak → app tawarkan bikin termin (DP/Progress/Pelunasan) jadi Piutang otomatis, langsung masuk Forecast.' },
+  { v:'v30.2', d:'1 Jul 2026', t:'Auto-termin dibatalkan (kurang praktis). Termin tetap bisa ditambah manual di Piutang; Invoice tetap berfungsi.' },
+  { v:'v30.1', d:'1 Jul 2026', t:'Invoice generator: dari detail project → "Buat Invoice" (format Arthabumi + logo, nomor otomatis, terbilang, "Telah terima" otomatis) → cetak/simpan PDF. + field Alamat/Telp/Kode klien di project.' },
   { v:'v29.4', d:'25 Jun 2026', t:'Input Kasbon kini instan (optimistic) — tidak lagi loading lama menunggu sinkronisasi penuh.' },
   { v:'v29.3', d:'25 Jun 2026', t:'Baris transaksi dirapikan & teks diperbesar: kategori tak dobel, tanggal ringkas (29 Jun), saldo penuh berlabel, tombol edit jadi ikon.' },
   { v:'v29.2', d:'25 Jun 2026', t:'Pengaturan Ukuran Tampilan (Kecil/Normal/Besar/Sangat Besar) di Master + tombol cepat di header — biar tulisan mudah dibaca.' },
@@ -3827,6 +3827,7 @@ function addendumSectionHTML(p){
 // ── v30: Auto-jadwal termin dari kontrak project ──────────────
 // Saat project baru dibuat (nilai kontrak > 0), tawarkan generate termin → jadi baris Piutang
 // (STATUS Belum) yang otomatis masuk Forecast. Template default bisa diedit per project.
+/* DISABLED v30.2 — fitur auto-termin dibatalkan (kurang praktis). Kode dipertahankan (mati) kalau mau diaktifkan lagi.
 const DEFAULT_TERMIN=[{nama:'DP',pct:40},{nama:'Progress 1',pct:35},{nama:'Progress 2',pct:20},{nama:'Pelunasan',pct:5}];
 let _tmRows=[], _tmProj=null;
 function offerTerminModal(projId){
@@ -3877,6 +3878,7 @@ function saveTerminBatch(){ tmSync(); const p=_tmProj; if(!p) return; const noms
   if(state.currentPage==='forecast')renderForecast();
   showToast(made?(made+' termin dibuat ✓'):'Tidak ada termin dibuat','success');
 }
+*/
 
 // ── v30.1: Invoice generator (format Arthabumi) ───────────────
 // Logo di-embed base64 (data URI) supaya muncul di popup cetak. Kosong = fallback wordmark.
@@ -4469,7 +4471,6 @@ async function saveDrawer() {
     if(eid){const i=state.projects.findIndex(x=>x.ID===eid);state.projects[i]=obj;}else state.projects.unshift(obj);
     if(API_URL)bgPost({action:eid?'updateRow':'addProj',data:eid?{sheet:'MASTER_PROJECT',id:eid,updates:obj}:obj},(eid?'Edit ':'')+'Project '+obj.NAMA);
     saveLocal();renderProject();renderDashboard();showToast(eid?'Project diperbarui':'Project ditambahkan','success');
-    if(!eid && Number(obj.NILAI_CONTRACT)>0) setTimeout(()=>offerTerminModal(obj.ID),140); // v30: tawarkan jadwal termin
   } else if (mode === 'bank') {
     const obj={ID:eid||uid(),NAMA:document.getElementById('fb_nama').value,BANK:document.getElementById('fb_bank').value,TIPE:document.getElementById('fb_tipe').value,SALDO_AWAL:unfmtNum(document.getElementById('fb_saldo').value),CREATED_AT:now};
     if(!obj.NAMA){showToast('Nama rekening wajib diisi','error');return;}
