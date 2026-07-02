@@ -497,8 +497,9 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v30.2';
+const APP_VERSION = 'v30.3';
 const CHANGELOG = [
+  { v:'v30.3', d:'1 Jul 2026', t:'Invoice: nama & alamat customer bisa diedit saat bikin invoice, nominal pakai prefix "Rp.", slot tanda tangan disiapkan.' },
   { v:'v30.2', d:'1 Jul 2026', t:'Auto-termin dibatalkan (kurang praktis). Termin tetap bisa ditambah manual di Piutang; Invoice tetap berfungsi.' },
   { v:'v30.1', d:'1 Jul 2026', t:'Invoice generator: dari detail project → "Buat Invoice" (format Arthabumi + logo, nomor otomatis, terbilang, "Telah terima" otomatis) → cetak/simpan PDF. + field Alamat/Telp/Kode klien di project.' },
   { v:'v29.4', d:'25 Jun 2026', t:'Input Kasbon kini instan (optimistic) — tidak lagi loading lama menunggu sinkronisasi penuh.' },
@@ -3883,6 +3884,7 @@ function saveTerminBatch(){ tmSync(); const p=_tmProj; if(!p) return; const noms
 // ── v30.1: Invoice generator (format Arthabumi) ───────────────
 // Logo di-embed base64 (data URI) supaya muncul di popup cetak. Kosong = fallback wordmark.
 const INVOICE_LOGO='data:image/jpeg;base64,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';
+const INVOICE_TTD=''; // tanda tangan Eddy (data URI). Kosong = tanpa ttd gambar.
 function _invRp(n){ return Number(Math.round(Math.abs(n||0))).toLocaleString('id-ID'); }
 function tglIndo(iso){ const M=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember']; const p=String(iso||'').slice(0,10).split('-'); if(p.length<3||!p[2]) return String(iso||''); return (+p[2])+' '+(M[(+p[1])-1]||'')+' '+p[0]; }
 function terbilang(n){
@@ -3937,12 +3939,12 @@ function invHTML(o){
       <div style="text-align:right;max-width:44%"><div><b>Eddy Santoso</b></div><div>0813-9086-1887</div><div>Daan Mogot KM 11 Perumahan Casa Jardin,<br>Cluster Dianella D3 No. 6, Jakarta Barat 11710</div><div style="margin-top:6px;font-weight:700">INV NO. ${_esc(o.invNo)}</div></div>
     </div>
     <table class="items"><thead><tr><th style="width:26px" class="c">No</th><th>NAMA BARANG</th><th class="c" style="width:42px">JMLH</th><th class="c" style="width:50px">SATUAN</th><th class="r" style="width:105px">HARGA</th><th class="r" style="width:118px">TOTAL HARGA</th></tr></thead>
-    <tbody><tr><td class="c">1</td><td><div style="font-weight:600">${_esc(o.namaBarang)}</div><div style="margin-top:8px;color:#333">Nilai Project Rp. ${_invRp(o.kontrak)},00</div>${telahBlock}</td><td class="c">1</td><td class="c">LS</td><td class="r">${_invRp(o.nominal)}</td><td class="r">${_invRp(o.nominal)}</td></tr></tbody></table>
-    <div class="tot">TOTAL&nbsp;&nbsp;<b>${_invRp(o.nominal)}</b></div>
+    <tbody><tr><td class="c">1</td><td><div style="font-weight:600">${_esc(o.namaBarang)}</div><div style="margin-top:8px;color:#333">Nilai Project Rp. ${_invRp(o.kontrak)},00</div>${telahBlock}</td><td class="c">1</td><td class="c">LS</td><td class="r">Rp. ${_invRp(o.nominal)}</td><td class="r">Rp. ${_invRp(o.nominal)}</td></tr></tbody></table>
+    <div class="tot">TOTAL&nbsp;&nbsp;<b>Rp. ${_invRp(o.nominal)}</b></div>
     <div class="terbilang"><b>TERBILANG:</b> ${_esc(o.terbilang)}</div>
     ${o.note?`<div style="margin-top:10px;font-size:12px"><b>NOTE:</b> <span style="white-space:pre-wrap">${_esc(o.note)}</span></div>`:''}
     <div class="foot"><div><div style="font-weight:700;margin-bottom:3px">PEMBAYARAN DI TRANSFER KE:</div><div>NAMA BANK: BCA (BANK CENTRAL ASIA)</div><div>CABANG: TAMAN SEMANAN INDAH</div><div>NO DAN NAMA REKENING: 549-082-6868 A/N EDDY SANTOSO</div></div>
-      <div class="sign"><div>Jakarta, ${_esc(o.tglIndo)}</div><div>Hormat saya,</div><div class="sp"></div><div style="font-weight:700;text-decoration:underline">EDDY SANTOSO</div></div></div>
+      <div class="sign"><div>Jakarta, ${_esc(o.tglIndo)}</div><div>Hormat saya,</div><div class="sp">${o.ttd?`<img src="${o.ttd}" style="height:58px;object-fit:contain">`:''}</div><div style="font-weight:700;text-decoration:underline">EDDY SANTOSO</div></div></div>
   </div></body></html>`;
 }
 function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -3960,6 +3962,8 @@ function openInvoiceBuilder(projId){
     <div style="font-size:14px;font-weight:700">Buat Invoice</div>
     <div style="font-size:11px;color:var(--text3);margin:2px 0 12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.NAMA)}</div>
     <div class="form-group"><label class="form-label">Termin yang ditagih</label><select class="form-input" id="inv_termin" onchange="invOnTermin('${projId}')">${opts}</select></div>
+    <div class="form-group"><label class="form-label">Nama Customer</label><input class="form-input" id="inv_cust" value="${esc(p.KLIEN||'')}" placeholder="Nama customer..."></div>
+    <div class="form-group"><label class="form-label">Alamat Customer <span style="color:var(--text3);font-weight:400">(opsional)</span></label><input class="form-input" id="inv_alamat" value="${esc(p.ALAMAT_KLIEN||'')}" placeholder="Alamat customer..."></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Tanggal invoice</label><input class="form-input" type="date" id="inv_tgl" value="${today()}" oninput="invPreview('${projId}')"></div>
       <div class="form-group"><label class="form-label">No urut</label><input class="form-input" id="inv_seq" value="01" oninput="invPreview('${projId}')" style="text-align:center"></div>
@@ -4005,7 +4009,9 @@ function genInvoice(projId){
   const telah=(state.piutang||[]).filter(x=>x.PROJECT===p.NAMA && x.STATUS==='Lunas' && x.ID!==tid)
     .sort((a,b)=>String(a.TGL_BAYAR||a.JATUH_TEMPO||'').localeCompare(String(b.TGL_BAYAR||b.JATUH_TEMPO||'')))
     .map(x=>({label:(x.TERMIN||'Termin')+' '+tglIndo(x.TGL_BAYAR||x.JATUH_TEMPO||''), amt:Number(x.NOMINAL||0)}));
-  const html=invHTML({logo:INVOICE_LOGO,klien:p.KLIEN,alamat:p.ALAMAT_KLIEN,telp:p.TELP_KLIEN,invNo,namaBarang,note,kontrak,nominal,telah,terbilang:(terbilang(nominal).toUpperCase()+' RUPIAH'),tglIndo:tglIndo(dateISO)});
+  const _custEl=document.getElementById('inv_cust'), _almEl=document.getElementById('inv_alamat');
+  const cust=(_custEl?_custEl.value:'')||p.KLIEN||''; const custAlamat=(_almEl?_almEl.value:'');
+  const html=invHTML({logo:INVOICE_LOGO,ttd:INVOICE_TTD,klien:cust,alamat:custAlamat,telp:p.TELP_KLIEN,invNo,namaBarang,note,kontrak,nominal,telah,terbilang:(terbilang(nominal).toUpperCase()+' RUPIAH'),tglIndo:tglIndo(dateISO)});
   const w=window.open('','_blank');
   if(!w){ showToast('Popup diblokir — izinkan popup untuk cetak invoice.','error'); return; }
   w.document.open(); w.document.write(html); w.document.close();
