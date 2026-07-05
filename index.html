@@ -499,10 +499,11 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v30.6';
+const APP_VERSION = 'v30.7';
 // Tampilkan versi di halaman login (sebelum masuk) — berguna utk cek deploy tanpa login.
 try{ var _lv=document.getElementById('loginVer'); if(_lv) _lv.textContent=APP_VERSION; }catch(e){}
 const CHANGELOG = [
+  { v:'v30.7', d:'5 Jul 2026', t:'Tombol Semua/Bisnis dipindah ke atas chart (bagian Arus Kas & Komposisi) sesuai masukan.' },
   { v:'v30.6', d:'5 Jul 2026', t:'Mode Bisnis di Dashboard: tombol Semua/Bisnis. Mode Bisnis mengecualikan transaksi pribadi dari strip "Bulan ini" & Komposisi Pengeluaran + kartu ringkas "Pribadi bulan ini". Default: Semua.' },
   { v:'v30.5', d:'2 Jul 2026', t:'Nomor versi kini tampil di halaman login (bawah kolom PIN) — memudahkan cek versi yang aktif tanpa harus masuk.' },
   { v:'v30.4', d:'1 Jul 2026', t:'Invoice: tanda tangan Eddy terpasang otomatis di atas nama. Nama/alamat customer editable + nominal "Rp." (v30.3).' },
@@ -1027,6 +1028,8 @@ const daysAgoISO = days => { const d = new Date(); d.setDate(d.getDate()-days); 
 // pemasukan pribadi juga di-exclude). Saldo bank/Net Cash/forecast TIDAK disentuh (uang riil campur).
 function isPribTxn(t){ const k=state.kategori.find(x=>x.NAMA===t.KATEGORI); return !!k && (k.KELOMPOK==='PRIBADI'||k.KELOMPOK==='TRAVELING'); }
 function setDashMode(m){ state.dashMode=m; try{localStorage.setItem('fcc_dashmode',m);}catch(e){} renderDashboard(); }
+// v30.7: chip toggle dipindah ke atas chart (feedback Eddy) — helper jadi top-level dipakai renderCharts.
+const dmChip=(m,l)=>`<button onclick="setDashMode('${m}')" style="font-size:10px;font-weight:600;padding:3px 11px;border-radius:20px;cursor:pointer;border:1px solid ${state.dashMode===m?'var(--green)':'var(--border2)'};background:${state.dashMode===m?'var(--ic-green)':'transparent'};color:${state.dashMode===m?'var(--green)':'var(--text2)'}">${l}</button>`;
 
 // Patch summary lokal saat ada perubahan (add: sign=+1, hapus/old: sign=-1).
 // Mirror persis logika getSummary() di Code.gs supaya dashboard akurat seketika,
@@ -1239,7 +1242,6 @@ function renderDashboard() {
     else if(t.TIPE_LOG==='Pengeluaran'){ if(prib){ mPribOut+=Number(t.NOMINAL)||0; if(bisnisMode) return; } mOut+=Number(t.NOMINAL)||0; }
   });
   const mNet=mIn-mOut;
-  const dmChip=(m,l)=>`<button onclick="setDashMode('${m}')" style="font-size:10px;font-weight:600;padding:3px 11px;border-radius:20px;cursor:pointer;border:1px solid ${state.dashMode===m?'var(--green)':'var(--border2)'};background:${state.dashMode===m?'var(--ic-green)':'transparent'};color:${state.dashMode===m?'var(--green)':'var(--text2)'}">${l}</button>`;
   const fx=(typeof forexCalc==='function')?forexCalc():{total:{holding:0,liveValue:0},hasKurs:false};
   const inv=(typeof investTotals==='function')?investTotals():{nilai:0,rp:0,modal:0};
   const invHas=(state.investAkun||[]).length>0;
@@ -1247,10 +1249,6 @@ function renderDashboard() {
   const asetWide=asetExtra===0?' wide':'';
 
   document.getElementById('dashMetrics').innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">
-      <span style="font-size:10px;color:var(--text3)">${bisnisMode?'Mode Bisnis — pribadi di luar metrik bulan & komposisi':''}</span>
-      <div style="display:flex;gap:4px;flex-shrink:0">${dmChip('semua','Semua')}${dmChip('bisnis','Bisnis')}</div>
-    </div>
     <div class="card" style="padding:11px 14px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
       <span style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px">Bulan ini${bisnisMode?' · bisnis':''}</span>
       <span style="font-size:12px;color:var(--text2)">masuk <b class="num" style="color:var(--green)">${fmtS(mIn)}</b> · keluar <b class="num" style="color:var(--red)">${fmtS(mOut)}</b> · net <b class="num" style="color:${mNet>=0?'var(--green)':'var(--red)'}">${mNet>=0?'+':'-'}${fmtS(Math.abs(mNet))}</b></span>
@@ -1465,6 +1463,10 @@ function renderCharts() {
 
   // Render HTML
   document.getElementById('dashCharts').innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:2px 0 8px">
+      <span style="font-size:10px;color:var(--text3)">${state.dashMode==='bisnis'?'Mode Bisnis — pribadi di luar metrik bulan & komposisi':'Metrik: semua transaksi (bisnis + pribadi)'}</span>
+      <div style="display:flex;gap:4px;flex-shrink:0">${dmChip('semua','Semua')}${dmChip('bisnis','Bisnis')}</div>
+    </div>
     <div class="card" style="margin-bottom:12px">
       <div class="card-title">Arus Kas 6 Bulan Terakhir</div>
       <div style="position:relative;height:180px"><canvas id="chartArus"></canvas></div>
