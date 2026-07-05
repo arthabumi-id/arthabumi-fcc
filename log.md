@@ -3,6 +3,22 @@
 
 ---
 
+## SESSION — 2026-07-02 (v30.5 Versi di halaman login + ⚠️ INSIDEN DEPLOY GITHUB PAGES)
+### v30.5 (sw.js v54, CLIENT-ONLY): nomor versi di halaman login
+- Eddy minta versi kelihatan di halaman PIN (sebelum login) utk cek deploy tanpa masuk.
+- Tambah `<span id="loginVer">` di `#loginScreen` (bawah teks "Masukkan PIN"); setter top-level `try{ ...getElementById('loginVer').textContent=APP_VERSION }catch{}` tepat setelah `const APP_VERSION` (login HTML ada sebelum `<script>` jadi elemen sudah ada saat script jalan). APP_VERSION→v30.5.
+
+### ⚠️⚠️ INSIDEN DEPLOY — GitHub Pages nyangkut seharian (PENTING, baca kalau versi app nggak update)
+**Gejala:** app tetap tampil versi lama (v30.1) walau kode di GitHub sudah v30.4+ dan sudah ke-push (dikonfirmasi via `git fetch` FETCH_HEAD & raw.githubusercontent). Bukan cache PWA — server memang belum menyajikan versi baru.
+**Diagnosis (via GitHub Actions API `/actions/runs`):** workflow **"pages build and deployment" GAGAL** berturut-turut. DUA masalah terpisah:
+1. **BUILD gagal** = **Jekyll** tersedak isi repo. **FIX permanen: file kosong `.nojekyll` di root repo** → Pages skip Jekyll → build hijau. (Ini fix yang harus TETAP ada; jangan dihapus.)
+2. **DEPLOY gagal** = **"Timeout reached, aborting!"** di job `deploy` (~10 mnt) — environment `github-pages` MACET di sisi GitHub (bukan ukuran repo (cuma 5MB) & bukan file kita — sudah discan bersih: no symlink/CNAME/temp/nama aneh; githubstatus semua operational).
+   **FIX yang berhasil:** **Settings → Pages → unpublish (Branch=None, Save) → TUNGGU 2–3 menit → set balik main / (root), Save.** Jeda 2–3 menit itu kuncinya (toggle cepat tanpa jeda TIDAK berhasil). Setelah reset, deploy hijau.
+**Pelajaran utk next time app nggak update:** (a) pastikan `.nojekyll` ada; (b) cek tab **Actions** → run "pages build and deployment" hijau/merah; (c) kalau deploy timeout → reset unpublish/republish Pages dgn jeda. Alternatif kalau GitHub rewel terus: pindah host ke Cloudflare Pages (URL ganti → install ulang PWA).
+**Catatan tooling:** `git fetch` dari sandbox meninggalkan `.git/*.lock` yg memblok GitHub Desktop ("lock file exists") & tak bisa dihapus dari sandbox (permission) → user hapus manual (`del ...\.git\index.lock` + `.git\objects\maintenance.lock`). **JANGAN jalankan git yg menulis di repo E:\Mirror dari sandbox.**
+
+---
+
 ## SESSION — 2026-07-01 (v30.3 Invoice polish) — CLIENT-ONLY, sw.js v52
 - Eddy minta 3 hal di invoice: (1) nama customer bisa diedit + alamat customer opsional saat bikin invoice, (2) nominal pakai "Rp.", (3) tanda tangan.
 - **Done:** builder tambah field `#inv_cust` (prefill KLIEN) + `#inv_alamat` (prefill ALAMAT_KLIEN); genInvoice baca keduanya (override per-invoice, tak ubah project). invHTML: HARGA/TOTAL HARGA/TOTAL prefix "Rp.". Slot ttd `${o.ttd?<img>:''}` di area sign; const `INVOICE_TTD=''`.
