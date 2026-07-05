@@ -227,6 +227,7 @@ function doPost(e) {
       case 'changeReserveBank': res = changeReserveBank(ss, data); break;
       case 'markTxn':     res = markTxn(ss, data); break;
       case 'unmarkTxn':   res = unmarkTxn(ss, data); break;
+      case 'unmarkUpTo':  res = unmarkUpTo(ss, data); break;
       case 'markPaid':      res = markPaid(ss, data); break;
       case 'unmarkPaid':    res = unmarkPaid(ss, data); break;
       case 'markPaidBatch': res = markPaidBatch(ss, data); break;
@@ -1085,6 +1086,27 @@ function markTxn(ss, data) {
   }
   sh.appendRow(['ID'+Date.now(), data.TXN_ID, data.CC || '', Math.abs(Number(data.NOMINAL)||0), data.USER || '', new Date().toISOString()]);
   return { ok: true };
+}
+// ⭐ v31: lepas SEMUA centangan sebuah CC yang tanggal transaksinya <= CUTOFF (dipanggil otomatis
+// sesudah Bayar CC — siklus tertutup). Join tanggal dari TRANSAKSI di server (client mungkin tak
+// memuat txn lama). Return jumlah baris terhapus.
+function unmarkUpTo(ss, data) {
+  const cc = String(data.CC || '');
+  const cutoff = String(data.CUTOFF || '').slice(0, 10);
+  if (!cc || !cutoff) return { error: 'CC & CUTOFF wajib' };
+  const sh = ss.getSheetByName(S.MARK);
+  if (!sh || sh.getLastRow() <= 1) return { ok: true, removed: 0 };
+  const txDates = {};
+  getSheet(ss, S.TXN).forEach(t => { txDates[String(t.ID)] = String(t.TANGGAL).slice(0, 10); });
+  const all = sh.getRange(1, 1, sh.getLastRow(), sh.getLastColumn()).getValues();
+  const iTxn = all[0].indexOf('TXN_ID'), iCC = all[0].indexOf('CC');
+  let removed = 0;
+  for (let i = all.length - 1; i >= 1; i--) {
+    if (String(all[i][iCC]) !== cc) continue;
+    const d = txDates[String(all[i][iTxn])];
+    if (d && d <= cutoff) { sh.deleteRow(i + 1); removed++; }
+  }
+  return { ok: true, removed: removed };
 }
 // Lepas centang: hapus baris RESERVE_MARK by TXN_ID.
 function unmarkTxn(ss, data) {

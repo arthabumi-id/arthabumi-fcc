@@ -499,10 +499,11 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v30.8';
+const APP_VERSION = 'v31';
 // Tampilkan versi di halaman login (sebelum masuk) — berguna utk cek deploy tanpa login.
 try{ var _lv=document.getElementById('loginVer'); if(_lv) _lv.textContent=APP_VERSION; }catch(e){}
 const CHANGELOG = [
+  { v:'v31', d:'5 Jul 2026', t:'Siklus reserve tertutup: Bayar CC kini otomatis melepas centangan reserve & menandai angsuran cicilan terbayar sesuai periode tagihan (bayar sebagian/tanpa tagihan terkunci → ditanya dulu). + tombol ±1 terbayar di daftar cicilan (koreksi manual, tanpa gerak uang). Angka "perlu transfer" tidak menggelembung lagi.' },
   { v:'v30.8', d:'5 Jul 2026', t:'Lock tagihan CC: kalau kartu sudah punya tagihan terkunci, kini ditanya TAMBAHKAN (nominal digabung, jatuh tempo lama dipertahankan) atau GANTI — transaksi kelupaan tidak lagi menimpa tagihan lama.' },
   { v:'v30.7', d:'5 Jul 2026', t:'Tombol Semua/Bisnis dipindah ke atas chart (bagian Arus Kas & Komposisi) sesuai masukan.' },
   { v:'v30.6', d:'5 Jul 2026', t:'Mode Bisnis di Dashboard: tombol Semua/Bisnis. Mode Bisnis mengecualikan transaksi pribadi dari strip "Bulan ini" & Komposisi Pengeluaran + kartu ringkas "Pribadi bulan ini". Default: Semua.' },
@@ -2588,6 +2589,10 @@ function cicilanRowHTML(c){
         <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">
           ${!lunas?`<button class="btn-danger" style="background:var(--ic-green);color:var(--green);border-color:#2EE6A640" onclick="doPayCicilan('${c.ID}')">Bayar angsuran</button>`:''}
           ${!lunas?`<button class="btn-danger" style="background:var(--ic-blue);color:var(--blue);border-color:#3b82f640" onclick="openChangeReserveBank('${c.ID}')">Ganti bank</button>`:''}
+          <div style="display:flex;gap:4px;justify-content:flex-end">
+            ${terbayar>0?`<button class="btn-danger" style="padding:2px 9px" onclick="cicAdj('${c.ID}',-1)" title="koreksi penanda">−1</button>`:''}
+            ${!lunas?`<button class="btn-danger" style="background:var(--ic-purple);color:var(--purple);border-color:#7c5cff40;padding:2px 9px" onclick="cicAdj('${c.ID}',1)" title="tandai 1 angsuran terbayar (tanpa gerak uang)">+1 terbayar</button>`:''}
+          </div>
           ${terbayar===0?`<button class="btn-danger" onclick="delCicilan('${c.ID}')">Hapus</button>`:''}
         </div>
       </div>
@@ -2607,6 +2612,45 @@ function gotoCicilan(){
   goPage('master');
   switchMasterTab('cc');
   setTimeout(()=>{const el=document.getElementById('cicilanAnchor'); if(el) el.scrollIntoView({behavior:'smooth',block:'start'});},150);
+}
+// ── v31: SIKLUS TERTUTUP — penanda angsuran terbayar (TANPA gerak uang) ─────
+// Dipanggil otomatis sesudah Bayar CC: angsuran ber-due <= cutoff dianggap sudah tertagih
+// & terbayar lewat statement (due angsuran ke-(k+1) = TGL_MULAI + k bulan, konsisten dgn
+// cicilanInstallmentsInPeriod). BEDA dgn doPayCicilan: itu menggerakkan uang dari reserve;
+// ini murni memajukan counter krn uangnya sudah keluar via Bayar CC gabungan.
+function advanceCicilanPaid(ccName, cutoff){
+  let adv=0;
+  (state.cicilan||[]).forEach(c=>{
+    if(c.CC!==ccName || c.STATUS==='Lunas') return;
+    const tenor=+c.TENOR||0, tb0=+c.TENOR_TERBAYAR||0;
+    const start=String(c.TGL_MULAI||c.TANGGAL_BELI||'').slice(0,10);
+    if(!start||!tenor) return;
+    let k=tb0;
+    while(k<tenor && _addMonthsISO(start,k)<=cutoff) k++;
+    if(k>tb0){
+      c.TENOR_TERBAYAR=k;
+      const upd={TENOR_TERBAYAR:k};
+      if(k>=tenor){ c.STATUS='Lunas'; upd.STATUS='Lunas'; }
+      if(API_URL) bgPost({action:'updateRow',data:{sheet:'CICILAN',id:c.ID,updates:upd}},'Angsuran '+(c.DESKRIPSI||c.CC)+' → '+k+'/'+tenor);
+      adv+=k-tb0;
+    }
+  });
+  if(adv) saveLocal();
+  return adv;
+}
+// Koreksi manual penanda terbayar (katup darurat, ±1). Juga tanpa gerak uang.
+function cicAdj(id, delta){
+  const c=(state.cicilan||[]).find(x=>x.ID===id); if(!c) return;
+  const tenor=+c.TENOR||0, tb0=+c.TENOR_TERBAYAR||0;
+  const k=Math.max(0, Math.min(tenor, tb0+delta));
+  if(k===tb0) return;
+  c.TENOR_TERBAYAR=k;
+  const upd={TENOR_TERBAYAR:k};
+  if(k>=tenor && tenor>0){ c.STATUS='Lunas'; upd.STATUS='Lunas'; }
+  else if(c.STATUS==='Lunas'){ c.STATUS='Aktif'; upd.STATUS='Aktif'; }
+  if(API_URL) bgPost({action:'updateRow',data:{sheet:'CICILAN',id:c.ID,updates:upd}},'Koreksi angsuran terbayar '+k+'/'+tenor);
+  saveLocal(); renderMaster(); renderDashboard();
+  showToast('Terbayar '+k+'/'+tenor+' — penanda saja, tanpa gerak uang','success');
 }
 // Section daftar angsuran jatuh tempo utk 1 kartu (dipakai di drawer Bayar CC).
 function paycCicilanHTML(ccName){
@@ -4563,6 +4607,25 @@ async function saveDrawer() {
       if(API_URL)await apiPost({action:'addTransfer',data:{TANGGAL:tgl,DARI:bank,KE:ccName,NOMINAL:nominal,NOTES:notes||'Bayar CC',USER:state.user}});
       showToast('Bayar '+ccName+' '+fmt(nominal)+' dari '+bank+' ✓','success');
     }
+    // v31 SIKLUS TERTUTUP: sesudah bayar → lepas centangan reserve & majukan penanda angsuran
+    // sesuai periode tagihan terkunci. Bayar sebagian / tanpa tagihan terkunci → tanya dulu.
+    try{
+      var relBill=(state.ccbills||[]).find(function(b){return b.CC===ccName&&String(b.STATUS||'Aktif')!=='Lunas';});
+      var relCutoff=relBill?(String(relBill.PERIODE_SAMPAI||'').slice(0,10)||tgl):tgl;
+      var doRel=true;
+      if(relBill && nominal < (Number(relBill.NOMINAL)||0)-1){
+        doRel=confirm('Nominal bayar '+fmt(nominal)+' LEBIH KECIL dari tagihan terkunci '+fmt(relBill.NOMINAL)+'.\n\nTetap lepas centangan reserve & majukan angsuran periode ini?\n(OK = ya · Batal = jangan, hanya catat pembayaran)');
+      } else if(!relBill){
+        doRel=confirm('Tidak ada tagihan terkunci untuk '+ccName+'.\n\nLepas semua centangan reserve s/d '+tgl+' & majukan angsuran yang jatuh tempo?\n(OK = ya · Batal = jangan)');
+      }
+      if(doRel){
+        var relAdv=advanceCicilanPaid(ccName,relCutoff);
+        state.marks=(state.marks||[]).filter(function(m){ if(m.CC!==ccName)return true; var t=state.txns.find(function(x){return x.ID===m.TXN_ID;}); var d=t?String(t.TANGGAL).slice(0,10):null; return !(d&&d<=relCutoff); });
+        saveLocal();
+        if(API_URL) await apiPost({action:'unmarkUpTo',data:{CC:ccName,CUTOFF:relCutoff,USER:state.user}});
+        showToast('Centangan reserve dilepas s/d '+relCutoff+(relAdv?(' · '+relAdv+' angsuran ditandai terbayar'):''),'success');
+      }
+    }catch(relErr){ console.error('release v31', relErr); }
     // Auto-clear ccbill reminder untuk CC ini
     (function(){
       var bill=(state.ccbills||[]).find(function(b){return b.CC===ccName&&String(b.STATUS||'Aktif')!=='Lunas';});
