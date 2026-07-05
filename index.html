@@ -494,14 +494,16 @@ let state = {
   pending: [],    // antrian operasi optimistic save yg belum/ gagal terkirim ke server
   hideAmounts: localStorage.getItem('fcc_hide')==='1',  // mode mata: sembunyikan nominal
   theme: localStorage.getItem('fcc_theme')||'dark',     // 'dark' / 'light'
+  dashMode: localStorage.getItem('fcc_dashmode')||'semua', // v30.6: 'semua' / 'bisnis' (exclude txn pribadi dari metrik bulan & komposisi)
 };
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v30.5';
+const APP_VERSION = 'v30.6';
 // Tampilkan versi di halaman login (sebelum masuk) — berguna utk cek deploy tanpa login.
 try{ var _lv=document.getElementById('loginVer'); if(_lv) _lv.textContent=APP_VERSION; }catch(e){}
 const CHANGELOG = [
+  { v:'v30.6', d:'5 Jul 2026', t:'Mode Bisnis di Dashboard: tombol Semua/Bisnis. Mode Bisnis mengecualikan transaksi pribadi dari strip "Bulan ini" & Komposisi Pengeluaran + kartu ringkas "Pribadi bulan ini". Default: Semua.' },
   { v:'v30.5', d:'2 Jul 2026', t:'Nomor versi kini tampil di halaman login (bawah kolom PIN) — memudahkan cek versi yang aktif tanpa harus masuk.' },
   { v:'v30.4', d:'1 Jul 2026', t:'Invoice: tanda tangan Eddy terpasang otomatis di atas nama. Nama/alamat customer editable + nominal "Rp." (v30.3).' },
   { v:'v30.2', d:'1 Jul 2026', t:'Auto-termin dibatalkan (kurang praktis). Termin tetap bisa ditambah manual di Piutang; Invoice tetap berfungsi.' },
@@ -1019,6 +1021,13 @@ function monthAgg(key) {
 
 const daysAgoISO = days => { const d = new Date(); d.setDate(d.getDate()-days); return d.toISOString().slice(0,10); };
 
+// ── v30.6 MODE BISNIS ─────────────────────────────────
+// Txn "pribadi" = kategorinya ber-KELOMPOK PRIBADI atau TRAVELING (keputusan Eddy 2026-07-05).
+// Mode 'bisnis' mengecualikan txn pribadi dari strip "Bulan ini" & Komposisi Pengeluaran (simetris:
+// pemasukan pribadi juga di-exclude). Saldo bank/Net Cash/forecast TIDAK disentuh (uang riil campur).
+function isPribTxn(t){ const k=state.kategori.find(x=>x.NAMA===t.KATEGORI); return !!k && (k.KELOMPOK==='PRIBADI'||k.KELOMPOK==='TRAVELING'); }
+function setDashMode(m){ state.dashMode=m; try{localStorage.setItem('fcc_dashmode',m);}catch(e){} renderDashboard(); }
+
 // Patch summary lokal saat ada perubahan (add: sign=+1, hapus/old: sign=-1).
 // Mirror persis logika getSummary() di Code.gs supaya dashboard akurat seketika,
 // termasuk saat offline. Sync berikutnya tetap merekonsiliasi dari server.
@@ -1222,9 +1231,15 @@ function renderDashboard() {
   const projAktif = state.projects.filter(p => p.STATUS === 'Jalan').length;
   const dp = doneProjectsProfit();
   const ym = new Date().toISOString().slice(0,7);
-  let mIn=0,mOut=0;
-  state.txns.forEach(t=>{ if(String(t.TANGGAL).slice(0,7)!==ym) return; if(t.TIPE_LOG==='Pemasukan') mIn+=Number(t.NOMINAL)||0; else if(t.TIPE_LOG==='Pengeluaran') mOut+=Number(t.NOMINAL)||0; });
+  const bisnisMode = state.dashMode==='bisnis'; // v30.6: exclude txn pribadi (simetris masuk & keluar)
+  let mIn=0,mOut=0,mPribOut=0,mPribIn=0;
+  state.txns.forEach(t=>{ if(String(t.TANGGAL).slice(0,7)!==ym) return;
+    const prib=isPribTxn(t);
+    if(t.TIPE_LOG==='Pemasukan'){ if(prib){ mPribIn+=Number(t.NOMINAL)||0; if(bisnisMode) return; } mIn+=Number(t.NOMINAL)||0; }
+    else if(t.TIPE_LOG==='Pengeluaran'){ if(prib){ mPribOut+=Number(t.NOMINAL)||0; if(bisnisMode) return; } mOut+=Number(t.NOMINAL)||0; }
+  });
   const mNet=mIn-mOut;
+  const dmChip=(m,l)=>`<button onclick="setDashMode('${m}')" style="font-size:10px;font-weight:600;padding:3px 11px;border-radius:20px;cursor:pointer;border:1px solid ${state.dashMode===m?'var(--green)':'var(--border2)'};background:${state.dashMode===m?'var(--ic-green)':'transparent'};color:${state.dashMode===m?'var(--green)':'var(--text2)'}">${l}</button>`;
   const fx=(typeof forexCalc==='function')?forexCalc():{total:{holding:0,liveValue:0},hasKurs:false};
   const inv=(typeof investTotals==='function')?investTotals():{nilai:0,rp:0,modal:0};
   const invHas=(state.investAkun||[]).length>0;
@@ -1232,10 +1247,18 @@ function renderDashboard() {
   const asetWide=asetExtra===0?' wide':'';
 
   document.getElementById('dashMetrics').innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">
+      <span style="font-size:10px;color:var(--text3)">${bisnisMode?'Mode Bisnis — pribadi di luar metrik bulan & komposisi':''}</span>
+      <div style="display:flex;gap:4px;flex-shrink:0">${dmChip('semua','Semua')}${dmChip('bisnis','Bisnis')}</div>
+    </div>
     <div class="card" style="padding:11px 14px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-      <span style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px">Bulan ini</span>
+      <span style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px">Bulan ini${bisnisMode?' · bisnis':''}</span>
       <span style="font-size:12px;color:var(--text2)">masuk <b class="num" style="color:var(--green)">${fmtS(mIn)}</b> · keluar <b class="num" style="color:var(--red)">${fmtS(mOut)}</b> · net <b class="num" style="color:${mNet>=0?'var(--green)':'var(--red)'}">${mNet>=0?'+':'-'}${fmtS(Math.abs(mNet))}</b></span>
     </div>
+    ${bisnisMode?`<div class="card" style="padding:9px 14px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <span style="font-size:11px;color:var(--purple);text-transform:uppercase;letter-spacing:.4px">Pribadi bulan ini</span>
+      <span style="font-size:12px;color:var(--text2)">keluar <b class="num" style="color:var(--purple)">${fmtS(mPribOut)}</b>${mPribIn>0?` · masuk <b class="num" style="color:var(--purple)">${fmtS(mPribIn)}</b>`:''} <span style="font-size:10px;color:var(--text3)">· di luar metrik</span></span>
+    </div>`:''}
 
     <div class="metric wide" style="background:var(--hero-bg);border:1px solid var(--hero-bd);margin-bottom:4px">
       <div style="height:2px;width:40px;background:var(--gold);border-radius:2px;margin-bottom:9px"></div>
@@ -1427,6 +1450,7 @@ function renderCharts() {
       kelompokMap[grp] = (kelompokMap[grp]||0) + Number(t.NOMINAL);
     });
   }
+  if(state.dashMode==='bisnis'){ delete kelompokMap.PRIBADI; delete kelompokMap.TRAVELING; } // v30.6 Mode Bisnis
   const kelLabels = Object.keys(kelompokMap);
   const kelValues = kelLabels.map(k => kelompokMap[k]/1e6);
   const kelColors = kelLabels.map(k => kelompokColors[k]||'#5a5a72');
@@ -1446,7 +1470,7 @@ function renderCharts() {
       <div style="position:relative;height:180px"><canvas id="chartArus"></canvas></div>
     </div>
     ${kelLabels.length ? `<div class="card" style="margin-bottom:12px;cursor:pointer" onclick="goPage('master');switchMasterTab('kat')">
-      <div class="card-title">Komposisi Pengeluaran <span style="font-size:10px;font-weight:500;color:var(--text3)">· semua waktu</span><i class="ti ti-chevron-right" style="float:right;color:var(--text3)"></i></div>
+      <div class="card-title">Komposisi Pengeluaran <span style="font-size:10px;font-weight:500;color:var(--text3)">· semua waktu${state.dashMode==='bisnis'?' · tanpa pribadi':''}</span><i class="ti ti-chevron-right" style="float:right;color:var(--text3)"></i></div>
       <div style="display:flex;align-items:center;gap:12px">
         <div style="position:relative;height:140px;width:140px;flex-shrink:0"><canvas id="chartKel"></canvas></div>
         <div style="font-size:11px;line-height:2">${kelLabels.map((l,i)=>`<div><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${kelColors[i]};margin-right:5px;vertical-align:middle"></span>${l}: <b>${kelValues[i].toFixed(1)}jt</b></div>`).join('')}</div>

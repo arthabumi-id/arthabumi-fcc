@@ -3,6 +3,15 @@
 
 ---
 
+## SESSION — 2026-07-05 (v30.6 Mode Bisnis di Dashboard) — CLIENT-ONLY, sw.js v55
+- **Konteks:** dashboard mencampur pribadi & bisnis (data riil: pengeluaran PRIBADI Mei 39,5jt / Jun 86,2jt — Juni ketiban pos besar: sekolah 20,8jt + Mami 22,7jt). PRD sign-off Eddy: TRAVELING ikut pribadi, default mode 'Semua', pemasukan pribadi ikut di-exclude (simetris).
+- **Implementasi (CLIENT-ONLY, tanpa redeploy):** `state.dashMode` (persist `fcc_dashmode`, default 'semua'); helper `isPribTxn(t)` (kategori KELOMPOK PRIBADI/TRAVELING) + `setDashMode(m)` (dekat daysAgoISO); toggle chip **Semua/Bisnis** di atas dashboard (`dmChip` di renderDashboard). Mode Bisnis: strip "Bulan ini" exclude txn pribadi (masuk & keluar) + kartu baru "Pribadi bulan ini" (keluar/masuk pribadi, warna ungu, label "di luar metrik"); donut Komposisi Pengeluaran drop PRIBADI+TRAVELING (`delete kelompokMap.*` di renderCharts) + label "· tanpa pribadi". Net Cash/saldo/forecast SENGAJA tak disentuh (uang riil masih campur — memisah angkanya = bohong; nanti v2 tandai rekening Bisnis/Pribadi di MASTER_BANK, ⚠️ butuh redeploy).
+- **Verifikasi:** vm.Script per blok (state-init, helpers, renderDashboard, renderCharts) semua OK; Grep-verify sisi Windows 12 marker + sw.js v55. ⚠️ Mount bash kini juga TERPOTONG utk index.html (~467k chars, putus di goPage) — node-check full file via bash tak bisa; cek per blok / Read tool.
+- APP_VERSION→v30.6, CHANGELOG +1, sw.js → **v55**. **Deploy: commit+push index.html + sw.js via GitHub Desktop (client-only).**
+- **Catatan konsultasi (di luar kode):** rekomendasi pemisahan keuangan pribadi/bisnis per 1 Agu: gaji tetap transfer "GAJI EDDY" (baseline rutin ±38-40jt/bln + provisi tahunan → ±45-50jt), 1 rekening khusus pribadi, dedikasikan 1-2 CC pribadi, prive dicatat. Data hygiene: kategori Allianz vs Asuransi kemungkinan dobel (5,98jt bergantian Mei/Jun); Claude.ai 3,8jt di PRIBADI padahal alat kerja → pindah OPERASIONAL; 1 kategori kelompok TRAVELING (tak ada di dropdown form) → ikut pribadi.
+
+---
+
 ## SESSION — 2026-07-02 (v30.5 Versi di halaman login + ⚠️ INSIDEN DEPLOY GITHUB PAGES)
 ### v30.5 (sw.js v54, CLIENT-ONLY): nomor versi di halaman login
 - Eddy minta versi kelihatan di halaman PIN (sebelum login) utk cek deploy tanpa masuk.
