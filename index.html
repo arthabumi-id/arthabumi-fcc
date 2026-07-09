@@ -495,14 +495,17 @@ let state = {
   hideAmounts: localStorage.getItem('fcc_hide')==='1',  // mode mata: sembunyikan nominal
   theme: localStorage.getItem('fcc_theme')||'dark',     // 'dark' / 'light'
   dashMode: localStorage.getItem('fcc_dashmode')||'semua', // v30.6: 'semua' / 'bisnis' (exclude txn pribadi dari metrik bulan & komposisi)
+  cicReserveN: localStorage.getItem('fcc_cic_reserve_n')===null ? 2 : (Number(localStorage.getItem('fcc_cic_reserve_n'))||0), // v32: reserve cicilan = angsuran N bln ke depan (0=sisa penuh)
 };
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v31';
+const APP_VERSION = 'v32.1';
 // Tampilkan versi di halaman login (sebelum masuk) — berguna utk cek deploy tanpa login.
 try{ var _lv=document.getElementById('loginVer'); if(_lv) _lv.textContent=APP_VERSION; }catch(e){}
 const CHANGELOG = [
+  { v:'v32.1', d:'5 Jul 2026', t:'Form Bayar CC: nominal kini terisi otomatis dari tagihan terkunci — SUDAH termasuk angsuran cicilan. Satu kali bayar untuk semuanya, tidak ada lagi klik angsuran satu per satu.' },
+  { v:'v32', d:'5 Jul 2026', t:'Reserve Policy + Cleanup: (1) reserve cicilan kini cukup angsuran N bulan ke depan (setelan di Master, default 2 bulan — sisanya bebas jadi modal kerja); (2) jalur bayar "dari reserve" (model lama) dihapus — semua bayar via rekening, default bank penyimpan; (3) tombol Bayar angsuran satuan disembunyikan (angsuran beres otomatis via Bayar CC); (4) kartu di Dashboard kini menampilkan status "dana siap / kurang X".' },
   { v:'v31', d:'5 Jul 2026', t:'Siklus reserve tertutup: Bayar CC kini otomatis melepas centangan reserve & menandai angsuran cicilan terbayar sesuai periode tagihan (bayar sebagian/tanpa tagihan terkunci → ditanya dulu). + tombol ±1 terbayar di daftar cicilan (koreksi manual, tanpa gerak uang). Angka "perlu transfer" tidak menggelembung lagi.' },
   { v:'v30.8', d:'5 Jul 2026', t:'Lock tagihan CC: kalau kartu sudah punya tagihan terkunci, kini ditanya TAMBAHKAN (nominal digabung, jatuh tempo lama dipertahankan) atau GANTI — transaksi kelupaan tidak lagi menimpa tagihan lama.' },
   { v:'v30.7', d:'5 Jul 2026', t:'Tombol Semua/Bisnis dipindah ke atas chart (bagian Arus Kas & Komposisi) sesuai masukan.' },
@@ -607,6 +610,11 @@ function renderDisplayBox(){
     <div class="card-title"><i class="ti ti-text-size" style="color:var(--gold);margin-right:5px"></i>Ukuran Tampilan</div>
     <div style="font-size:11px;color:var(--text2);margin:2px 0 10px">Perbesar tulisan &amp; tampilan biar lebih mudah dibaca. Bisa juga ketuk tombol <i class="ti ti-text-size"></i> di atas.</div>
     <div style="display:flex;gap:6px">${FONT_SIZES.map(s=>`<button onclick="setFontScale(${s.v})" style="flex:1;padding:10px 4px;border-radius:9px;border:1px solid ${s.v===cur?'var(--green)':'var(--border2)'};background:${s.v===cur?'var(--ic-green)':'transparent'};color:var(--text);font-family:var(--font);font-weight:${s.v===cur?'700':'500'};cursor:pointer"><div style="font-size:${Math.round(11+(s.v-0.9)*11)}px;line-height:1">A</div><div style="font-size:10px;margin-top:3px;color:${s.v===cur?'var(--green)':'var(--text3)'}">${s.l}</div></button>`).join('')}</div>
+  </div>
+  <div class="card" style="margin-top:12px">
+    <div class="card-title"><i class="ti ti-calendar-repeat" style="color:var(--purple);margin-right:5px"></i>Cakupan Reserve Cicilan</div>
+    <div style="font-size:11px;color:var(--text2);margin:2px 0 10px">Berapa bulan angsuran ke depan yang wajib siap dananya di bank penyimpan. Sisanya bebas sebagai modal kerja. Angka "perlu transfer" ikut kebijakan ini.</div>
+    <div style="display:flex;gap:6px">${[{v:1,l:'1 bulan'},{v:2,l:'2 bulan'},{v:3,l:'3 bulan'},{v:0,l:'Penuh'}].map(o=>{const on=o.v===(Number(state.cicReserveN)||0);return `<button onclick="setCicReserveN(${o.v})" style="flex:1;padding:10px 4px;border-radius:9px;border:1px solid ${on?'var(--green)':'var(--border2)'};background:${on?'var(--ic-green)':'transparent'};color:${on?'var(--green)':'var(--text2)'};font-family:var(--font);font-weight:${on?'700':'500'};cursor:pointer;font-size:12px">${o.l}</button>`;}).join('')}</div>
   </div>`;
 }
 const HIDE_MASK = '••••';
@@ -801,6 +809,28 @@ function cicilanRemaining(namaCC) {
     return s + per * Math.max(0, tenor - terbayar);
   }, 0);
 }
+// ── v32: KEBIJAKAN RESERVE CICILAN — hanya angsuran N bulan ke depan yang wajib siap dananya
+// (praktik treasury: cover kewajiban jangka pendek, sisanya jadi modal kerja). N dari
+// state.cicReserveN (0 = sisa penuh, gaya lama). Angsuran overdue ikut. due ke-(k+1) =
+// TGL_MULAI + k bulan (konsisten cicilanInstallmentsInPeriod & advanceCicilanPaid).
+function cicilanReserveNeed(namaCC){
+  const N=Number(state.cicReserveN)||0;
+  if(N<=0) return cicilanRemaining(namaCC);
+  const horizon=_addMonthsISO(today(),N);
+  let s=0;
+  (state.cicilan||[]).filter(c=>c.CC===namaCC && c.STATUS!=='Lunas').forEach(c=>{
+    const tenor=+c.TENOR||0, tb=+c.TENOR_TERBAYAR||0, per=+c.NOMINAL_PER_BULAN||0;
+    const total=(+c.NOMINAL_POKOK||0)+(+c.BUNGA_TOTAL||0);
+    const start=String(c.TGL_MULAI||c.TANGGAL_BELI||'').slice(0,10);
+    if(!start||!tenor) return;
+    for(let k=tb;k<tenor;k++){
+      if(_addMonthsISO(start,k)>horizon) break;
+      s+=(k===tenor-1)?(total-per*(tenor-1)):per;
+    }
+  });
+  return s;
+}
+function setCicReserveN(n){ state.cicReserveN=n; try{localStorage.setItem('fcc_cic_reserve_n',n);}catch(e){} renderMaster(); renderDashboard(); showToast(n>0?('Reserve cicilan: angsuran '+n+' bulan ke depan'):'Reserve cicilan: sisa penuh','success'); }
 
 // ── v19.3: Status pendanaan reserve per kartu — DIPISAH cicilan vs belanja lain ──
 // Dua bagian terpisah supaya tidak rancu (cicilan ditampilkan beda dari belanja biasa):
@@ -859,7 +889,7 @@ function reserveHeldIn(bankName){
 // ── v22: Reserve CC = total centang + sisa cicilan; rekening reserve = dua kantong ──
 // Kebutuhan reserve satu kartu = belanja CC yang dicentang + SELURUH sisa cicilan kartu.
 function reserveNeedCC(namaCC){
-  return markTotalCC(namaCC) + cicilanRemaining(namaCC);
+  return markTotalCC(namaCC) + cicilanReserveNeed(namaCC); // v32: cicilan pakai kebijakan N bulan
 }
 // Bank ini berfungsi sbg rekening reserve bila ada kartu yang menyimpan reserve di sini.
 function isReserveBank(bankName){
@@ -1365,8 +1395,9 @@ function renderDashboard() {
           const due = String(bill.JATUH_TEMPO||'').slice(0,10);
           const dd = due ? _daysBetween(today(),due) : null;
           const lbl = dd===null?'':(dd<0?`<span style="color:var(--red)">lewat ${Math.abs(dd)} hr</span>`:dd===0?`<span style="color:var(--red)">hari ini</span>`:`<span style="color:var(--amber)">${dd} hr lagi</span>`);
+          const bHold=ccHoldingBank(c.NAMA), bGap=reserveGapBank(bHold);
           billStrip = `<div style="width:100%;margin-top:8px;padding:7px 9px;border-radius:8px;background:var(--ic-amber);border:1px solid #f59e0b40;display:flex;align-items:center;justify-content:space-between;gap:8px">
-            <div style="min-width:0"><div style="font-size:12px;font-weight:700;color:var(--amber)">Tagihan ${fmt(bill.NOMINAL)}</div><div style="font-size:10px;color:var(--text3)">jth tempo ${due||'—'} · ${lbl}</div></div>
+            <div style="min-width:0"><div style="font-size:12px;font-weight:700;color:var(--amber)">Tagihan ${fmt(bill.NOMINAL)}</div><div style="font-size:10px;color:var(--text3)">jth tempo ${due||'—'} · ${lbl}</div><div style="font-size:10px;color:${bGap>0?'var(--red)':'var(--green)'}">${bGap>0?('dana di '+esc(bHold)+' kurang '+fmtS(bGap)):('dana di '+esc(bHold)+' siap ✓')}</div></div>
             <div style="display:flex;gap:5px;flex-shrink:0"><button class="btn-danger" style="background:var(--ic-green);color:var(--green);border-color:#2EE6A640" onclick="event.stopPropagation();payCCFromReminder('${esc(c.NAMA)}')">Bayar</button><button class="btn-danger" onclick="event.stopPropagation();clearCCBill('${bill.ID}','${esc(bill.CC||c.NAMA||'')}')">Lunas</button></div>
           </div>`;
         }
@@ -2587,7 +2618,6 @@ function cicilanRowHTML(c){
       <div style="text-align:right;flex-shrink:0">
         <span class="badge" style="background:${lunas?'var(--ic-green)':'var(--ic-amber)'};color:${lunas?'var(--green)':'var(--amber)'}">${lunas?'Lunas':'Jalan'}</span>
         <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">
-          ${!lunas?`<button class="btn-danger" style="background:var(--ic-green);color:var(--green);border-color:#2EE6A640" onclick="doPayCicilan('${c.ID}')">Bayar angsuran</button>`:''}
           ${!lunas?`<button class="btn-danger" style="background:var(--ic-blue);color:var(--blue);border-color:#3b82f640" onclick="openChangeReserveBank('${c.ID}')">Ganti bank</button>`:''}
           <div style="display:flex;gap:4px;justify-content:flex-end">
             ${terbayar>0?`<button class="btn-danger" style="padding:2px 9px" onclick="cicAdj('${c.ID}',-1)" title="koreksi penanda">−1</button>`:''}
@@ -2657,13 +2687,12 @@ function paycCicilanHTML(ccName){
   const list=(state.cicilan||[]).filter(c=>c.CC===ccName && c.STATUS!=='Lunas');
   if(!list.length) return '';
   return `<div class="card" style="padding:8px 10px;margin:0 0 12px;background:#140d24;border:1px solid #7c5cff40">
-    <div style="font-size:10px;color:var(--purple);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px"><i class="ti ti-calendar-repeat"></i> Angsuran cicilan kartu ini (dibayar dari reserve)</div>
+    <div style="font-size:10px;color:var(--purple);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px"><i class="ti ti-calendar-repeat"></i> Angsuran kartu ini — sudah termasuk di tagihan, beres otomatis saat Bayar</div>
     ${list.map(c=>{
       const tenor=+c.TENOR||0, terbayar=+c.TENOR_TERBAYAR||0, per=+c.NOMINAL_PER_BULAN||0;
       return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0;border-top:1px solid #ffffff10">
         <div style="min-width:0"><div style="font-size:12px;font-weight:600">${esc(c.DESKRIPSI||'Cicilan')}</div>
         <div style="font-size:10px;color:var(--text3)">angsuran ke-${Math.min(tenor,terbayar+1)}/${tenor} · ${fmt(per)}</div></div>
-        <button class="btn-danger" style="background:var(--ic-green);color:var(--green);border-color:#2EE6A640;flex-shrink:0" onclick="doPayCicilan('${c.ID}')">Bayar</button>
       </div>`;
     }).join('')}
   </div>`;
@@ -4477,33 +4506,29 @@ function openDrawer(mode, editId = null, preset = null) {
     const cc = editId ? state.ccs.find(x=>x.ID===editId) : state.ccs[0];
     const out = cc ? getCCOut(cc.NAMA) : 0;
     const resv = cc ? (state.reserveFunds[cc.NAMA]||0) : 0;
-    const cicDue = cc ? cicilanDueAmt(cc.NAMA) : 0;
-    const nonCic = Math.max(0, out - cicDue);
+    // v32.1: prefill = nominal tagihan terkunci (SUDAH termasuk angsuran cicilan) — satu bayar utk semua.
+    const bill0 = cc ? ccBillFor(cc.NAMA) : null;
+    const prefill = bill0 ? (Number(bill0.NOMINAL)||0) : out;
     const banks = state.banks.map(b=>b.NAMA);
     document.getElementById('drawerBody').innerHTML = `
       <div class="form-group"><label class="form-label">Kartu Kredit</label>
         <select class="form-input" id="pc_cc" onchange="onPayCCChange()">${state.ccs.map(c=>`<option value="${esc(c.NAMA)}" ${cc&&c.NAMA===cc.NAMA?'selected':''}>${esc(c.NAMA)}</option>`).join('')}</select></div>
       <div style="display:flex;gap:8px;margin-bottom:12px">
         <div class="card" style="flex:1;padding:8px 10px;margin:0"><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Tagihan</div><div id="pc_out" style="font-size:14px;font-weight:700;color:var(--red)">${fmt(out)}</div></div>
-        <div class="card" style="flex:1;padding:8px 10px;margin:0"><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Reserve tersedia</div><div id="pc_resv" style="font-size:14px;font-weight:700;color:var(--blue)">${fmt(resv)}</div></div>
+        <div class="card" style="flex:1;padding:8px 10px;margin:0"><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Dana di penyimpan</div><div id="pc_resv" style="font-size:14px;font-weight:700;color:var(--blue)">${fmt(cc?getSaldo(ccHoldingBank(cc.NAMA)).saldo:0)}</div></div>
       </div>
       <div id="pc_cicilan">${cc?paycCicilanHTML(cc.NAMA):''}</div>
-      <div class="form-group"><label class="form-label">Sumber Dana</label>
-        <select class="form-input" id="pc_src" onchange="onPayCCSrc()">
-          <option value="bank">Rekening Bank</option>
-          <option value="reserve">Dana Reserve kartu ini</option>
-        </select></div>
+      <input type="hidden" id="pc_src" value="bank">
       <div class="form-group" id="pc_bankWrap"><label class="form-label">Dari Rekening</label>
-        <select class="form-input" id="pc_bank">${banks.map(n=>`<option>${esc(n)}</option>`).join('')}</select></div>
-      <div class="form-group" id="pc_holdWrap" style="display:none"><label class="form-label">Ambil dari rekening reserve</label>
-        <select class="form-input" id="pc_holding">${banks.map(n=>`<option ${n===ccHoldingBank(cc?cc.NAMA:'')?'selected':''}>${esc(n)}</option>`).join('')}</select></div>
+        <select class="form-input" id="pc_bank">${banks.map(n=>`<option ${n===ccHoldingBank(cc?cc.NAMA:'')?'selected':''}>${esc(n)}</option>`).join('')}</select>
+        <div style="font-size:10px;color:var(--text3);margin-top:3px">Otomatis menunjuk bank penyimpan reserve kartu ini — boleh diganti.</div></div>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">Nominal (non-cicilan)</label><input class="form-input" id="pc_nominal" type="text" inputmode="numeric" value="${nonCic>0?fmtInput(nonCic):''}" oninput="fmtMoneyInput(this)" placeholder="0"></div>
+        <div class="form-group"><label class="form-label">Nominal pembayaran</label><input class="form-input" id="pc_nominal" type="text" inputmode="numeric" value="${prefill>0?fmtInput(prefill):''}" oninput="fmtMoneyInput(this)" placeholder="0"><div style="font-size:10px;color:var(--text3);margin-top:3px">${bill0?'terisi dari tagihan terkunci (termasuk angsuran cicilan)':'terisi dari total tagihan berjalan'}</div></div>
         <div class="form-group"><label class="form-label">Tanggal</label><input class="form-input" id="pc_tgl" type="date" value="${today()}"></div>
       </div>
       <div class="form-group"><label class="form-label">Catatan</label><input class="form-input" id="pc_notes" placeholder="opsional"></div>
       <button class="btn-primary" onclick="saveDrawer()"><i class="ti ti-credit-card"></i> Bayar</button>
-      <div class="settings-sub" style="margin-top:8px">Angsuran cicilan dibayar lewat tombol "Bayar" di atas (dari reserve). Nominal di bawah = tagihan non-cicilan: Bank → saldo bank turun & tagihan turun. Reserve → tagihan & pot reserve turun.</div>
+      <div class="settings-sub" style="margin-top:8px">Bayar = transfer dari rekening ke kartu (saldo bank turun, tagihan turun). Sesudahnya centangan reserve dilepas & angsuran cicilan ditandai terbayar otomatis.</div>
     `;
   } else if (mode === 'settings') {
     document.getElementById('drawerBody').innerHTML = `
@@ -4746,12 +4771,14 @@ function editCC(id){openDrawer('cc',id);}
 function editKat(id){openDrawer('kat',id);}
 function onPayCCChange(){
   const ccName=document.getElementById('pc_cc').value;
-  const out=getCCOut(ccName), resv=state.reserveFunds[ccName]||0;
-  const nonCic=Math.max(0,out-cicilanDueAmt(ccName));
+  const out=getCCOut(ccName), resv=getSaldo(ccHoldingBank(ccName)).saldo; // v32: tampilkan saldo bank penyimpan (pot lama pensiun)
+  const bill=ccBillFor(ccName); // v32.1: prefill = tagihan terkunci (termasuk angsuran), fallback total berjalan
+  const prefill=bill?(Number(bill.NOMINAL)||0):out;
   document.getElementById('pc_out').textContent=fmt(out);
   document.getElementById('pc_resv').textContent=fmt(resv);
+  const pb=document.getElementById('pc_bank'); if(pb){ const h=ccHoldingBank(ccName); if(h) pb.value=h; }
   const cicBox=document.getElementById('pc_cicilan'); if(cicBox) cicBox.innerHTML=paycCicilanHTML(ccName);
-  const nm=document.getElementById('pc_nominal'); if(nm) nm.value=nonCic>0?fmtInput(nonCic):'';
+  const nm=document.getElementById('pc_nominal'); if(nm) nm.value=prefill>0?fmtInput(prefill):'';
   onPayCCSrc();
 }
 function onPayCCSrc(){
