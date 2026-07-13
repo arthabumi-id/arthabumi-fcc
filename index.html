@@ -500,10 +500,11 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v32.5';
+const APP_VERSION = 'v33';
 // Tampilkan versi di halaman login (sebelum masuk) — berguna utk cek deploy tanpa login.
 try{ var _lv=document.getElementById('loginVer'); if(_lv) _lv.textContent=APP_VERSION; }catch(e){}
 const CHANGELOG = [
+  { v:'v33', d:'13 Jul 2026', t:'(1) Rekap PPh Dipotong Klien di halaman Piutang: total per tahun, per klien, dengan penanda "bupot ✓" untuk melacak bukti potong — tinggal cocokkan dengan Coretax. (2) Info termin: "Sudah diterima" kini hanya menghitung pembayaran klien (kategori kelompok PEMASUKAN) — refund material dkk. tidak lagi ikut terhitung.' },
   { v:'v32.5', d:'13 Jul 2026', t:'Tandai Lunas kini punya kolom "PPh dipotong klien": pendapatan tercatat penuh + potongan otomatis jadi Pengeluaran "PPh Dipotong Klien" di project yang sama — saldo bank tetap akurat, jejak pajak rapi untuk bukti potong & SPT.' },
   { v:'v32.4', d:'13 Jul 2026', t:'Info termin: "Sudah diterima" kini menghitung SEMUA pemasukan project (termasuk DP yang dicatat langsung di Transaksi, seperti Tri Kerta) — bukan hanya termin berstatus Lunas. Sisa yang belum terjadwal jadi akurat.' },
   { v:'v32.3', d:'8 Jul 2026', t:'Fix tanda tangan invoice: gambar ttd yang tertanam ternyata korup sejak v30.4 (tampil sepotong) — diproses ulang dari file asli, kini utuh & lebih tajam. + Form Tambah/Edit Termin kini menampilkan ringkasan project: nilai kontrak, sudah dibayar, terjadwal, dan sisa yang belum ditagih.' },
@@ -1977,6 +1978,64 @@ async function lockCCBillUI(){
     const res=await apiPost({action:'lockCCBill',data:{CC:name,NOMINAL:finalAmt,JATUH_TEMPO:finalDue,PERIODE_DARI:finalFrom,PERIODE_SAMPAI:to,USER:state.user}}); if(res&&!res.error) await syncAll();
   }
 }
+// ── v33: REKAP PPH DIPOTONG KLIEN ─────────────────────────────────────────
+// Data ditarik dari server (getTxns since/until) → setahun penuh, tak terbatas 120 hari.
+// Status bukti potong disimpan sebagai tag [BUPOT✓] di NOTES (ikut tersinkron ke Sheet).
+function _pphKlien(t){ const pr=state.projects.find(p=>p.NAMA===t.PROJECT); return (pr&&pr.KLIEN)||t.PROJECT||'(tanpa project)'; }
+async function loadPphRekap(year){
+  year=String(year||new Date().getFullYear());
+  const box=document.getElementById('pphRekap'); if(!box) return;
+  window._pphYear=year;
+  box.innerHTML='<div class="card" style="margin-top:14px"><div class="settings-sub">Memuat rekap PPh '+year+' dari server…</div></div>';
+  try{
+    const r=await apiGet({action:'getTxns', since:year+'-01-01', until:year+'-12-31'});
+    window._pphRows=Array.isArray(r)?r.filter(t=>t.KATEGORI==='PPh Dipotong Klien'):[];
+    window._pphLoaded=year;
+  }catch(e){ window._pphRows=[]; }
+  renderPphRekap();
+}
+function togglePphBupot(id){
+  const t=(window._pphRows||[]).find(x=>x.ID===id); if(!t) return;
+  const has=String(t.NOTES||'').indexOf('[BUPOT')>=0;
+  t.NOTES=has?String(t.NOTES).replace(/\s*\[BUPOT[^\]]*\]/,''):(String(t.NOTES||'')+' [BUPOT✓]');
+  const loc=state.txns.find(x=>x.ID===id); if(loc) loc.NOTES=t.NOTES;
+  if(API_URL) bgPost({action:'updateRow',data:{sheet:'TRANSAKSI',id:id,updates:{NOTES:t.NOTES}}},'Tanda bukti potong');
+  saveLocal(); renderPphRekap();
+}
+function renderPphRekap(){
+  const box=document.getElementById('pphRekap'); if(!box) return;
+  const year=window._pphYear||String(new Date().getFullYear());
+  const rows=window._pphRows||[];
+  const yopts=[0,1,2].map(i=>{const y=String(new Date().getFullYear()-i);return `<option ${y===year?'selected':''}>${y}</option>`;}).join('');
+  const head=`<div class="card-title"><i class="ti ti-receipt-tax" style="color:var(--amber);margin-right:5px"></i>Rekap PPh Dipotong Klien
+      <select class="form-input" style="width:auto;display:inline-block;padding:2px 8px;font-size:11px;margin-left:8px" onchange="loadPphRekap(this.value)">${yopts}</select></div>`;
+  if(window._pphLoaded!==year){
+    box.innerHTML=`<div class="card" style="margin-top:14px">${head}
+      <button class="btn-secondary" style="margin-top:6px" onclick="loadPphRekap('${year}')"><i class="ti ti-refresh"></i> Muat rekap ${year}</button>
+      <div class="settings-sub" style="margin-top:6px">Menarik semua potongan PPh setahun langsung dari database.</div></div>`;
+    return;
+  }
+  const byK={};
+  rows.forEach(t=>{ const k=_pphKlien(t); (byK[k]=byK[k]||[]).push(t); });
+  let tot=0, noBupot=0, parts='';
+  Object.keys(byK).sort().forEach(k=>{
+    const list=byK[k].sort((a,b)=>String(a.TANGGAL).localeCompare(String(b.TANGGAL)));
+    const sub=list.reduce((s,t)=>s+Number(t.NOMINAL||0),0); tot+=sub;
+    const rws=list.map(t=>{
+      const has=String(t.NOTES||'').indexOf('[BUPOT')>=0; if(!has) noBupot++;
+      return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0;border-top:1px solid var(--border)">
+        <div style="min-width:0;font-size:11px;color:var(--text2)">${String(t.TANGGAL).slice(0,10)} · ${esc(t.PROJECT||'')}</div>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0"><b class="num" style="font-size:12px">${fmt(t.NOMINAL)}</b>
+        <button class="btn-danger" style="padding:2px 8px;font-size:10px;${has?'background:var(--ic-green);color:var(--green);border-color:#2EE6A640':''}" onclick="togglePphBupot('${t.ID}')">${has?'bupot ✓':'bupot?'}</button></div>
+      </div>`;
+    }).join('');
+    parts+=`<div style="margin-top:10px"><div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700"><span>${esc(k)}</span><b class="num">${fmt(sub)}</b></div>${rws}</div>`;
+  });
+  box.innerHTML=`<div class="card" style="margin-top:14px">${head}
+    ${rows.length?`<div style="font-size:11px;color:var(--text2);margin:4px 0 2px">Total ${year}: <b class="num" style="color:var(--amber)">${fmt(tot)}</b> · ${rows.length} potongan${noBupot?` · <span style="color:var(--red)">${noBupot} belum ada bukti potong</span>`:' · bukti potong lengkap ✓'}</div>${parts}
+    <div class="settings-sub" style="margin-top:10px">Tandai "bupot ✓" setelah terima bukti potong dari klien. Cocokkan dengan Coretax: eBupot → Bukti Potong Saya.</div>`:`<div class="settings-sub" style="margin-top:4px">Tidak ada potongan PPh tercatat di ${year}.</div>`}
+  </div>`;
+}
 function renderPiutang(){
   const ag=piutangAgg();
   const list=(state.piutang||[]).slice();
@@ -1996,7 +2055,9 @@ function renderPiutang(){
     html+=`<div style="font-size:12px;font-weight:700;margin:16px 0 8px">Sudah Lunas · Rekap (${lunas.length})</div>`;
     html+=lunas.map(piutangRow).join('');
   }
+  html+=`<div id="pphRekap"></div>`; // v33: rekap PPh di bawah daftar termin
   document.getElementById('piutangList').innerHTML=html;
+  renderPphRekap();
 }
 function piutangRow(p){
   const st=piutangStatus(p);
@@ -2025,14 +2086,15 @@ function piutangRow(p){
   </div>`;
 }
 // ── v32.3: ringkasan keuangan project di form termin — biar tahu sisa yang boleh ditagih ──
-function piutangProjInfoHTML(nm, exceptId){
+// v33: "sudah diterima" = HANYA pemasukan ber-kategori kelompok PEMASUKAN (pembayaran klien:
+// DP, Pelunasan, dst). Refund/kelompok lain TIDAK dihitung sebagai pembayaran termin.
+// Angka pasti ditarik async dari server (getTxns per project — lengkap); sebelum datang,
+// tampil estimasi dari getProjCF (semua pemasukan) berlabel "menghitung…".
+function piutangProjInfoHTML(nm, exceptId, masukVal, loading){
   const pr=state.projects.find(x=>x.NAMA===nm);
   if(!pr) return '';
   const kontrak=effectiveContract(pr);
-  // v32.4: "sudah diterima" = SEMUA pemasukan project (basis kas, dari summary server — lengkap
-  // walau txn lama tak termuat client). Menangkap DP yang dicatat langsung di Transaksi (pola lama
-  // Eddy, kasus Tri Kerta) DAN termin lunas (yang otomatis jadi txn Pemasukan — jadi tidak dobel).
-  const masuk=getProjCF(nm).masuk;
+  const masuk=(masukVal===undefined)?getProjCF(nm).masuk:masukVal;
   let jadwal=0;
   (state.piutang||[]).forEach(t=>{
     if(t.PROJECT!==nm || (exceptId&&t.ID===exceptId)) return;
@@ -2041,7 +2103,7 @@ function piutangProjInfoHTML(nm, exceptId){
   const sisa=kontrak-masuk-jadwal;
   return `<div class="card" style="padding:9px 11px;margin:0 0 12px;background:var(--ic-blue);border:1px solid #3b82f640;font-size:12px;line-height:1.8">
     <div style="display:flex;justify-content:space-between;gap:8px"><span style="color:var(--text2)">Nilai kontrak (efektif)</span><b class="num">${fmt(kontrak)}</b></div>
-    <div style="display:flex;justify-content:space-between;gap:8px"><span style="color:var(--text2)">Sudah diterima (semua pemasukan)</span><b class="num" style="color:var(--green)">${fmt(masuk)}</b></div>
+    <div style="display:flex;justify-content:space-between;gap:8px"><span style="color:var(--text2)">Sudah diterima (pembayaran klien)${loading?' <i class="ti ti-loader" style="font-size:10px"></i>':''}</span><b class="num" style="color:var(--green)">${fmt(masuk)}</b></div>
     <div style="display:flex;justify-content:space-between;gap:8px"><span style="color:var(--text2)">Terjadwal, belum dibayar</span><b class="num" style="color:var(--amber)">${fmt(jadwal)}</b></div>
     <div style="display:flex;justify-content:space-between;gap:8px;border-top:1px solid var(--border2);margin-top:4px;padding-top:4px"><span style="font-weight:700">Sisa belum terjadwal</span><b class="num" style="color:${sisa>=0?'var(--blue)':'var(--red)'}">${sisa<0?'−':''}${fmt(Math.abs(sisa))}</b></div>
     ${sisa<0?`<div style="color:var(--red);font-size:10px;margin-top:2px"><i class="ti ti-alert-triangle"></i> Total termin melebihi nilai kontrak</div>`:''}
@@ -2054,7 +2116,7 @@ function openPiutang(editId){
   document.getElementById('drawerBody').innerHTML=`
     <div class="form-group"><label class="form-label">Project</label>
       <select class="form-input" id="pi_proj" onchange="onPiutangProj()"><option value="">— Pilih project —</option>${state.projects.map(x=>`<option ${p&&p.PROJECT===x.NAMA?'selected':''}>${esc(x.NAMA)}</option>`).join('')}</select></div>
-    <div id="pi_info">${p&&p.PROJECT?piutangProjInfoHTML(p.PROJECT,editId):''}</div>
+    <div id="pi_info"></div>
     <div class="form-group"><label class="form-label">Klien</label><input class="form-input" id="pi_klien" value="${p?esc(p.KLIEN||''):''}" placeholder="otomatis dari project"></div>
     <div class="form-group"><label class="form-label">Termin / Keterangan</label><input class="form-input" id="pi_termin" value="${p?esc(p.TERMIN||''):''}" placeholder="mis. DP 30%, Progress 1, Pelunasan"></div>
     <div class="form-row">
@@ -2067,14 +2129,29 @@ function openPiutang(editId){
     <div class="settings-sub" style="margin-top:8px">Termin belum lunas dengan jatuh tempo ≤90 hari otomatis masuk proyeksi Forecast. Saat klien bayar, tekan "Tandai Lunas" → otomatis jadi transaksi Pemasukan.</div>`;
   drawerMode='piutang'; drawerEditId=editId||null;
   document.getElementById('drawerBg').classList.add('open');
+  if(p&&p.PROJECT) updatePiutangInfo(p.PROJECT, editId); // v33
 }
 function onPiutangProj(){
   const nm=document.getElementById('pi_proj').value;
   const pr=state.projects.find(x=>x.NAMA===nm);
   const kl=document.getElementById('pi_klien');
   if(pr&&pr.KLIEN&&kl&&!kl.value)kl.value=pr.KLIEN;
-  const info=document.getElementById('pi_info'); // v32.3: ringkasan kontrak/terbayar/sisa
-  if(info) info.innerHTML=nm?piutangProjInfoHTML(nm,drawerEditId):'';
+  updatePiutangInfo(nm, drawerEditId); // v33: async, angka pasti dari server
+}
+// v33: render info termin — estimasi dulu, lalu diganti angka pasti (hanya kelompok PEMASUKAN)
+async function updatePiutangInfo(nm, exceptId){
+  const info=document.getElementById('pi_info'); if(!info) return;
+  if(!nm){ info.innerHTML=''; return; }
+  info.innerHTML=piutangProjInfoHTML(nm, exceptId, undefined, true);
+  if(!API_URL) return;
+  try{
+    const r=await apiGet({action:'getTxns', project:nm});
+    if(Array.isArray(r)){
+      const masuk=r.filter(t=>t.JENIS==='Pemasukan'&&(((state.kategori.find(k=>k.NAMA===t.KATEGORI)||{}).KELOMPOK)==='PEMASUKAN')).reduce((s,t)=>s+Number(t.NOMINAL||0),0);
+      const cur=document.getElementById('pi_proj');
+      if(cur&&cur.value===nm&&document.getElementById('pi_info')) document.getElementById('pi_info').innerHTML=piutangProjInfoHTML(nm, exceptId, masuk, false);
+    }
+  }catch(e){}
 }
 function savePiutang(editId){
   editId=editId||null;
