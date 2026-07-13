@@ -500,10 +500,11 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v32.3';
+const APP_VERSION = 'v32.4';
 // Tampilkan versi di halaman login (sebelum masuk) — berguna utk cek deploy tanpa login.
 try{ var _lv=document.getElementById('loginVer'); if(_lv) _lv.textContent=APP_VERSION; }catch(e){}
 const CHANGELOG = [
+  { v:'v32.4', d:'13 Jul 2026', t:'Info termin: "Sudah diterima" kini menghitung SEMUA pemasukan project (termasuk DP yang dicatat langsung di Transaksi, seperti Tri Kerta) — bukan hanya termin berstatus Lunas. Sisa yang belum terjadwal jadi akurat.' },
   { v:'v32.3', d:'8 Jul 2026', t:'Fix tanda tangan invoice: gambar ttd yang tertanam ternyata korup sejak v30.4 (tampil sepotong) — diproses ulang dari file asli, kini utuh & lebih tajam. + Form Tambah/Edit Termin kini menampilkan ringkasan project: nilai kontrak, sudah dibayar, terjadwal, dan sisa yang belum ditagih.' },
   { v:'v32.2', d:'8 Jul 2026', t:'Invoice PDF: tanda tangan tidak terpotong lagi saat cetak/simpan PDF (ukuran halaman A4 dikunci + blok ttd dilarang terbelah antar halaman).' },
   { v:'v32.1', d:'5 Jul 2026', t:'Form Bayar CC: nominal kini terisi otomatis dari tagihan terkunci — SUDAH termasuk angsuran cicilan. Satu kali bayar untuk semuanya, tidak ada lagi klik angsuran satu per satu.' },
@@ -2027,16 +2028,19 @@ function piutangProjInfoHTML(nm, exceptId){
   const pr=state.projects.find(x=>x.NAMA===nm);
   if(!pr) return '';
   const kontrak=effectiveContract(pr);
-  let lunas=0, jadwal=0;
+  // v32.4: "sudah diterima" = SEMUA pemasukan project (basis kas, dari summary server — lengkap
+  // walau txn lama tak termuat client). Menangkap DP yang dicatat langsung di Transaksi (pola lama
+  // Eddy, kasus Tri Kerta) DAN termin lunas (yang otomatis jadi txn Pemasukan — jadi tidak dobel).
+  const masuk=getProjCF(nm).masuk;
+  let jadwal=0;
   (state.piutang||[]).forEach(t=>{
     if(t.PROJECT!==nm || (exceptId&&t.ID===exceptId)) return;
-    const n=Number(t.NOMINAL)||0;
-    if(String(t.STATUS)==='Lunas') lunas+=n; else jadwal+=n;
+    if(String(t.STATUS)!=='Lunas') jadwal+=Number(t.NOMINAL)||0;
   });
-  const sisa=kontrak-lunas-jadwal;
+  const sisa=kontrak-masuk-jadwal;
   return `<div class="card" style="padding:9px 11px;margin:0 0 12px;background:var(--ic-blue);border:1px solid #3b82f640;font-size:12px;line-height:1.8">
     <div style="display:flex;justify-content:space-between;gap:8px"><span style="color:var(--text2)">Nilai kontrak (efektif)</span><b class="num">${fmt(kontrak)}</b></div>
-    <div style="display:flex;justify-content:space-between;gap:8px"><span style="color:var(--text2)">Sudah dibayar (termin lunas)</span><b class="num" style="color:var(--green)">${fmt(lunas)}</b></div>
+    <div style="display:flex;justify-content:space-between;gap:8px"><span style="color:var(--text2)">Sudah diterima (semua pemasukan)</span><b class="num" style="color:var(--green)">${fmt(masuk)}</b></div>
     <div style="display:flex;justify-content:space-between;gap:8px"><span style="color:var(--text2)">Terjadwal, belum dibayar</span><b class="num" style="color:var(--amber)">${fmt(jadwal)}</b></div>
     <div style="display:flex;justify-content:space-between;gap:8px;border-top:1px solid var(--border2);margin-top:4px;padding-top:4px"><span style="font-weight:700">Sisa belum terjadwal</span><b class="num" style="color:${sisa>=0?'var(--blue)':'var(--red)'}">${sisa<0?'−':''}${fmt(Math.abs(sisa))}</b></div>
     ${sisa<0?`<div style="color:var(--red);font-size:10px;margin-top:2px"><i class="ti ti-alert-triangle"></i> Total termin melebihi nilai kontrak</div>`:''}
