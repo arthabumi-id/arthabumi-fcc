@@ -500,10 +500,11 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v32.1';
+const APP_VERSION = 'v32.2';
 // Tampilkan versi di halaman login (sebelum masuk) — berguna utk cek deploy tanpa login.
 try{ var _lv=document.getElementById('loginVer'); if(_lv) _lv.textContent=APP_VERSION; }catch(e){}
 const CHANGELOG = [
+  { v:'v32.2', d:'8 Jul 2026', t:'Invoice PDF: tanda tangan tidak terpotong lagi saat cetak/simpan PDF (ukuran halaman A4 dikunci + blok ttd dilarang terbelah antar halaman).' },
   { v:'v32.1', d:'5 Jul 2026', t:'Form Bayar CC: nominal kini terisi otomatis dari tagihan terkunci — SUDAH termasuk angsuran cicilan. Satu kali bayar untuk semuanya, tidak ada lagi klik angsuran satu per satu.' },
   { v:'v32', d:'5 Jul 2026', t:'Reserve Policy + Cleanup: (1) reserve cicilan kini cukup angsuran N bulan ke depan (setelan di Master, default 2 bulan — sisanya bebas jadi modal kerja); (2) jalur bayar "dari reserve" (model lama) dihapus — semua bayar via rekening, default bank penyimpan; (3) tombol Bayar angsuran satuan disembunyikan (angsuran beres otomatis via Bayar CC); (4) kartu di Dashboard kini menampilkan status "dana siap / kurang X".' },
   { v:'v31', d:'5 Jul 2026', t:'Siklus reserve tertutup: Bayar CC kini otomatis melepas centangan reserve & menandai angsuran cicilan terbayar sesuai periode tagihan (bayar sebagian/tanpa tagihan terkunci → ditanya dulu). + tombol ±1 terbayar di daftar cicilan (koreksi manual, tanpa gerak uang). Angka "perlu transfer" tidak menggelembung lagi.' },
@@ -4040,9 +4041,10 @@ function invHTML(o){
     .r{text-align:right}.c{text-align:center}
     .tot{margin-top:4px;text-align:right;font-size:13px}.tot b{display:inline-block;min-width:130px}
     .terbilang{margin-top:10px;font-size:12px;font-style:italic}
-    .foot{display:flex;justify-content:space-between;gap:20px;margin-top:26px;font-size:12px;line-height:1.5}
+    .foot{display:flex;justify-content:space-between;gap:20px;margin-top:26px;font-size:12px;line-height:1.5;break-inside:avoid;page-break-inside:avoid}
     .sign{text-align:center;min-width:190px}.sign .sp{height:58px}
-    @media print{ body{background:#fff} .page{box-shadow:none;margin:0} .noprint{display:none!important} }
+    @page{size:A4;margin:0}
+    @media print{ body{background:#fff} .page{box-shadow:none;margin:0;width:auto;min-height:auto} .noprint{display:none!important} }
     .noprint{position:fixed;top:10px;right:10px;display:flex;gap:8px}
     .btn{background:#16794f;color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer}.btn.sec{background:#e6e6e6;color:#333}
   </style></head><body>
