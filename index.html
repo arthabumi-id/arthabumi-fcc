@@ -500,10 +500,11 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v32.4';
+const APP_VERSION = 'v32.5';
 // Tampilkan versi di halaman login (sebelum masuk) — berguna utk cek deploy tanpa login.
 try{ var _lv=document.getElementById('loginVer'); if(_lv) _lv.textContent=APP_VERSION; }catch(e){}
 const CHANGELOG = [
+  { v:'v32.5', d:'13 Jul 2026', t:'Tandai Lunas kini punya kolom "PPh dipotong klien": pendapatan tercatat penuh + potongan otomatis jadi Pengeluaran "PPh Dipotong Klien" di project yang sama — saldo bank tetap akurat, jejak pajak rapi untuk bukti potong & SPT.' },
   { v:'v32.4', d:'13 Jul 2026', t:'Info termin: "Sudah diterima" kini menghitung SEMUA pemasukan project (termasuk DP yang dicatat langsung di Transaksi, seperti Tri Kerta) — bukan hanya termin berstatus Lunas. Sisa yang belum terjadwal jadi akurat.' },
   { v:'v32.3', d:'8 Jul 2026', t:'Fix tanda tangan invoice: gambar ttd yang tertanam ternyata korup sejak v30.4 (tampil sepotong) — diproses ulang dari file asli, kini utuh & lebih tajam. + Form Tambah/Edit Termin kini menampilkan ringkasan project: nilai kontrak, sudah dibayar, terjadwal, dan sisa yang belum ditagih.' },
   { v:'v32.2', d:'8 Jul 2026', t:'Invoice PDF: tanda tangan tidak terpotong lagi saat cetak/simpan PDF (ukuran halaman A4 dikunci + blok ttd dilarang terbelah antar halaman).' },
@@ -2102,26 +2103,53 @@ function payPiutangUI(id){
     <div class="settings-row"><div class="settings-label">${esc(p.KLIEN||p.PROJECT||'')} · ${esc(p.TERMIN||'')}</div><div style="font-weight:700">${fmt(p.NOMINAL)}</div></div>
     <div class="form-group"><label class="form-label">Rekening tujuan (uang masuk)</label><select class="form-input" id="pp_rek">${banks.map(n=>`<option>${esc(n)}</option>`).join('')}</select></div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Nominal diterima</label><input class="form-input" id="pp_nominal" type="text" inputmode="numeric" value="${fmtInput(p.NOMINAL)}" oninput="fmtMoneyInput(this)"></div>
+      <div class="form-group"><label class="form-label">Nominal termin (penuh)</label><input class="form-input" id="pp_nominal" type="text" inputmode="numeric" value="${fmtInput(p.NOMINAL)}" oninput="fmtMoneyInput(this);ppNetCalc()"></div>
       <div class="form-group"><label class="form-label">Tanggal bayar</label><input class="form-input" id="pp_tgl" type="date" value="${today()}"></div>
     </div>
+    <div class="form-group"><label class="form-label">PPh dipotong klien (opsional, Rp)</label><input class="form-input" id="pp_pph" type="text" inputmode="numeric" placeholder="0 — isi bila klien memotong PPh" oninput="fmtMoneyInput(this);ppNetCalc()">
+      <div id="pp_net" style="font-size:10px;color:var(--text3);margin-top:3px"></div></div>
     <button class="btn-primary" onclick="doPayPiutang('${id}')"><i class="ti ti-check"></i> Konfirmasi Lunas</button>
-    <div class="settings-sub" style="margin-top:8px">Tercatat sebagai transaksi Pemasukan (kategori "Pelunasan") ke rekening terpilih & masuk laba project. Nominal boleh diubah bila klien bayar sebagian/lebih.</div>`;
+    <div class="settings-sub" style="margin-top:8px">Tercatat sebagai Pemasukan PENUH ke rekening (masuk laba project). Bila PPh diisi: otomatis dibuat 1 baris Pengeluaran "PPh Dipotong Klien" (project sama) — net saldo = uang yang benar-benar masuk. Jangan lupa minta bukti potong ke klien.</div>`;
   drawerMode='paypiutang'; drawerEditId=null;
   document.getElementById('drawerBg').classList.add('open');
 }
+// v32.5: hint bersih = nominal penuh − PPh (tampil live di form Tandai Lunas)
+function ppNetCalc(){
+  const el=document.getElementById('pp_net'); if(!el) return;
+  const n=unfmtNum((document.getElementById('pp_nominal')||{value:''}).value);
+  const pph=unfmtNum((document.getElementById('pp_pph')||{value:''}).value);
+  el.textContent=pph>0?('Masuk rekening (bersih): '+fmt(Math.max(0,n-pph))+' · pendapatan tetap tercatat penuh '+fmt(n)):'';
+}
 async function doPayPiutang(id){
+  const p0=(state.piutang||[]).find(x=>x.ID===id);
   const rek=document.getElementById('pp_rek').value;
   const nominal=unfmtNum(document.getElementById('pp_nominal').value);
   const tgl=document.getElementById('pp_tgl').value;
+  const pph=unfmtNum((document.getElementById('pp_pph')||{value:''}).value)||0; // v32.5
   if(!rek||!nominal||!tgl){showToast('Rekening, nominal, tanggal wajib diisi','error');return;}
+  if(pph>=nominal){showToast('PPh tidak boleh ≥ nominal termin','error');return;}
   closeDrawer();
-  showToast('Termin ditandai lunas ✓','success');
+  showToast('Termin ditandai lunas ✓'+(pph>0?(' · PPh '+fmt(pph)+' ikut dicatat'):''),'success');
   if(API_URL){
     const res=await apiPost({action:'payPiutang',data:{ID:id,REKENING:rek,NOMINAL:nominal,TGL_BAYAR:tgl,USER:state.user}});
     if(res&&res.error){showToast('Gagal: '+res.error,'error');}
+    if(pph>0&&!(res&&res.error)){
+      // v32.5: catat potongan PPh sbg Pengeluaran project (kategori auto-dibuat bila belum ada)
+      const KNAME='PPh Dipotong Klien';
+      let katObj=state.kategori.find(k=>String(k.NAMA).toLowerCase()===KNAME.toLowerCase());
+      if(!katObj){
+        katObj={ID:uid(),NAMA:KNAME,KELOMPOK:'FINANCIAL',TIPE:'Pengeluaran',CREATED_AT:new Date().toISOString()};
+        state.kategori.push(katObj);
+        bgPost({action:'addKat',data:katObj},'Kategori '+KNAME);
+      }
+      const tobj={ID:uid(),TANGGAL:tgl,JENIS:'Pengeluaran',PROJECT:(p0&&p0.PROJECT)||'',REKENING:rek,KATEGORI:katObj.NAMA,NOMINAL:pph,NOTES:'PPh dipotong klien atas termin "'+((p0&&p0.TERMIN)||'')+'" — minta bukti potong',TIPE_LOG:'Pengeluaran',CREATED_BY:state.user,CREATED_AT:new Date().toISOString()};
+      state.txns.unshift(tobj); applySummaryDelta(tobj,1);
+      bgPost({action:'addTxn',data:tobj},'PPh dipotong '+fmt(pph));
+      saveLocal();
+    }
     await syncAll();
   } else {
+    if(pph>0){showToast('Catatan PPh butuh online — catat manual nanti','error');}
     const p=(state.piutang||[]).find(x=>x.ID===id);
     if(p){p.STATUS='Lunas';p.TGL_BAYAR=tgl;p.REKENING=rek;p.NOMINAL=nominal;}
     saveLocal(); renderPiutang(); renderPiutangReminder(); updatePiutangBadge();
