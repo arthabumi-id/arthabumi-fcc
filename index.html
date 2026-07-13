@@ -500,10 +500,11 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v33';
+const APP_VERSION = 'v33.1';
 // Tampilkan versi di halaman login (sebelum masuk) — berguna utk cek deploy tanpa login.
 try{ var _lv=document.getElementById('loginVer'); if(_lv) _lv.textContent=APP_VERSION; }catch(e){}
 const CHANGELOG = [
+  { v:'v33.1', d:'13 Jul 2026', t:'Tombol Invoice langsung di tiap baris termin (halaman Piutang) — buat termin, langsung terbitkan invoice-nya tanpa lewat detail project. Builder terbuka dengan termin sudah terpilih.' },
   { v:'v33', d:'13 Jul 2026', t:'(1) Rekap PPh Dipotong Klien di halaman Piutang: total per tahun, per klien, dengan penanda "bupot ✓" untuk melacak bukti potong — tinggal cocokkan dengan Coretax. (2) Info termin: "Sudah diterima" kini hanya menghitung pembayaran klien (kategori kelompok PEMASUKAN) — refund material dkk. tidak lagi ikut terhitung.' },
   { v:'v32.5', d:'13 Jul 2026', t:'Tandai Lunas kini punya kolom "PPh dipotong klien": pendapatan tercatat penuh + potongan otomatis jadi Pengeluaran "PPh Dipotong Klien" di project yang sama — saldo bank tetap akurat, jejak pajak rapi untuk bukti potong & SPT.' },
   { v:'v32.4', d:'13 Jul 2026', t:'Info termin: "Sudah diterima" kini menghitung SEMUA pemasukan project (termasuk DP yang dicatat langsung di Transaksi, seperti Tri Kerta) — bukan hanya termin berstatus Lunas. Sisa yang belum terjadwal jadi akurat.' },
@@ -2068,9 +2069,11 @@ function piutangRow(p){
   const sub=st==='lunas'
     ? ('dibayar '+(String(p.TGL_BAYAR||'').slice(0,10)||'—')+(p.REKENING?' · '+esc(p.REKENING):''))
     : (due?(due+(dd<0?` · lewat ${Math.abs(dd)} hari`:` · ${dd} hari lagi`)):'tanpa jatuh tempo');
+  const invBtn=`<button class="btn-secondary" style="padding:5px 10px;font-size:11px;margin:0;color:var(--gold)" onclick="invoiceFromPiutang('${p.ID}')"><i class="ti ti-file-invoice"></i> Invoice</button>`; // v33.1
   const actions=st==='lunas'
-    ? `<div style="text-align:right;margin-top:4px"><button style="font-size:10px;background:transparent;border:none;color:var(--text3);cursor:pointer" onclick="delPiutang('${p.ID}')">hapus</button></div>`
+    ? `<div style="display:flex;gap:5px;margin-top:8px;justify-content:flex-end;align-items:center">${invBtn}<button style="font-size:10px;background:transparent;border:none;color:var(--text3);cursor:pointer" onclick="delPiutang('${p.ID}')">hapus</button></div>`
     : `<div style="display:flex;gap:5px;margin-top:8px;justify-content:flex-end">
+         ${invBtn}
          <button class="btn-secondary" style="padding:5px 10px;font-size:11px;margin:0" onclick="openPiutang('${p.ID}')">Edit</button>
          <button class="btn-primary" style="padding:5px 12px;font-size:11px;margin:0" onclick="payPiutangUI('${p.ID}')">Tandai Lunas</button></div>`;
   return `<div class="card" style="padding:11px 13px;margin-bottom:8px">
@@ -4199,6 +4202,16 @@ function invHTML(o){
 }
 function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function _invPct(p,nominal){ const k=Number(p.NILAI_CONTRACT||0); return k>0?Math.round(nominal/k*100):0; }
+// v33.1: buat invoice langsung dari baris termin di halaman Piutang — builder terbuka
+// dengan termin tsb sudah terpilih (deskripsi ikut terisi via invOnTermin).
+function invoiceFromPiutang(piutangId){
+  const t=(state.piutang||[]).find(x=>x.ID===piutangId); if(!t) return;
+  const proj=state.projects.find(x=>x.NAMA===t.PROJECT);
+  if(!proj){ showToast('Project "'+(t.PROJECT||'—')+'" tidak ditemukan di Master Project','error'); return; }
+  openInvoiceBuilder(proj.ID);
+  const sel=document.getElementById('inv_termin');
+  if(sel){ sel.value=piutangId; if(typeof invOnTermin==='function') invOnTermin(proj.ID); }
+}
 function openInvoiceBuilder(projId){
   const p=state.projects.find(x=>x.ID===projId); if(!p) return;
   const termins=(state.piutang||[]).filter(x=>x.PROJECT===p.NAMA);
