@@ -500,10 +500,11 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v33.2';
+const APP_VERSION = 'v33.3';
 // Tampilkan versi di halaman login (sebelum masuk) — berguna utk cek deploy tanpa login.
 try{ var _lv=document.getElementById('loginVer'); if(_lv) _lv.textContent=APP_VERSION; }catch(e){}
 const CHANGELOG = [
+  { v:'v33.3', d:'13 Jul 2026', t:'Invoice dirapikan: rincian "Telah diterima sebelumnya" kini seksi sendiri di bawah tabel (jelas terbaca, dengan total), dan jarak isi tabel dilonggarkan agar tidak mepet.' },
   { v:'v33.2', d:'13 Jul 2026', t:'Identitas Invoice bisa diatur di Master: nama, telp, alamat, dan info rekening pembayaran yang tampil di invoice PDF — tidak lagi terkunci di kode.' },
   { v:'v33.1', d:'13 Jul 2026', t:'Tombol Invoice langsung di tiap baris termin (halaman Piutang) — buat termin, langsung terbitkan invoice-nya tanpa lewat detail project. Builder terbuka dengan termin sudah terpilih.' },
   { v:'v33', d:'13 Jul 2026', t:'(1) Rekap PPh Dipotong Klien di halaman Piutang: total per tahun, per klien, dengan penanda "bupot ✓" untuk melacak bukti potong — tinggal cocokkan dengan Coretax. (2) Info termin: "Sudah diterima" kini hanya menghitung pembayaran klien (kategori kelompok PEMASUKAN) — refund material dkk. tidak lagi ikut terhitung.' },
@@ -4190,8 +4191,17 @@ function saveInvIssuer(){
 }
 function _escBr(s){ return _esc(s).replace(/\n/g,'<br>'); }
 function invHTML(o){
-  const rows=o.telah.map((x,i)=>`<tr><td style="padding:1px 6px 1px 0;width:14px;vertical-align:top">${String.fromCharCode(97+i)}</td><td style="padding:1px 0">${_esc(x.label)} : Rp. ${_invRp(x.amt)},-</td></tr>`).join('');
-  const telahBlock=o.telah.length?`<div style="margin-top:5px">Telah terima:</div><table style="border-collapse:collapse;font-size:11px">${rows}</table>`:'';
+  // v33.3: rincian pembayaran sebelumnya jadi SEKSI SENDIRI di bawah tabel (bukan terjepit
+  // di dalam sel barang) — jelas terbaca, dengan total telah diterima.
+  const telahTot=o.telah.reduce((s,x)=>s+(Number(x.amt)||0),0);
+  const telahRows=o.telah.map((x,i)=>`<tr><td class="pl">${String.fromCharCode(97+i)}.</td><td>${_esc(x.label)}</td><td class="pr">Rp. ${_invRp(x.amt)},-</td></tr>`).join('');
+  const telahBlock=o.telah.length?`
+    <div class="paid">
+      <div class="paidhead">TELAH DITERIMA SEBELUMNYA:</div>
+      <table class="paidtbl">${telahRows}
+        <tr class="paidtot"><td class="pl"></td><td>Total telah diterima</td><td class="pr">Rp. ${_invRp(telahTot)},-</td></tr>
+      </table>
+    </div>`:'';
   return `<!doctype html><html><head><meta charset="utf-8"><title>Invoice ${_esc(o.invNo)}</title><style>
     *{box-sizing:border-box;font-family:Arial,Helvetica,sans-serif}
     body{margin:0;color:#111;background:#f3f3f3}
@@ -4204,8 +4214,15 @@ function invHTML(o){
     .parties{display:flex;justify-content:space-between;gap:20px;margin-top:16px;font-size:12px;line-height:1.5}
     .lbl{font-weight:700;font-size:11px;color:#16794f;margin-bottom:3px}
     table.items{width:100%;border-collapse:collapse;margin-top:18px;font-size:12px}
-    table.items th{background:#16794f;color:#fff;padding:7px 8px;text-align:left;font-size:10.5px;letter-spacing:.3px}
-    table.items td{border:1px solid #cfcfcf;padding:8px;vertical-align:top}
+    table.items th{background:#16794f;color:#fff;padding:10px 10px;text-align:left;font-size:10.5px;letter-spacing:.3px}
+    table.items td{border:1px solid #cfcfcf;padding:12px 10px;vertical-align:top;line-height:1.55}
+    .paid{margin-top:16px;font-size:12px;break-inside:avoid;page-break-inside:avoid}
+    .paidhead{font-weight:700;margin-bottom:5px}
+    .paidtbl{border-collapse:collapse;width:62%;font-size:12px}
+    .paidtbl td{padding:5px 8px 5px 0;border-bottom:1px solid #e4e4e4;line-height:1.5}
+    .paidtbl td.pl{width:18px;color:#666;padding-right:4px}
+    .paidtbl td.pr{text-align:right;white-space:nowrap;font-weight:600}
+    .paidtbl tr.paidtot td{border-bottom:none;border-top:2px solid #16794f;font-weight:700;color:#16794f}
     .r{text-align:right}.c{text-align:center}
     .tot{margin-top:4px;text-align:right;font-size:13px}.tot b{display:inline-block;min-width:130px}
     .terbilang{margin-top:10px;font-size:12px;font-style:italic}
@@ -4224,9 +4241,10 @@ function invHTML(o){
       <div style="text-align:right;max-width:44%"><div><b>${_esc(o.issuer.nama)}</b></div><div>${_esc(o.issuer.telp)}</div><div>${_escBr(o.issuer.alamat)}</div><div style="margin-top:6px;font-weight:700">INV NO. ${_esc(o.invNo)}</div></div>
     </div>
     <table class="items"><thead><tr><th style="width:26px" class="c">No</th><th>NAMA BARANG</th><th class="c" style="width:42px">JMLH</th><th class="c" style="width:50px">SATUAN</th><th class="r" style="width:105px">HARGA</th><th class="r" style="width:118px">TOTAL HARGA</th></tr></thead>
-    <tbody><tr><td class="c">1</td><td><div style="font-weight:600">${_esc(o.namaBarang)}</div><div style="margin-top:8px;color:#333">Nilai Project Rp. ${_invRp(o.kontrak)},00</div>${telahBlock}</td><td class="c">1</td><td class="c">LS</td><td class="r">Rp. ${_invRp(o.nominal)}</td><td class="r">Rp. ${_invRp(o.nominal)}</td></tr></tbody></table>
+    <tbody><tr><td class="c">1</td><td><div style="font-weight:600">${_esc(o.namaBarang)}</div><div style="margin-top:8px;color:#333">Nilai Project Rp. ${_invRp(o.kontrak)},00</div></td><td class="c">1</td><td class="c">LS</td><td class="r">Rp. ${_invRp(o.nominal)}</td><td class="r">Rp. ${_invRp(o.nominal)}</td></tr></tbody></table>
     <div class="tot">TOTAL&nbsp;&nbsp;<b>Rp. ${_invRp(o.nominal)}</b></div>
     <div class="terbilang"><b>TERBILANG:</b> ${_esc(o.terbilang)}</div>
+    ${telahBlock}
     ${o.note?`<div style="margin-top:10px;font-size:12px"><b>NOTE:</b> <span style="white-space:pre-wrap">${_esc(o.note)}</span></div>`:''}
     <div class="foot"><div><div style="font-weight:700;margin-bottom:3px">PEMBAYARAN DI TRANSFER KE:</div><div>${_escBr(o.issuer.bayar)}</div></div>
       <div class="sign"><div>Jakarta, ${_esc(o.tglIndo)}</div><div>Hormat saya,</div><div class="sp">${o.ttd?`<img src="${o.ttd}" style="height:58px;object-fit:contain">`:''}</div><div style="font-weight:700;text-decoration:underline">${_esc(String(o.issuer.nama).toUpperCase())}</div></div></div>
