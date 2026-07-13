@@ -500,10 +500,11 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v33.1';
+const APP_VERSION = 'v33.2';
 // Tampilkan versi di halaman login (sebelum masuk) — berguna utk cek deploy tanpa login.
 try{ var _lv=document.getElementById('loginVer'); if(_lv) _lv.textContent=APP_VERSION; }catch(e){}
 const CHANGELOG = [
+  { v:'v33.2', d:'13 Jul 2026', t:'Identitas Invoice bisa diatur di Master: nama, telp, alamat, dan info rekening pembayaran yang tampil di invoice PDF — tidak lagi terkunci di kode.' },
   { v:'v33.1', d:'13 Jul 2026', t:'Tombol Invoice langsung di tiap baris termin (halaman Piutang) — buat termin, langsung terbitkan invoice-nya tanpa lewat detail project. Builder terbuka dengan termin sudah terpilih.' },
   { v:'v33', d:'13 Jul 2026', t:'(1) Rekap PPh Dipotong Klien di halaman Piutang: total per tahun, per klien, dengan penanda "bupot ✓" untuk melacak bukti potong — tinggal cocokkan dengan Coretax. (2) Info termin: "Sudah diterima" kini hanya menghitung pembayaran klien (kategori kelompok PEMASUKAN) — refund material dkk. tidak lagi ikut terhitung.' },
   { v:'v32.5', d:'13 Jul 2026', t:'Tandai Lunas kini punya kolom "PPh dipotong klien": pendapatan tercatat penuh + potongan otomatis jadi Pengeluaran "PPh Dipotong Klien" di project yang sama — saldo bank tetap akurat, jejak pajak rapi untuk bukti potong & SPT.' },
@@ -621,6 +622,18 @@ function renderDisplayBox(){
     <div class="card-title"><i class="ti ti-calendar-repeat" style="color:var(--purple);margin-right:5px"></i>Cakupan Reserve Cicilan</div>
     <div style="font-size:11px;color:var(--text2);margin:2px 0 10px">Berapa bulan angsuran ke depan yang wajib siap dananya di bank penyimpan. Sisanya bebas sebagai modal kerja. Angka "perlu transfer" ikut kebijakan ini.</div>
     <div style="display:flex;gap:6px">${[{v:1,l:'1 bulan'},{v:2,l:'2 bulan'},{v:3,l:'3 bulan'},{v:0,l:'Penuh'}].map(o=>{const on=o.v===(Number(state.cicReserveN)||0);return `<button onclick="setCicReserveN(${o.v})" style="flex:1;padding:10px 4px;border-radius:9px;border:1px solid ${on?'var(--green)':'var(--border2)'};background:${on?'var(--ic-green)':'transparent'};color:${on?'var(--green)':'var(--text2)'};font-family:var(--font);font-weight:${on?'700':'500'};cursor:pointer;font-size:12px">${o.l}</button>`;}).join('')}</div>
+  </div>
+  <div class="card" style="margin-top:12px">
+    <div class="card-title"><i class="ti ti-file-invoice" style="color:var(--gold);margin-right:5px"></i>Identitas Invoice</div>
+    <div style="font-size:11px;color:var(--text2);margin:2px 0 10px">Nama, alamat &amp; info pembayaran yang tampil di invoice PDF. Tersimpan per perangkat.</div>
+    ${(()=>{const ii=getInvIssuer();return `
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Nama</label><input class="form-input" id="ii_nama" value="${esc(ii.nama)}"></div>
+      <div class="form-group"><label class="form-label">Telp</label><input class="form-input" id="ii_telp" value="${esc(ii.telp)}"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Alamat (boleh 2 baris)</label><textarea class="form-input" id="ii_alamat" rows="2" style="resize:vertical">${esc(ii.alamat)}</textarea></div>
+    <div class="form-group"><label class="form-label">Info pembayaran (bank/cabang/rekening)</label><textarea class="form-input" id="ii_bayar" rows="3" style="resize:vertical">${esc(ii.bayar)}</textarea></div>
+    <button class="btn-primary" onclick="saveInvIssuer()"><i class="ti ti-device-floppy"></i> Simpan Identitas</button>`;})()}
   </div>`;
 }
 const HIDE_MASK = '••••';
@@ -4157,6 +4170,25 @@ function terbilang(n){
   if(n===0) return 'nol';
   return t(n).replace(/\s+/g,' ').trim();
 }
+// ── v33.2: identitas penerbit invoice bisa diatur (kartu "Identitas Invoice" di Master) ──
+// Disimpan di localStorage per perangkat; default = data lama yang dulunya hardcode.
+const INV_ISSUER_DEFAULT={
+  nama:'Eddy Santoso',
+  telp:'0813-9086-1887',
+  alamat:'Daan Mogot KM 11 Perumahan Casa Jardin,\nCluster Dianella D3 No. 6, Jakarta Barat 11710',
+  bayar:'NAMA BANK: BCA (BANK CENTRAL ASIA)\nCABANG: TAMAN SEMANAN INDAH\nNO DAN NAMA REKENING: 549-082-6868 A/N EDDY SANTOSO'
+};
+function getInvIssuer(){
+  try{ const s=JSON.parse(localStorage.getItem('fcc_inv_issuer')||'{}'); return Object.assign({},INV_ISSUER_DEFAULT,s); }
+  catch(e){ return Object.assign({},INV_ISSUER_DEFAULT); }
+}
+function saveInvIssuer(){
+  const v=id=>{const el=document.getElementById(id);return el?el.value:'';};
+  const obj={nama:v('ii_nama').trim()||INV_ISSUER_DEFAULT.nama, telp:v('ii_telp').trim(), alamat:v('ii_alamat'), bayar:v('ii_bayar')};
+  try{ localStorage.setItem('fcc_inv_issuer',JSON.stringify(obj)); }catch(e){}
+  showToast('Identitas invoice tersimpan ✓ (per perangkat)','success');
+}
+function _escBr(s){ return _esc(s).replace(/\n/g,'<br>'); }
 function invHTML(o){
   const rows=o.telah.map((x,i)=>`<tr><td style="padding:1px 6px 1px 0;width:14px;vertical-align:top">${String.fromCharCode(97+i)}</td><td style="padding:1px 0">${_esc(x.label)} : Rp. ${_invRp(x.amt)},-</td></tr>`).join('');
   const telahBlock=o.telah.length?`<div style="margin-top:5px">Telah terima:</div><table style="border-collapse:collapse;font-size:11px">${rows}</table>`:'';
@@ -4189,15 +4221,15 @@ function invHTML(o){
     <div class="top"><div class="title">INVOICE</div>${o.logo?`<img class="logo" src="${o.logo}">`:`<div class="brand">ARTHABUMI<small>KONTRAKTOR · INTERIOR · BESI</small></div>`}</div>
     <div class="parties">
       <div style="max-width:54%"><div class="lbl">CUSTOMER</div><div><b>${_esc(o.klien||'-')}</b></div><div>${_esc(o.alamat||'')}</div><div>${o.telp?('Telp: '+_esc(o.telp)):''}</div></div>
-      <div style="text-align:right;max-width:44%"><div><b>Eddy Santoso</b></div><div>0813-9086-1887</div><div>Daan Mogot KM 11 Perumahan Casa Jardin,<br>Cluster Dianella D3 No. 6, Jakarta Barat 11710</div><div style="margin-top:6px;font-weight:700">INV NO. ${_esc(o.invNo)}</div></div>
+      <div style="text-align:right;max-width:44%"><div><b>${_esc(o.issuer.nama)}</b></div><div>${_esc(o.issuer.telp)}</div><div>${_escBr(o.issuer.alamat)}</div><div style="margin-top:6px;font-weight:700">INV NO. ${_esc(o.invNo)}</div></div>
     </div>
     <table class="items"><thead><tr><th style="width:26px" class="c">No</th><th>NAMA BARANG</th><th class="c" style="width:42px">JMLH</th><th class="c" style="width:50px">SATUAN</th><th class="r" style="width:105px">HARGA</th><th class="r" style="width:118px">TOTAL HARGA</th></tr></thead>
     <tbody><tr><td class="c">1</td><td><div style="font-weight:600">${_esc(o.namaBarang)}</div><div style="margin-top:8px;color:#333">Nilai Project Rp. ${_invRp(o.kontrak)},00</div>${telahBlock}</td><td class="c">1</td><td class="c">LS</td><td class="r">Rp. ${_invRp(o.nominal)}</td><td class="r">Rp. ${_invRp(o.nominal)}</td></tr></tbody></table>
     <div class="tot">TOTAL&nbsp;&nbsp;<b>Rp. ${_invRp(o.nominal)}</b></div>
     <div class="terbilang"><b>TERBILANG:</b> ${_esc(o.terbilang)}</div>
     ${o.note?`<div style="margin-top:10px;font-size:12px"><b>NOTE:</b> <span style="white-space:pre-wrap">${_esc(o.note)}</span></div>`:''}
-    <div class="foot"><div><div style="font-weight:700;margin-bottom:3px">PEMBAYARAN DI TRANSFER KE:</div><div>NAMA BANK: BCA (BANK CENTRAL ASIA)</div><div>CABANG: TAMAN SEMANAN INDAH</div><div>NO DAN NAMA REKENING: 549-082-6868 A/N EDDY SANTOSO</div></div>
-      <div class="sign"><div>Jakarta, ${_esc(o.tglIndo)}</div><div>Hormat saya,</div><div class="sp">${o.ttd?`<img src="${o.ttd}" style="height:58px;object-fit:contain">`:''}</div><div style="font-weight:700;text-decoration:underline">EDDY SANTOSO</div></div></div>
+    <div class="foot"><div><div style="font-weight:700;margin-bottom:3px">PEMBAYARAN DI TRANSFER KE:</div><div>${_escBr(o.issuer.bayar)}</div></div>
+      <div class="sign"><div>Jakarta, ${_esc(o.tglIndo)}</div><div>Hormat saya,</div><div class="sp">${o.ttd?`<img src="${o.ttd}" style="height:58px;object-fit:contain">`:''}</div><div style="font-weight:700;text-decoration:underline">${_esc(String(o.issuer.nama).toUpperCase())}</div></div></div>
   </div></body></html>`;
 }
 function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -4274,7 +4306,7 @@ function genInvoice(projId){
     .map(x=>({label:(x.TERMIN||'Termin')+' '+tglIndo(x.TGL_BAYAR||x.JATUH_TEMPO||''), amt:Number(x.NOMINAL||0)}));
   const _custEl=document.getElementById('inv_cust'), _almEl=document.getElementById('inv_alamat');
   const cust=(_custEl?_custEl.value:'')||p.KLIEN||''; const custAlamat=(_almEl?_almEl.value:'');
-  const html=invHTML({logo:INVOICE_LOGO,ttd:INVOICE_TTD,klien:cust,alamat:custAlamat,telp:p.TELP_KLIEN,invNo,namaBarang,note,kontrak,nominal,telah,terbilang:(terbilang(nominal).toUpperCase()+' RUPIAH'),tglIndo:tglIndo(dateISO)});
+  const html=invHTML({logo:INVOICE_LOGO,ttd:INVOICE_TTD,issuer:getInvIssuer(),klien:cust,alamat:custAlamat,telp:p.TELP_KLIEN,invNo,namaBarang,note,kontrak,nominal,telah,terbilang:(terbilang(nominal).toUpperCase()+' RUPIAH'),tglIndo:tglIndo(dateISO)});
   const w=window.open('','_blank');
   if(!w){ showToast('Popup diblokir — izinkan popup untuk cetak invoice.','error'); return; }
   w.document.open(); w.document.write(html); w.document.close();
