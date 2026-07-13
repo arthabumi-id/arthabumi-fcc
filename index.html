@@ -5995,4 +5995,8 @@ applyTheme();setEyeIcon();
   el.addEventListener('touchend',function(){ if(!pulling||busy) return; pulling=false; if(dist*0.5>=TH){ busy=true; ind.classList.add('ptr-load'); ind.style.height='44px'; ind.style.opacity='1'; Promise.resolve(typeof syncAll==='function'?syncAll():null).catch(function(){}).then(function(){ setTimeout(function(){ ind.classList.remove('ptr-load'); ind.style.height='0'; ind.style.opacity='0'; busy=false; },250); }); } else { ind.style.height='0'; ind.style.opacity='0'; } dist=0; },{passive:true});
 })();
 let logoTimer;
-document.querySelector('.topbar-title').addEventListener('touchstart
+document.querySelector('.topbar-title').addEventListener('touchstart',()=>{logoTimer=setTimeout(()=>openDrawer('settings'),800);});
+document.querySelector('.topbar-title').addEventListener('touchend',()=>clearTimeout(logoTimer));
+document.querySelector('.topbar-title').addEventListener('click',()=>openDrawer('settings'));
+</script>
+</body>
