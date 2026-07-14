@@ -500,10 +500,11 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v33.4';
+const APP_VERSION = 'v33.5';
 // Tampilkan versi di halaman login (sebelum masuk) — berguna utk cek deploy tanpa login.
 try{ var _lv=document.getElementById('loginVer'); if(_lv) _lv.textContent=APP_VERSION; }catch(e){}
 const CHANGELOG = [
+  { v:'v33.5', d:'13 Jul 2026', t:'Chart Cashflow Project di Dashboard kini otomatis menampilkan 6 project paling aktif (status Jalan didahulukan, urut transaksi terbaru) — bukan lagi 6 project pertama yang itu-itu saja.' },
   { v:'v33.4', d:'13 Jul 2026', t:'Invoice "Telah diterima sebelumnya" kini juga memuat DP/pembayaran yang dicatat langsung sebagai transaksi (tanpa termin) — data ditarik dari server. Format baris: "Nama — diterima <tanggal>".' },
   { v:'v33.3', d:'13 Jul 2026', t:'Invoice dirapikan: rincian "Telah diterima sebelumnya" kini seksi sendiri di bawah tabel (jelas terbaca, dengan total), dan jarak isi tabel dilonggarkan agar tidak mepet.' },
   { v:'v33.2', d:'13 Jul 2026', t:'Identitas Invoice bisa diatur di Master: nama, telp, alamat, dan info rekening pembayaran yang tampil di invoice PDF — tidak lagi terkunci di kode.' },
@@ -1509,7 +1510,17 @@ function renderCharts() {
 
   // ── 3. Cashflow Project (top 6 by activity) ──────────
   const hasProjActivity = nama => (state.summary && state.summary.proj && state.summary.proj[nama]) || state.txns.some(t => t.PROJECT===nama);
-  const projWithTxn = state.projects.filter(p => hasProjActivity(p.NAMA)).slice(0,6);
+  // v33.5: chart Cashflow Project = 6 project PALING AKTIF (status Jalan didahulukan,
+  // lalu urut transaksi terbaru) — dulu ambil 6 pertama urutan master → tampil itu-itu saja.
+  const _lastAct={};
+  state.txns.forEach(t=>{ if(t.PROJECT){ const d=String(t.TANGGAL).slice(0,10); if(!_lastAct[t.PROJECT]||d>_lastAct[t.PROJECT]) _lastAct[t.PROJECT]=d; } });
+  const projWithTxn = state.projects.filter(p => hasProjActivity(p.NAMA))
+    .sort((a,b)=>{
+      const ja=a.STATUS==='Jalan'?1:0, jb=b.STATUS==='Jalan'?1:0;
+      if(ja!==jb) return jb-ja;
+      return String(_lastAct[b.NAMA]||'').localeCompare(String(_lastAct[a.NAMA]||''));
+    })
+    .slice(0,6);
   const projLabels = projWithTxn.map(p => p.NAMA.replace(/^PROJ\s*/i,'').slice(0,18));
   const projMasuk = projWithTxn.map(p => getProjCF(p.NAMA).masuk/1e6);
   const projKeluar = projWithTxn.map(p => getProjCF(p.NAMA).keluar/1e6);
@@ -1534,7 +1545,7 @@ function renderCharts() {
       <div style="font-size:10px;color:var(--text3);margin-top:8px">Ketuk untuk rincian per periode & drill-down kategori →</div>
     </div>` : ''}
     ${projWithTxn.length ? `<div class="card" style="margin-bottom:12px">
-      <div class="card-title">Cashflow Project</div>
+      <div class="card-title">Cashflow Project <span style="font-size:10px;font-weight:500;color:var(--text3)">· 6 paling aktif</span></div>
       <div style="position:relative;height:${Math.max(160, projWithTxn.length*44)}px"><canvas id="chartProj"></canvas></div>
     </div>` : ''}
   `;
