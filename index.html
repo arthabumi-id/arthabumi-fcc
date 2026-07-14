@@ -500,10 +500,11 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v33.3';
+const APP_VERSION = 'v33.4';
 // Tampilkan versi di halaman login (sebelum masuk) — berguna utk cek deploy tanpa login.
 try{ var _lv=document.getElementById('loginVer'); if(_lv) _lv.textContent=APP_VERSION; }catch(e){}
 const CHANGELOG = [
+  { v:'v33.4', d:'13 Jul 2026', t:'Invoice "Telah diterima sebelumnya" kini juga memuat DP/pembayaran yang dicatat langsung sebagai transaksi (tanpa termin) — data ditarik dari server. Format baris: "Nama — diterima <tanggal>".' },
   { v:'v33.3', d:'13 Jul 2026', t:'Invoice dirapikan: rincian "Telah diterima sebelumnya" kini seksi sendiri di bawah tabel (jelas terbaca, dengan total), dan jarak isi tabel dilonggarkan agar tidak mepet.' },
   { v:'v33.2', d:'13 Jul 2026', t:'Identitas Invoice bisa diatur di Master: nama, telp, alamat, dan info rekening pembayaran yang tampil di invoice PDF — tidak lagi terkunci di kode.' },
   { v:'v33.1', d:'13 Jul 2026', t:'Tombol Invoice langsung di tiap baris termin (halaman Piutang) — buat termin, langsung terbitkan invoice-nya tanpa lewat detail project. Builder terbuka dengan termin sudah terpilih.' },
@@ -4310,7 +4311,7 @@ function _invNo(p){
   return `${dd}${mm}${yy}/${(p.KODE||'XX').toUpperCase()}/${seq}`;
 }
 function invPreview(projId){ const p=state.projects.find(x=>x.ID===projId); if(!p) return; const el=document.getElementById('inv_no_prev'); if(el) el.textContent=_invNo(p); }
-function genInvoice(projId){
+async function genInvoice(projId){
   const p=state.projects.find(x=>x.ID===projId); if(!p) return;
   const tid=document.getElementById('inv_termin').value;
   const t=(state.piutang||[]).find(x=>x.ID===tid); if(!t){ showToast('Pilih termin','error'); return; }
@@ -4319,9 +4320,26 @@ function genInvoice(projId){
   const namaBarang=document.getElementById('inv_desc').value||'';
   const note=document.getElementById('inv_note').value||'';
   const invNo=_invNo(p);
-  const telah=(state.piutang||[]).filter(x=>x.PROJECT===p.NAMA && x.STATUS==='Lunas' && x.ID!==tid)
-    .sort((a,b)=>String(a.TGL_BAYAR||a.JATUH_TEMPO||'').localeCompare(String(b.TGL_BAYAR||b.JATUH_TEMPO||'')))
-    .map(x=>({label:(x.TERMIN||'Termin')+' '+tglIndo(x.TGL_BAYAR||x.JATUH_TEMPO||''), amt:Number(x.NOMINAL||0)}));
+  // v33.4: "Telah diterima" = termin Lunas + PEMASUKAN LANGSUNG project (DP yang dicatat
+  // sbg transaksi tanpa termin — kasus Wishnu). Txn hasil Tandai Lunas ber-tag [PIUTANG]
+  // di-skip biar tidak dobel. Format label: "Nama — diterima <tanggal>".
+  showToast('Menyiapkan invoice…','success');
+  let telahRaw=(state.piutang||[]).filter(x=>x.PROJECT===p.NAMA && x.STATUS==='Lunas' && x.ID!==tid)
+    .map(x=>({d:String(x.TGL_BAYAR||x.JATUH_TEMPO||'').slice(0,10), label:(x.TERMIN||'Termin'), amt:Number(x.NOMINAL||0)}));
+  if(API_URL){
+    try{
+      const r=await apiGet({action:'getTxns', project:p.NAMA});
+      if(Array.isArray(r)) r.filter(tx=>tx.JENIS==='Pemasukan'
+          && String(tx.NOTES||'').indexOf('[PIUTANG')<0
+          && (((state.kategori.find(k=>k.NAMA===tx.KATEGORI)||{}).KELOMPOK)==='PEMASUKAN'))
+        .forEach(tx=>telahRaw.push({d:String(tx.TANGGAL).slice(0,10), label:(tx.KATEGORI||'Pembayaran'), amt:Number(tx.NOMINAL||0)}));
+    }catch(e){}
+  }
+  // gabung baris ber-tanggal & label sama (mis. DP + baris koreksi PPh-nya)
+  const merged={};
+  telahRaw.forEach(x=>{ const k=x.d+'|'+x.label; if(merged[k]) merged[k].amt+=x.amt; else merged[k]=Object.assign({},x); });
+  const telah=Object.values(merged).sort((a,b)=>a.d.localeCompare(b.d))
+    .map(x=>({label:x.label+' — diterima '+tglIndo(x.d), amt:x.amt}));
   const _custEl=document.getElementById('inv_cust'), _almEl=document.getElementById('inv_alamat');
   const cust=(_custEl?_custEl.value:'')||p.KLIEN||''; const custAlamat=(_almEl?_almEl.value:'');
   const html=invHTML({logo:INVOICE_LOGO,ttd:INVOICE_TTD,issuer:getInvIssuer(),klien:cust,alamat:custAlamat,telp:p.TELP_KLIEN,invNo,namaBarang,note,kontrak,nominal,telah,terbilang:(terbilang(nominal).toUpperCase()+' RUPIAH'),tglIndo:tglIndo(dateISO)});
