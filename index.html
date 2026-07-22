@@ -500,10 +500,11 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v33.5';
+const APP_VERSION = 'v33.6';
 // Tampilkan versi di halaman login (sebelum masuk) — berguna utk cek deploy tanpa login.
 try{ var _lv=document.getElementById('loginVer'); if(_lv) _lv.textContent=APP_VERSION; }catch(e){}
 const CHANGELOG = [
+  { v:'v33.6', d:'22 Jul 2026', t:'Fix invoice PDF: warna hijau header tabel tidak hilang lagi saat Simpan PDF — warna kini dipaksa ikut tercetak apa pun setelan print browser.' },
   { v:'v33.5', d:'13 Jul 2026', t:'Chart Cashflow Project di Dashboard kini otomatis menampilkan 6 project paling aktif (status Jalan didahulukan, urut transaksi terbaru) — bukan lagi 6 project pertama yang itu-itu saja.' },
   { v:'v33.4', d:'13 Jul 2026', t:'Invoice "Telah diterima sebelumnya" kini juga memuat DP/pembayaran yang dicatat langsung sebagai transaksi (tanpa termin) — data ditarik dari server. Format baris: "Nama — diterima <tanggal>".' },
   { v:'v33.3', d:'13 Jul 2026', t:'Invoice dirapikan: rincian "Telah diterima sebelumnya" kini seksi sendiri di bawah tabel (jelas terbaca, dengan total), dan jarak isi tabel dilonggarkan agar tidak mepet.' },
@@ -4215,7 +4216,7 @@ function invHTML(o){
       </table>
     </div>`:'';
   return `<!doctype html><html><head><meta charset="utf-8"><title>Invoice ${_esc(o.invNo)}</title><style>
-    *{box-sizing:border-box;font-family:Arial,Helvetica,sans-serif}
+    *{box-sizing:border-box;font-family:Arial,Helvetica,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     body{margin:0;color:#111;background:#f3f3f3}
     .page{background:#fff;width:210mm;min-height:297mm;margin:12px auto;padding:17mm 15mm;box-shadow:0 2px 12px rgba(0,0,0,.15)}
     .top{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #16794f;padding-bottom:10px}
@@ -4720,11 +4721,23 @@ function openDrawer(mode, editId = null, preset = null) {
     `;
   } else if (mode === 'kat') {
     const k = editId ? state.kategori.find(x=>x.ID===editId) : null;
+    // Kelompok unik dari data — dinamis, tidak hardcoded.
+    const _kels=[...new Set(state.kategori.map(x=>x.KELOMPOK).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),'id'));
+    const _curKel=k?k.KELOMPOK:'';
     document.getElementById('drawerBody').innerHTML = `
       <div class="form-group"><label class="form-label">Nama Kategori</label><input class="form-input" id="fk_nama" value="${k?esc(k.NAMA):''}" placeholder="Material..."></div>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">Kelompok</label><select class="form-input" id="fk_kelompok"><option ${!k||k.KELOMPOK==='PEMASUKAN'?'selected':''}>PEMASUKAN</option><option ${k&&k.KELOMPOK==='PROJECT'?'selected':''}>PROJECT</option><option ${k&&k.KELOMPOK==='OPERASIONAL'?'selected':''}>OPERASIONAL</option><option ${k&&k.KELOMPOK==='PRIBADI'?'selected':''}>PRIBADI</option><option ${k&&k.KELOMPOK==='FINANCIAL'?'selected':''}>FINANCIAL</option></select></div>
+        <div class="form-group"><label class="form-label">Kelompok</label>
+          <select class="form-input" id="fk_kelompok" onchange="fkOnKelChange()">
+            ${_kels.map(g=>`<option ${g===_curKel?'selected':''}>${esc(g)}</option>`).join('')}
+            <option value="__NEW__">➕ Kelompok baru…</option>
+          </select>
+        </div>
         <div class="form-group"><label class="form-label">Tipe</label><select class="form-input" id="fk_tipe"><option ${!k||k.TIPE==='Pemasukan'?'selected':''}>Pemasukan</option><option ${k&&k.TIPE==='Pengeluaran'?'selected':''}>Pengeluaran</option></select></div>
+      </div>
+      <div class="form-group" id="fk_kel_new_wrap" style="display:none">
+        <label class="form-label" style="color:var(--amber)"><i class="ti ti-plus"></i> Nama kelompok baru</label>
+        <input class="form-input" id="fk_kel_new_name" placeholder="ketik nama kelompok… (huruf besar otomatis)">
       </div>
       <button class="btn-primary" onclick="saveDrawer()"><i class="ti ti-device-floppy"></i> Simpan</button>
       ${editId?`<button class="btn-secondary" onclick="deleteItem('kategori','${editId}','MASTER_KATEGORI');closeDrawer()">Hapus Kategori</button>`:''}
@@ -4834,8 +4847,13 @@ async function saveDrawer() {
     }
     saveLocal();renderMaster();renderDashboard();showToast(ccRenamed?('Kartu diubah ke "'+obj.NAMA+'" — semua riwayat ikut dipindah'):(eid?'Kartu diperbarui':'Kartu ditambahkan'),'success');
   } else if (mode === 'kat') {
-    const obj={ID:eid||uid(),NAMA:document.getElementById('fk_nama').value,KELOMPOK:document.getElementById('fk_kelompok').value,TIPE:document.getElementById('fk_tipe').value,CREATED_AT:now};
+    const _grpSel=document.getElementById('fk_kelompok');
+    const _kelompok=_grpSel.value==='__NEW__'
+      ? (document.getElementById('fk_kel_new_name').value.trim().toUpperCase()||'')
+      : _grpSel.value;
+    const obj={ID:eid||uid(),NAMA:document.getElementById('fk_nama').value,KELOMPOK:_kelompok,TIPE:document.getElementById('fk_tipe').value,CREATED_AT:now};
     if(!obj.NAMA){showToast('Nama kategori wajib diisi','error');return;}
+    if(!obj.KELOMPOK){showToast('Nama kelompok baru wajib diisi','error');return;}
     if(eid){const i=state.kategori.findIndex(x=>x.ID===eid);state.kategori[i]=obj;}else state.kategori.push(obj);
     if(API_URL)bgPost({action:eid?'updateRow':'addKat',data:eid?{sheet:'MASTER_KATEGORI',id:eid,updates:obj}:obj},(eid?'Edit ':'')+'Kategori '+obj.NAMA);
     saveLocal();renderMaster();showToast(eid?'Kategori diperbarui':'Kategori ditambahkan','success');
@@ -4995,6 +5013,10 @@ function editTxn(id){openDrawer('txn',id);}
 function editProj(id){openDrawer('proj',id);}
 function editBank(id){openDrawer('bank',id);}
 function editCC(id){openDrawer('cc',id);}
+function fkOnKelChange(){
+  const sel=document.getElementById('fk_kelompok'), wrap=document.getElementById('fk_kel_new_wrap');
+  if(sel&&wrap){ wrap.style.display=(sel.value==='__NEW__')?'block':'none'; if(sel.value==='__NEW__') document.getElementById('fk_kel_new_name').focus(); }
+}
 function editKat(id){openDrawer('kat',id);}
 function onPayCCChange(){
   const ccName=document.getElementById('pc_cc').value;
