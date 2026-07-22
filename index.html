@@ -428,6 +428,7 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
     <button onclick="goPage('kasbon')" style="display:flex;align-items:center;gap:11px;padding:11px 12px;border:none;background:transparent;color:var(--text);font-family:var(--font);font-size:15px;text-align:left;border-radius:9px;cursor:pointer;width:100%"><i class="ti ti-wallet" style="font-size:20px;color:var(--text2)"></i> Kasbon</button>
     <button onclick="goPage('piutang')" style="display:flex;align-items:center;gap:11px;padding:11px 12px;border:none;background:transparent;color:var(--text);font-family:var(--font);font-size:15px;text-align:left;border-radius:9px;cursor:pointer;width:100%"><i class="ti ti-cash" style="font-size:20px;color:var(--text2)"></i> Piutang</button>
     <button onclick="goPage('forecast')" style="display:flex;align-items:center;gap:11px;padding:11px 12px;border:none;background:transparent;color:var(--text);font-family:var(--font);font-size:15px;text-align:left;border-radius:9px;cursor:pointer;width:100%"><i class="ti ti-chart-line" style="font-size:20px;color:var(--text2)"></i> Forecast</button>
+    <button onclick="closeLainnyaMenu();openBungaHarian()" style="display:flex;align-items:center;gap:11px;padding:11px 12px;border:none;background:transparent;color:var(--text);font-family:var(--font);font-size:15px;text-align:left;border-radius:9px;cursor:pointer;width:100%"><i class="ti ti-percentage" style="font-size:20px;color:var(--text2)"></i> Bunga Harian</button>
     <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;font-weight:600;padding:8px 12px 3px;border-top:1px solid var(--border);margin-top:4px">Aset</div>
     <button onclick="goPage('forex')" style="display:flex;align-items:center;gap:11px;padding:11px 12px;border:none;background:transparent;color:var(--text);font-family:var(--font);font-size:15px;text-align:left;border-radius:9px;cursor:pointer;width:100%"><i class="ti ti-arrows-exchange" style="font-size:20px;color:var(--gold)"></i> Forex &amp; Kurs</button>
     <button onclick="goPage('invest')" style="display:flex;align-items:center;gap:11px;padding:11px 12px;border:none;background:transparent;color:var(--text);font-family:var(--font);font-size:15px;text-align:left;border-radius:9px;cursor:pointer;width:100%"><i class="ti ti-trending-up" style="font-size:20px;color:var(--gold)"></i> Investasi</button>
@@ -500,10 +501,11 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v33.6';
+const APP_VERSION = 'v34';
 // Tampilkan versi di halaman login (sebelum masuk) — berguna utk cek deploy tanpa login.
 try{ var _lv=document.getElementById('loginVer'); if(_lv) _lv.textContent=APP_VERSION; }catch(e){}
 const CHANGELOG = [
+  { v:'v34', d:'22 Jul 2026', t:'Input massal Bunga Harian (menu Lainnya): tempel angka bunga per baris — tanggal berjalan otomatis, pajak 20% dihitung otomatis (bisa di-override per baris), semua terkirim sekali jalan. Untuk rekening seperti Seabank yang berbunga tiap hari.' },
   { v:'v33.6', d:'22 Jul 2026', t:'Fix invoice PDF: warna hijau header tabel tidak hilang lagi saat Simpan PDF — warna kini dipaksa ikut tercetak apa pun setelan print browser.' },
   { v:'v33.5', d:'13 Jul 2026', t:'Chart Cashflow Project di Dashboard kini otomatis menampilkan 6 project paling aktif (status Jalan didahulukan, urut transaksi terbaru) — bukan lagi 6 project pertama yang itu-itu saja.' },
   { v:'v33.4', d:'13 Jul 2026', t:'Invoice "Telah diterima sebelumnya" kini juga memuat DP/pembayaran yang dicatat langsung sebagai transaksi (tanpa termin) — data ditarik dari server. Format baris: "Nama — diterima <tanggal>".' },
@@ -2005,6 +2007,75 @@ async function lockCCBillUI(){
     if(paidIds.length) bgPost({action:'markPaidBatch',data:{TXN_IDS:paidIds, USER:state.user}},'Tandai lunas '+paidIds.length+' baris tagihan');
     const res=await apiPost({action:'lockCCBill',data:{CC:name,NOMINAL:finalAmt,JATUH_TEMPO:finalDue,PERIODE_DARI:finalFrom,PERIODE_SAMPAI:to,USER:state.user}}); if(res&&!res.error) await syncAll();
   }
+}
+// ── v34: INPUT MASSAL BUNGA HARIAN BANK (Seabank dkk) ─────────────────────
+// Tempel angka bunga per baris (baris 1 = tanggal mulai, baris berikut +1 hari).
+// Format baris: "bunga" ATAU "bunga pajak" (pemisah spasi/tab/;). Kalau kolom pajak kosong
+// dan opsi pajak-otomatis aktif → pajak = 20% bunga. Simpan sekali via addTxnBatch.
+function _bhParseNum(s){ s=String(s||'').trim(); if(!s) return 0; s=s.replace(/\./g,'').replace(',','.'); const n=parseFloat(s); return isNaN(n)?0:Math.round(n); }
+function _bhAddDays(iso,n){ const d=new Date(iso+'T00:00:00'); d.setDate(d.getDate()+n); return _ymd(d.getFullYear(),d.getMonth()+1,d.getDate()); }
+function bhParse(){
+  const start=(document.getElementById('bh_start')||{value:''}).value;
+  const auto=(document.getElementById('bh_auto')||{checked:true}).checked;
+  const lines=String((document.getElementById('bh_text')||{value:''}).value).split('\n').map(l=>l.trim()).filter(l=>l);
+  const rows=[];
+  lines.forEach((l,i)=>{
+    const parts=l.split(/[\s;]+/).filter(x=>x);
+    const bunga=_bhParseNum(parts[0]);
+    let pajak=parts.length>1?_bhParseNum(parts[1]):(auto?Math.round(bunga*0.2):0);
+    if(bunga>0) rows.push({tgl:start?_bhAddDays(start,i):'', bunga, pajak});
+  });
+  return rows;
+}
+function bhPreview(){
+  const el=document.getElementById('bh_prev'); if(!el) return;
+  const rows=bhParse();
+  if(!rows.length){ el.innerHTML='<span style="color:var(--text3)">Tempel angka bunga per baris untuk preview…</span>'; return; }
+  const tb=rows.reduce((s,r)=>s+r.bunga,0), tp=rows.reduce((s,r)=>s+r.pajak,0);
+  el.innerHTML=`${rows.length} hari · ${rows[0].tgl||'?'} s/d ${rows[rows.length-1].tgl||'?'}<br>`+
+    `Bunga <b class="num" style="color:var(--green)">${fmt(tb)}</b> − Pajak <b class="num" style="color:var(--red)">${fmt(tp)}</b> = Netto <b class="num">${fmt(tb-tp)}</b>`;
+}
+function openBungaHarian(){
+  const banks=state.banks.map(b=>`<option ${/seabank/i.test(b.NAMA)&&/eddy/i.test(b.NAMA)?'selected':''}>${esc(b.NAMA)}</option>`).join('');
+  const awalBulan=today().slice(0,8)+'01';
+  document.getElementById('drawerTitle').textContent='Bunga Harian Bank';
+  document.getElementById('drawerBody').innerHTML=`
+    <div class="form-group"><label class="form-label">Rekening</label><select class="form-input" id="bh_rek">${banks}</select></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Tanggal baris pertama</label><input class="form-input" type="date" id="bh_start" value="${awalBulan}" onchange="bhPreview()"></div>
+      <div class="form-group"><label class="form-label" style="display:flex;align-items:center;gap:6px;margin-top:22px"><input type="checkbox" id="bh_auto" checked onchange="bhPreview()" style="width:16px;height:16px;accent-color:var(--green)"> Pajak otomatis 20%</label></div>
+    </div>
+    <div class="form-group"><label class="form-label">Angka bunga per hari (1 baris = 1 hari)</label>
+      <textarea class="form-input" id="bh_text" rows="8" style="resize:vertical;font-family:monospace" placeholder="contoh:\n1.234\n1.198\n1.305 261\n(baris 3: bunga 1.305, pajak 261 — kolom 2 opsional)" oninput="bhPreview()"></textarea></div>
+    <div id="bh_prev" class="card" style="padding:9px 11px;margin:0 0 12px;font-size:12px;line-height:1.7"><span style="color:var(--text3)">Tempel angka bunga per baris untuk preview…</span></div>
+    <button class="btn-primary" onclick="saveBungaHarian()"><i class="ti ti-device-floppy"></i> Simpan Semua</button>
+    <div class="settings-sub" style="margin-top:8px">Tiap hari dicatat 2 transaksi: Pemasukan "Bunga Bank" & Pengeluaran "Pajak Bunga" (kelompok FINANCIAL — tidak mengganggu laba project maupun tagihan klien). Dikirim sekali jalan ke server.</div>`;
+  drawerMode='bungaharian'; drawerEditId=null;
+  document.getElementById('drawerBg').classList.add('open');
+}
+async function saveBungaHarian(){
+  const rek=(document.getElementById('bh_rek')||{value:''}).value;
+  const rows=bhParse();
+  if(!rek){ showToast('Pilih rekening','error'); return; }
+  if(!rows.length||!rows[0].tgl){ showToast('Isi tanggal mulai & minimal 1 baris bunga','error'); return; }
+  if(!API_URL){ showToast('Butuh online — input massal dikirim ke server','error'); return; }
+  const tb=rows.reduce((s,r)=>s+r.bunga,0), tp=rows.reduce((s,r)=>s+r.pajak,0);
+  if(!confirm('Simpan '+rows.length+' hari bunga ke '+rek+'?\nBunga '+fmt(tb)+' − Pajak '+fmt(tp)+' = Netto '+fmt(tb-tp)))return;
+  // kategori self-provision (kelompok FINANCIAL)
+  const newKats=[];
+  if(!state.kategori.find(k=>k.NAMA==='Bunga Bank')) newKats.push({NAMA:'Bunga Bank',KELOMPOK:'FINANCIAL',TIPE:'Pemasukan'});
+  if(tp>0 && !state.kategori.find(k=>k.NAMA==='Pajak Bunga')) newKats.push({NAMA:'Pajak Bunga',KELOMPOK:'FINANCIAL',TIPE:'Pengeluaran'});
+  const txns=[];
+  rows.forEach(r=>{
+    txns.push({TANGGAL:r.tgl,JENIS:'Pemasukan',PROJECT:'',REKENING:rek,KATEGORI:'Bunga Bank',NOMINAL:r.bunga,NOTES:'Bunga harian '+rek});
+    if(r.pajak>0) txns.push({TANGGAL:r.tgl,JENIS:'Pengeluaran',PROJECT:'',REKENING:rek,KATEGORI:'Pajak Bunga',NOMINAL:r.pajak,NOTES:'Pajak bunga harian '+rek});
+  });
+  closeDrawer();
+  showToast('Mengirim '+txns.length+' transaksi…','success');
+  const res=await apiPost({action:'addTxnBatch',data:{txns,newKats,newProjs:[],USER:state.user}});
+  if(res&&res.error){ showToast('Gagal: '+res.error,'error'); return; }
+  await syncAll();
+  showToast(rows.length+' hari bunga tercatat ✓ Netto '+fmt(tb-tp),'success');
 }
 // ── v33: REKAP PPH DIPOTONG KLIEN ─────────────────────────────────────────
 // Data ditarik dari server (getTxns since/until) → setahun penuh, tak terbatas 120 hari.

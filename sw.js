@@ -1,4 +1,4 @@
-const CACHE = 'fcc-arthabumi-v72';
+const CACHE = 'fcc-arthabumi-v73';
 const ASSETS = ['./index.html', './manifest.json', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
