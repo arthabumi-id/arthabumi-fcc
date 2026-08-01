@@ -2049,7 +2049,7 @@ function openBungaHarian(){
       <textarea class="form-input" id="bh_text" rows="8" style="resize:vertical;font-family:monospace" placeholder="contoh:\n1.234\n1.198\n1.305 261\n(baris 3: bunga 1.305, pajak 261 — kolom 2 opsional)" oninput="bhPreview()"></textarea></div>
     <div id="bh_prev" class="card" style="padding:9px 11px;margin:0 0 12px;font-size:12px;line-height:1.7"><span style="color:var(--text3)">Tempel angka bunga per baris untuk preview…</span></div>
     <button class="btn-primary" onclick="saveBungaHarian()"><i class="ti ti-device-floppy"></i> Simpan Semua</button>
-    <div class="settings-sub" style="margin-top:8px">Tiap hari dicatat 2 transaksi: Pemasukan "Bunga Bank" & Pengeluaran "Pajak Bunga" (kelompok FINANCIAL — tidak mengganggu laba project maupun tagihan klien). Dikirim sekali jalan ke server.</div>`;
+    <div class="settings-sub" style="margin-top:8px">Tiap hari dicatat 2 transaksi: Pemasukan "Bunga" & Pengeluaran "Pajak" (kelompok FINANCIAL — tidak mengganggu laba project maupun tagihan klien). Dikirim sekali jalan ke server.</div>`;
   drawerMode='bungaharian'; drawerEditId=null;
   document.getElementById('drawerBg').classList.add('open');
 }
@@ -2063,12 +2063,12 @@ async function saveBungaHarian(){
   if(!confirm('Simpan '+rows.length+' hari bunga ke '+rek+'?\nBunga '+fmt(tb)+' − Pajak '+fmt(tp)+' = Netto '+fmt(tb-tp)))return;
   // kategori self-provision (kelompok FINANCIAL)
   const newKats=[];
-  if(!state.kategori.find(k=>k.NAMA==='Bunga Bank')) newKats.push({NAMA:'Bunga Bank',KELOMPOK:'FINANCIAL',TIPE:'Pemasukan'});
-  if(tp>0 && !state.kategori.find(k=>k.NAMA==='Pajak Bunga')) newKats.push({NAMA:'Pajak Bunga',KELOMPOK:'FINANCIAL',TIPE:'Pengeluaran'});
+  if(!state.kategori.find(k=>k.NAMA==='Bunga')) newKats.push({NAMA:'Bunga',KELOMPOK:'FINANCIAL',TIPE:'Pemasukan'});
+  if(tp>0 && !state.kategori.find(k=>k.NAMA==='Pajak')) newKats.push({NAMA:'Pajak',KELOMPOK:'FINANCIAL',TIPE:'Pengeluaran'});
   const txns=[];
   rows.forEach(r=>{
-    txns.push({TANGGAL:r.tgl,JENIS:'Pemasukan',PROJECT:'',REKENING:rek,KATEGORI:'Bunga Bank',NOMINAL:r.bunga,NOTES:'Bunga harian '+rek});
-    if(r.pajak>0) txns.push({TANGGAL:r.tgl,JENIS:'Pengeluaran',PROJECT:'',REKENING:rek,KATEGORI:'Pajak Bunga',NOMINAL:r.pajak,NOTES:'Pajak bunga harian '+rek});
+    txns.push({TANGGAL:r.tgl,JENIS:'Pemasukan',PROJECT:'',REKENING:rek,KATEGORI:'Bunga',NOMINAL:r.bunga,NOTES:'Bunga harian '+rek});
+    if(r.pajak>0) txns.push({TANGGAL:r.tgl,JENIS:'Pengeluaran',PROJECT:'',REKENING:rek,KATEGORI:'Pajak',NOMINAL:r.pajak,NOTES:'Pajak bunga harian '+rek});
   });
   closeDrawer();
   showToast('Mengirim '+txns.length+' transaksi…','success');
