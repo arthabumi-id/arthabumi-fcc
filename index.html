@@ -501,10 +501,11 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v34';
+const APP_VERSION = 'v35';
 // Tampilkan versi di halaman login (sebelum masuk) — berguna utk cek deploy tanpa login.
 try{ var _lv=document.getElementById('loginVer'); if(_lv) _lv.textContent=APP_VERSION; }catch(e){}
 const CHANGELOG = [
+  { v:'v35', d:'1 Agu 2026', t:'Pengaman kasbon & baris sistem. (1) FIX BUG: mengedit baris Kasbon/Transfer/Reserve lewat menu Transaksi dulu menimpa TIPE_LOG-nya jadi Pemasukan/Pengeluaran — akibatnya baris itu ikut terhitung ke laba. Sekarang TIPE_LOG sistem dipertahankan. (2) Baris sistem kini terkunci di form Transaksi dengan penjelasan menu asalnya; ada tombol Buka Kunci bila memang perlu. (3) Halaman Kasbon: badge Lunas / Lebih bayar, hitungan orang yang lebih bayar, dan tombol Cek Konsistensi Kasbon untuk memeriksa kecocokan catatan kasbon dengan transaksinya. (4) Kategori bunga & pajak SeaBank diseragamkan kembali jadi "Bunga" dan "Pajak".' },
   { v:'v34', d:'22 Jul 2026', t:'Input massal Bunga Harian (menu Lainnya): tempel angka bunga per baris — tanggal berjalan otomatis, pajak 20% dihitung otomatis (bisa di-override per baris), semua terkirim sekali jalan. Untuk rekening seperti Seabank yang berbunga tiap hari.' },
   { v:'v33.6', d:'22 Jul 2026', t:'Fix invoice PDF: warna hijau header tabel tidak hilang lagi saat Simpan PDF — warna kini dipaksa ikut tercetak apa pun setelan print browser.' },
   { v:'v33.5', d:'13 Jul 2026', t:'Chart Cashflow Project di Dashboard kini otomatis menampilkan 6 project paling aktif (status Jalan didahulukan, urut transaksi terbaru) — bukan lagi 6 project pertama yang itu-itu saja.' },
@@ -3521,8 +3522,9 @@ function renderKasbon(){
   let html = `<div class="card" style="margin-bottom:12px;background:var(--hero-amber-bg);border:1px solid var(--hero-amber-bd)">
       <div class="metric-label">Total Kasbon Beredar (piutang)</div>
       <div class="metric-value" style="font-size:24px;color:${totalOut>0?'var(--amber)':'var(--green)'}">${fmt(totalOut)}</div>
-      <div class="metric-sub">${names.length} karyawan</div>
-    </div>`;
+      <div class="metric-sub">${names.length} karyawan${(function(){const bad=names.filter(n=>agg[n].saldo<0).length;return bad?' \u00b7 <span style="color:var(--red)">'+bad+' lebih bayar</span>':'';})()}</div>
+    </div>
+    <button class="btn-secondary" style="margin-bottom:12px" onclick="cekKonsistensiKasbon()"><i class="ti ti-shield-check"></i> Cek Konsistensi Kasbon</button>`;
   if (!names.length) { document.getElementById('kasbonList').innerHTML = html + '<div class="empty">Belum ada kasbon. Tekan "Catat Kasbon".</div>'; return; }
   html += names.map(nm=>{
     const a = agg[nm];
@@ -3532,13 +3534,50 @@ function renderKasbon(){
         <div style="font-size:10px;color:var(--text3);margin-top:2px">pinjam ${fmtS(a.pinjam)} · kembali ${fmtS(a.kembali)} · ${a.last||'—'}</div>
       </div>
       <div style="text-align:right;flex-shrink:0">
-        <div style="font-size:9px;color:var(--text3);text-transform:uppercase">Sisa kasbon</div>
+        <div style="font-size:9px;color:var(--text3);text-transform:uppercase">${a.saldo===0?'<span style="color:var(--green)">Lunas</span>':a.saldo<0?'<span style="color:var(--red)">Lebih bayar</span>':'Sisa kasbon'}</div>
         <div style="font-size:15px;font-weight:700;color:${a.saldo>0?'var(--amber)':a.saldo<0?'var(--red)':'var(--green)'}">${fmt(a.saldo)}</div>
       </div>
       <i class="ti ti-chevron-right" style="color:var(--text3);flex-shrink:0"></i>
     </div>`;
   }).join('');
   document.getElementById('kasbonList').innerHTML = html;
+}
+// v75: pemeriksaan manual kecocokan KASBON <-> TRANSAKSI. Hanya menampilkan, tidak memperbaiki.
+function cekKonsistensiKasbon(){
+  const masalah=[], txByRef={};
+  (state.txns||[]).forEach(function(x){
+    const m=/\[KASBON (KB\w+)\]/.exec(String(x.NOTES||''));
+    if(m){ (txByRef[m[1]]=txByRef[m[1]]||[]).push(x); }
+  });
+  (state.kasbon||[]).forEach(function(k){
+    const xs=txByRef[k.REF_ID]||[];
+    const lbl=(k.KARYAWAN||'?')+' \u00b7 '+k.JENIS+' '+fmt(k.NOMINAL)+' \u00b7 '+String(k.TANGGAL).slice(0,10);
+    if(!k.REKENING){ if(xs.length) masalah.push(lbl+': tanpa rekening tapi punya '+xs.length+' transaksi'); return; }
+    if(xs.length!==1){ masalah.push(lbl+': jumlah transaksi '+xs.length+' (seharusnya 1)'); return; }
+    const x=xs[0];
+    const ek=(k.JENIS==='Pinjam')?'Kasbon Keluar':'Kasbon Masuk';
+    const ej=(k.JENIS==='Pinjam')?'Pengeluaran':'Pemasukan';
+    if(String(x.KATEGORI)!==ek) masalah.push(lbl+': kategori "'+x.KATEGORI+'" seharusnya "'+ek+'"');
+    if(String(x.JENIS)!==ej) masalah.push(lbl+': jenis "'+x.JENIS+'" seharusnya "'+ej+'"');
+    if(String(x.TIPE_LOG)!=='Kasbon') masalah.push(lbl+': TIPE_LOG "'+x.TIPE_LOG+'" seharusnya "Kasbon" \u2014 baris ini bocor terhitung ke laba');
+    if(Number(x.NOMINAL)!==Number(k.NOMINAL)) masalah.push(lbl+': nominal transaksi '+fmt(x.NOMINAL)+' berbeda');
+    if(String(x.REKENING)!==String(k.REKENING)) masalah.push(lbl+': rekening "'+x.REKENING+'" vs "'+k.REKENING+'"');
+    if(String(x.TANGGAL).slice(0,10)!==String(k.TANGGAL).slice(0,10)) masalah.push(lbl+': tanggal transaksi '+String(x.TANGGAL).slice(0,10)+' berbeda');
+  });
+  Object.keys(txByRef).forEach(function(ref){
+    if(!(state.kasbon||[]).some(function(k){return k.REF_ID===ref;})) masalah.push('Transaksi ber-ref '+ref+' tidak punya catatan kasbon');
+  });
+  const agg=kasbonAgg();
+  Object.keys(agg).forEach(function(nm){
+    if(agg[nm].saldo<0) masalah.push(nm+': saldo minus '+fmt(agg[nm].saldo)+' (kembali melebihi pinjam)');
+  });
+  document.getElementById('drawerTitle').textContent='Cek Konsistensi Kasbon';
+  document.getElementById('drawerBody').innerHTML = masalah.length
+    ? '<div class="card" style="padding:10px 12px;margin-bottom:12px;background:var(--hero-amber-bg);border:1px solid var(--hero-amber-bd)"><b>'+masalah.length+' hal perlu dicek</b><div style="font-size:11px;color:var(--text3);margin-top:4px">Tidak ada yang diperbaiki otomatis \u2014 putuskan sendiri.</div></div>'
+      + masalah.map(function(m){return '<div class="card" style="padding:9px 11px;margin-bottom:6px;font-size:12px;line-height:1.5">'+esc(m)+'</div>';}).join('')
+    : '<div class="card" style="padding:16px;text-align:center;color:var(--green);font-size:13px"><i class="ti ti-circle-check" style="font-size:30px"></i><div style="margin-top:6px">Semua '+(state.kasbon||[]).length+' catatan kasbon cocok dengan transaksinya.</div></div>';
+  drawerMode='kbcheck'; drawerEditId=null;
+  document.getElementById('drawerBg').classList.add('open');
 }
 function openKasbon(prefName){
   const names = kasbonEmployees();
@@ -4714,6 +4753,41 @@ function toggleLainnyaMenu(){ const m=document.getElementById('lainnyaMenu'),bg=
 function closeLainnyaMenu(){ const m=document.getElementById('lainnyaMenu'),bg=document.getElementById('lainnyaBg'); if(m) m.style.display='none'; if(bg) bg.style.display='none'; }
 function addTxnType(j){ closeFabMenu(); openDrawer('txn', null, j); }
 
+// ── v75: PENGAMAN BARIS SISTEM ────────────────────────────────────────────
+// Baris ber-TIPE_LOG selain Pemasukan/Pengeluaran punya pasangan di sheet lain
+// (KASBON, TRANSFER_LOG, RESERVE_LOG, CICILAN). Mengeditnya dari drawer Transaksi
+// hanya mengubah satu sisi → data jadi tidak cocok.
+const SYS_TXN_MENU = {'Kasbon':'menu Kasbon','Transfer':'menu Transfer','Reserve':'menu Reserve CC','Saldo Awal':'Master (saldo awal rekening)'};
+const SYS_TXN_FIELDS = ['f_tgl','f_jenis','f_proj','f_rek','f_kat_grp','f_kat_sel','f_nominal'];
+function sysTxnInfo(t){
+  if(!t||!t.TIPE_LOG) return null;
+  const L=String(t.TIPE_LOG);
+  if(L==='Pemasukan'||L==='Pengeluaran') return null;
+  return {log:L, menu:(SYS_TXN_MENU[L] || (L.indexOf('Cicilan')===0 ? 'menu Cicilan' : 'menu asalnya'))};
+}
+function setSysTxnFields(disabled){
+  SYS_TXN_FIELDS.forEach(function(id){
+    const el=document.getElementById(id);
+    if(el){ el.disabled=disabled; el.style.opacity=disabled?'.55':''; }
+  });
+}
+function lockSystemTxn(t){
+  const info=sysTxnInfo(t); if(!info) return;
+  setSysTxnFields(true);
+  const body=document.getElementById('drawerBody'); if(!body) return;
+  const warn=document.createElement('div');
+  warn.className='card';
+  warn.style.cssText='margin-bottom:12px;padding:10px 12px;background:var(--hero-amber-bg);border:1px solid var(--hero-amber-bd);font-size:12px;line-height:1.6';
+  warn.innerHTML='<b>Baris sistem \u2014 '+esc(info.log)+'</b><br>Baris ini berpasangan dengan catatan di '+esc(info.menu)+'. Ubah dari sana supaya keduanya tetap cocok. Kolom Notes tetap bisa diedit.'
+    +'<br><button class="btn-secondary" style="margin-top:8px;color:var(--red)" onclick="unlockSystemTxn()"><i class="ti ti-lock-open"></i> Buka kunci</button>';
+  body.insertBefore(warn, body.firstChild);
+}
+function unlockSystemTxn(){
+  if(!confirm('Membuka kunci berarti perubahan di sini TIDAK ikut memperbarui catatan Kasbon/Transfer/Reserve pasangannya.\n\nData bisa jadi tidak cocok satu sama lain. Lanjutkan?')) return;
+  setSysTxnFields(false);
+  showToast('Kunci dibuka \u2014 pastikan Anda perbaiki pasangannya juga','error');
+}
+// ──────────────────────────────────────────────────────────────────────────
 function openDrawer(mode, editId = null, preset = null) {
   drawerMode = mode; drawerEditId = editId;
   closeFabMenu();
@@ -4746,6 +4820,7 @@ function openDrawer(mode, editId = null, preset = null) {
     `;
     const _pg = t ? ((state.kategori.find(k=>k.NAMA===t.KATEGORI)||{}).KELOMPOK||null) : null;
     fillKatGroup(_pg, t?t.KATEGORI:null);
+    lockSystemTxn(t);
   } else if (mode === 'proj') {
     const t = editId ? state.projects.find(x=>x.ID===editId) : null;
     document.getElementById('drawerBody').innerHTML = `
@@ -4886,7 +4961,12 @@ async function saveDrawer() {
       if(!confirm('Kategori "'+kat+'" termasuk kelompok PROJECT, tapi Project belum dipilih.\n\nSimpan tanpa project?'))return;
     }
     if(newKatObj){state.kategori.push(newKatObj);if(API_URL)bgPost({action:'addKat',data:newKatObj},'Kategori '+newKatObj.NAMA);showToast('Kategori baru "'+newKatObj.NAMA+'" ditambahkan','success');}
-    const obj={ID:eid||uid(),TANGGAL:tgl,JENIS:jenis,PROJECT:proj,REKENING:rek,KATEGORI:kat,NOMINAL:nominal,NOTES:notes,TIPE_LOG:jenis,CREATED_BY:state.user,CREATED_AT:now};
+    // v75 FIX: JANGAN timpa TIPE_LOG sistem (Kasbon/Transfer/Reserve/Cicilan-*/Saldo Awal).
+    // Bug lama: tiap edit baris sistem lewat drawer ini menimpanya jadi Pemasukan/Pengeluaran,
+    // sehingga baris kasbon/transfer ikut terhitung ke laba. Penyebab kerusakan data Ajis & Tego.
+    const _prevT = eid ? state.txns.find(x=>x.ID===eid) : null;
+    const _sysLog = (_prevT && _prevT.TIPE_LOG && _prevT.TIPE_LOG!=='Pemasukan' && _prevT.TIPE_LOG!=='Pengeluaran') ? _prevT.TIPE_LOG : null;
+    const obj={ID:eid||uid(),TANGGAL:tgl,JENIS:jenis,PROJECT:proj,REKENING:rek,KATEGORI:kat,NOMINAL:nominal,NOTES:notes,TIPE_LOG:_sysLog||jenis,CREATED_BY:state.user,CREATED_AT:now};
     let oldT=null;
     if(eid){const i=state.txns.findIndex(x=>x.ID===eid);if(i>=0){oldT=state.txns[i];state.txns[i]=obj;}else state.txns.unshift(obj);}else state.txns.unshift(obj);
     if(oldT)applySummaryDelta(oldT,-1); applySummaryDelta(obj,1);
