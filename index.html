@@ -505,7 +505,7 @@ const APP_VERSION = 'v35';
 // Tampilkan versi di halaman login (sebelum masuk) — berguna utk cek deploy tanpa login.
 try{ var _lv=document.getElementById('loginVer'); if(_lv) _lv.textContent=APP_VERSION; }catch(e){}
 const CHANGELOG = [
-  { v:'v35', d:'1 Agu 2026', t:'Pengaman kasbon & baris sistem. (1) FIX BUG: mengedit baris Kasbon/Transfer/Reserve lewat menu Transaksi dulu menimpa TIPE_LOG-nya jadi Pemasukan/Pengeluaran — akibatnya baris itu ikut terhitung ke laba. Sekarang TIPE_LOG sistem dipertahankan. (2) Baris sistem kini terkunci di form Transaksi dengan penjelasan menu asalnya; ada tombol Buka Kunci bila memang perlu. (3) Halaman Kasbon: badge Lunas / Lebih bayar, hitungan orang yang lebih bayar, dan tombol Cek Konsistensi Kasbon untuk memeriksa kecocokan catatan kasbon dengan transaksinya. (4) Kategori bunga & pajak SeaBank diseragamkan kembali jadi "Bunga" dan "Pajak".' },
+  { v:'v35', d:'1 Agu 2026', t:'Pengaman kasbon & baris sistem. (1) FIX BUG: mengedit baris Kasbon/Transfer/Reserve lewat menu Transaksi dulu menimpa TIPE_LOG-nya jadi Pemasukan/Pengeluaran — akibatnya baris itu ikut terhitung ke laba. Sekarang TIPE_LOG sistem dipertahankan. (2) Baris sistem kini terkunci di form Transaksi dengan penjelasan menu asalnya; ada tombol Buka Kunci bila memang perlu. (3) Halaman Kasbon: badge Lunas / Lebih bayar, hitungan orang yang lebih bayar, dan tombol Cek Konsistensi Kasbon untuk memeriksa kecocokan catatan kasbon dengan transaksinya. (4) Kelebihan bayar kasbon: kalau yang dikembalikan melebihi sisa, app menawarkan mencatat kelebihannya sebagai pendapatan (kategori "Pembulatan Kasbon") supaya kasbon jadi lunas — bukan bikin saldo minus. (5) Kategori bunga & pajak SeaBank diseragamkan kembali jadi "Bunga" dan "Pajak".' },
   { v:'v34', d:'22 Jul 2026', t:'Input massal Bunga Harian (menu Lainnya): tempel angka bunga per baris — tanggal berjalan otomatis, pajak 20% dihitung otomatis (bisa di-override per baris), semua terkirim sekali jalan. Untuk rekening seperti Seabank yang berbunga tiap hari.' },
   { v:'v33.6', d:'22 Jul 2026', t:'Fix invoice PDF: warna hijau header tabel tidak hilang lagi saat Simpan PDF — warna kini dipaksa ikut tercetak apa pun setelan print browser.' },
   { v:'v33.5', d:'13 Jul 2026', t:'Chart Cashflow Project di Dashboard kini otomatis menampilkan 6 project paling aktif (status Jalan didahulukan, urut transaksi terbaru) — bukan lagi 6 project pertama yang itu-itu saja.' },
@@ -3619,12 +3619,24 @@ function saveKasbon(){
   const jenis=document.getElementById('kb_jenis').value;
   let metode=document.getElementById('kb_metode').value;
   if(jenis==='Pinjam') metode='Tunai';
-  const nominal=unfmtNum(document.getElementById('kb_nominal').value);
+  let nominal=unfmtNum(document.getElementById('kb_nominal').value);
   const tgl=document.getElementById('kb_tgl').value;
   const notes=document.getElementById('kb_notes').value;
   const rek=document.getElementById('kb_rek').value;
   if(!nama||!nominal||!tgl){showToast('Nama, nominal, tanggal wajib diisi','error');return;}
   if(!rek){showToast('Pilih rekening','error');return;}
+  // v35: kelebihan bayar kasbon. Kalau yang dikembalikan melebihi sisa, kelebihannya BUKAN
+  // pengurang piutang (piutangnya sudah lunas) melainkan pendapatan. Kalau tetap dicatat
+  // sebagai Kasbon Masuk, saldo orang itu jadi minus terus dan peringatan jadi tumpul.
+  let _lebihKasbon = 0;
+  if(jenis==='Kembali'){
+    const _sisa = (kasbonAgg()[nama]||{saldo:0}).saldo;
+    if(_sisa > 0 && nominal > _sisa){
+      const _l = nominal - _sisa;
+      const _ok = confirm('Sisa kasbon '+nama+' tinggal '+fmt(_sisa)+', tapi Anda catat '+fmt(nominal)+'.\n\nKelebihan '+fmt(_l)+' mau diapakan?\n\nOK  = anggap pendapatan (kategori "Pembulatan Kasbon"), kasbon jadi LUNAS\nBatal = catat penuh sebagai kasbon (sisa jadi minus)');
+      if(_ok){ _lebihKasbon = _l; nominal = _sisa; }
+    }
+  }
   // v29.4: optimistic (seperti Transaksi) — UI langsung, kirim di latar, tanpa syncAll penuh.
   const now=new Date().toISOString();
   const ref='KB'+Date.now(), id='ID'+Date.now(), txnId=id+'K';
@@ -3634,8 +3646,23 @@ function saveKasbon(){
     state.txns.unshift(ktxn); applySummaryDelta(ktxn,1);
   }
   if(API_URL)bgPost({action:'addKasbon',data:{ID:id,REF_ID:ref,TXN_ID:txnId,TANGGAL:tgl,KARYAWAN:nama,JENIS:jenis,NOMINAL:nominal,METODE:metode,REKENING:rek,NOTES:notes,USER:state.user}},'Kasbon '+nama);
+  // v35: baris kedua untuk kelebihan bayar — pendapatan biasa, TIPE_LOG Pemasukan (ikut laba),
+  // terpisah dari catatan kasbon supaya saldo kasbon tetap bersih.
+  if(_lebihKasbon > 0){
+    const KAT_LEBIH='Pembulatan Kasbon';
+    if(!state.kategori.find(k=>k.NAMA===KAT_LEBIH)){
+      const nk={ID:uid(),NAMA:KAT_LEBIH,KELOMPOK:'FINANCIAL',TIPE:'Pemasukan',CREATED_AT:now};
+      state.kategori.push(nk);
+      if(API_URL)bgPost({action:'addKat',data:nk},'Kategori '+KAT_LEBIH);
+    }
+    const xtra={ID:id+'X',TANGGAL:tgl,JENIS:'Pemasukan',PROJECT:'',REKENING:rek,KATEGORI:KAT_LEBIH,NOMINAL:_lebihKasbon,NOTES:'Kelebihan bayar kasbon '+nama+' ('+ref+') - tidak diminta kembali',TIPE_LOG:'Pemasukan',CREATED_BY:state.user,CREATED_AT:now};
+    state.txns.unshift(xtra); applySummaryDelta(xtra,1);
+    if(API_URL)bgPost({action:'addTxn',data:xtra},'Pembulatan kasbon '+fmt(_lebihKasbon));
+  }
   saveLocal(); closeDrawer(); renderKasbon(); renderDashboard(); filterTxn();
-  showToast('Kasbon '+jenis.toLowerCase()+' '+nama+' '+fmt(nominal)+' ✓','success');
+  showToast(_lebihKasbon>0
+    ? ('Kasbon '+nama+' LUNAS · kelebihan '+fmt(_lebihKasbon)+' dicatat sebagai pendapatan ✓')
+    : ('Kasbon '+jenis.toLowerCase()+' '+nama+' '+fmt(nominal)+' ✓'),'success');
 }
 function openKasbonDetail(nama){
   const a = kasbonAgg()[nama] || {pinjam:0,kembali:0,saldo:0};
