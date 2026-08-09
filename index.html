@@ -501,10 +501,11 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v35';
+const APP_VERSION = 'v36';
 // Tampilkan versi di halaman login (sebelum masuk) — berguna utk cek deploy tanpa login.
 try{ var _lv=document.getElementById('loginVer'); if(_lv) _lv.textContent=APP_VERSION; }catch(e){}
 const CHANGELOG = [
+  { v:'v36', d:'1 Agu 2026', t:'Tombol "Lunas" pada pengingat tagihan kartu kredit diganti jadi "Abaikan", dan peringatannya dibuat tegas: tombol itu HANYA menghapus pengingat — tidak mencatat pembayaran dan tidak memotong saldo bank. Untuk mencatat pembayaran tetap pakai tombol "Bayar" (hijau). Teks lama "Tandai tagihan ini lunas" menyesatkan dan pernah membuat 5 pembayaran CC tidak tercatat.' },
   { v:'v35', d:'1 Agu 2026', t:'Pengaman kasbon & baris sistem. (1) FIX BUG: mengedit baris Kasbon/Transfer/Reserve lewat menu Transaksi dulu menimpa TIPE_LOG-nya jadi Pemasukan/Pengeluaran — akibatnya baris itu ikut terhitung ke laba. Sekarang TIPE_LOG sistem dipertahankan. (2) Baris sistem kini terkunci di form Transaksi dengan penjelasan menu asalnya; ada tombol Buka Kunci bila memang perlu. (3) Halaman Kasbon: badge Lunas / Lebih bayar, hitungan orang yang lebih bayar, dan tombol Cek Konsistensi Kasbon untuk memeriksa kecocokan catatan kasbon dengan transaksinya. (4) Kelebihan bayar kasbon: kalau yang dikembalikan melebihi sisa, app menawarkan mencatat kelebihannya sebagai pendapatan (kategori "Pembulatan Kasbon") supaya kasbon jadi lunas — bukan bikin saldo minus. (5) Kategori bunga & pajak SeaBank diseragamkan kembali jadi "Bunga" dan "Pajak".' },
   { v:'v34', d:'22 Jul 2026', t:'Input massal Bunga Harian (menu Lainnya): tempel angka bunga per baris — tanggal berjalan otomatis, pajak 20% dihitung otomatis (bisa di-override per baris), semua terkirim sekali jalan. Untuk rekening seperti Seabank yang berbunga tiap hari.' },
   { v:'v33.6', d:'22 Jul 2026', t:'Fix invoice PDF: warna hijau header tabel tidak hilang lagi saat Simpan PDF — warna kini dipaksa ikut tercetak apa pun setelan print browser.' },
@@ -1424,7 +1425,7 @@ function renderDashboard() {
           const bHold=ccHoldingBank(c.NAMA), bGap=reserveGapBank(bHold);
           billStrip = `<div style="width:100%;margin-top:8px;padding:7px 9px;border-radius:8px;background:var(--ic-amber);border:1px solid #f59e0b40;display:flex;align-items:center;justify-content:space-between;gap:8px">
             <div style="min-width:0"><div style="font-size:12px;font-weight:700;color:var(--amber)">Tagihan ${fmt(bill.NOMINAL)}</div><div style="font-size:10px;color:var(--text3)">jth tempo ${due||'—'} · ${lbl}</div><div style="font-size:10px;color:${bGap>0?'var(--red)':'var(--green)'}">${bGap>0?('dana di '+esc(bHold)+' kurang '+fmtS(bGap)):('dana di '+esc(bHold)+' siap ✓')}</div></div>
-            <div style="display:flex;gap:5px;flex-shrink:0"><button class="btn-danger" style="background:var(--ic-green);color:var(--green);border-color:#2EE6A640" onclick="event.stopPropagation();payCCFromReminder('${esc(c.NAMA)}')">Bayar</button><button class="btn-danger" onclick="event.stopPropagation();clearCCBill('${bill.ID}','${esc(bill.CC||c.NAMA||'')}')">Lunas</button></div>
+            <div style="display:flex;gap:5px;flex-shrink:0"><button class="btn-danger" style="background:var(--ic-green);color:var(--green);border-color:#2EE6A640" onclick="event.stopPropagation();payCCFromReminder('${esc(c.NAMA)}')">Bayar</button><button class="btn-danger" onclick="event.stopPropagation();clearCCBill('${bill.ID}','${esc(bill.CC||c.NAMA||'')}')">Abaikan</button></div>
           </div>`;
         }
         return `<div class="list-item" style="flex-wrap:wrap;cursor:pointer" onclick="openAccountDetail('cc','${esc(c.NAMA)}')">
@@ -1960,7 +1961,7 @@ function renderCCBillReminder(){
         <div style="min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(b.CC)}</div><div style="font-size:10px;color:var(--text3)">${due||'—'} · ${lbl}</div></div>
         <div style="display:flex;align-items:center;gap:6px;flex-shrink:0"><span style="font-size:13px;font-weight:700;color:var(--red)">${fmt(b.NOMINAL)}</span>
           <button class="btn-danger" style="background:var(--ic-green);color:var(--green);border-color:#2EE6A640" onclick="payCCFromReminder('${esc(b.CC)}')">Bayar</button>
-          <button class="btn-danger" onclick="clearCCBill('${b.ID}','${esc(b.CC||'')}')">Lunas</button></div>
+          <button class="btn-danger" onclick="clearCCBill('${b.ID}','${esc(b.CC||'')}')">Abaikan</button></div>
       </div>`;}).join('')}
     </div></div>`;
 }
@@ -1969,7 +1970,9 @@ function payCCFromReminder(ccName){
   if(cc) openDrawer('paycc',cc.ID); else openDrawer('paycc');
 }
 function clearCCBill(id,ccName){
-  if(!confirm('Tandai tagihan ini lunas & hapus pengingat dari dashboard?'))return;
+  // v36: teks lama "Tandai tagihan ini lunas" menyesatkan — pernah bikin 5 pembayaran CC
+  // (8 Jul 2026) tidak tercatat karena dikira mencatat pembayaran. Sekarang dibuat tegas.
+  if(!confirm('Hapus pengingat tagihan ini dari dashboard?\n\n⚠️ Ini TIDAK mencatat pembayaran dan TIDAK memotong saldo bank.\nUntuk mencatat pembayaran, tekan tombol "Bayar" (hijau).'))return;
   state.ccbills=(state.ccbills||[]).filter(x=>x.ID!==id);
   if(API_URL)bgPost({action:'deleteRow',data:{sheet:'CC_TAGIHAN',id,cc:ccName||undefined}},'Hapus pengingat tagihan');
   saveLocal(); renderCCBillReminder();
