@@ -501,10 +501,11 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v36';
+const APP_VERSION = 'v37';
 // Tampilkan versi di halaman login (sebelum masuk) — berguna utk cek deploy tanpa login.
 try{ var _lv=document.getElementById('loginVer'); if(_lv) _lv.textContent=APP_VERSION; }catch(e){}
 const CHANGELOG = [
+  { v:'v37', d:'1 Agu 2026', t:'Perbaikan besar di Import Excel. (1) FIX BUG PENTING: angka bersen dulu dibaca salah 100x — 367566,64 masuk jadi Rp 36.756.664 tanpa ditolak. Sekarang dibulatkan benar ke rupiah penuh, nilai aslinya ditulis di NOTES, dan pembulatannya dilaporkan di PREVIEW. (2) PREVIEW memperingatkan kalau ada baris mirip transaksi yang sudah ada — supaya tidak dobel; hanya peringatan, keputusan tetap di tangan Anda. (3) Tombol baru "Download Template Import" di Settings: template dibuat saat itu juga berisi daftar rekening, project & kategori TERBARU, jadi nama tidak pernah salah lagi. (4) Tombol "Cocokkan" di tiap rekening Master: isi saldo dari mutasi bank, app langsung menunjukkan selisihnya dengan catatan FCC.' },
   { v:'v36', d:'1 Agu 2026', t:'Tombol "Lunas" pada pengingat tagihan kartu kredit diganti jadi "Abaikan", dan peringatannya dibuat tegas: tombol itu HANYA menghapus pengingat — tidak mencatat pembayaran dan tidak memotong saldo bank. Untuk mencatat pembayaran tetap pakai tombol "Bayar" (hijau). Teks lama "Tandai tagihan ini lunas" menyesatkan dan pernah membuat 5 pembayaran CC tidak tercatat.' },
   { v:'v35', d:'1 Agu 2026', t:'Pengaman kasbon & baris sistem. (1) FIX BUG: mengedit baris Kasbon/Transfer/Reserve lewat menu Transaksi dulu menimpa TIPE_LOG-nya jadi Pemasukan/Pengeluaran — akibatnya baris itu ikut terhitung ke laba. Sekarang TIPE_LOG sistem dipertahankan. (2) Baris sistem kini terkunci di form Transaksi dengan penjelasan menu asalnya; ada tombol Buka Kunci bila memang perlu. (3) Halaman Kasbon: badge Lunas / Lebih bayar, hitungan orang yang lebih bayar, dan tombol Cek Konsistensi Kasbon untuk memeriksa kecocokan catatan kasbon dengan transaksinya. (4) Kelebihan bayar kasbon: kalau yang dikembalikan melebihi sisa, app menawarkan mencatat kelebihannya sebagai pendapatan (kategori "Pembulatan Kasbon") supaya kasbon jadi lunas — bukan bikin saldo minus. (5) Kategori bunga & pajak SeaBank diseragamkan kembali jadi "Bunga" dan "Pajak".' },
   { v:'v34', d:'22 Jul 2026', t:'Input massal Bunga Harian (menu Lainnya): tempel angka bunga per baris — tanggal berjalan otomatis, pajak 20% dihitung otomatis (bisa di-override per baris), semua terkirim sekali jalan. Untuk rekening seperti Seabank yang berbunga tiap hari.' },
@@ -3728,6 +3729,7 @@ function renderMaster() {
               <div style="font-size:14px;font-weight:700;color:${r.saldo>=0?'var(--green)':'var(--red)'}">${fmt(r.saldo)}</div>
               <div style="font-size:10px;color:var(--text3)">+${fmtS(r.masuk)} / -${fmtS(r.keluar)}</div>
               <div style="display:flex;gap:5px;margin-top:6px;justify-content:flex-end" onclick="event.stopPropagation()">
+                <button class="btn-danger" style="color:var(--green);border-color:#2EE6A640" onclick="openCocokSaldo('${esc(b.NAMA).replace(/'/g,"\\'")}')">Cocokkan</button>
                 <button class="btn-danger" onclick="editBank('${b.ID}')">Edit</button>
                 <button class="btn-danger" onclick="deleteItem('banks','${b.ID}','MASTER_BANK')">Hapus</button>
               </div>
@@ -4956,6 +4958,7 @@ function openDrawer(mode, editId = null, preset = null) {
       <div class="settings-row"><div><div class="settings-label">Hitung Ulang Total</div><div class="settings-sub">Pakai setelah edit manual di Google Sheets</div></div><button class="btn-danger" onclick="forceRefresh()">Refresh</button></div>
       <div class="settings-row"><div><div class="settings-label">Laporan (PDF)</div><div class="settings-sub">Laporan visual dengan chart cashflow, project, piutang — buka di tab baru, lalu Print → Save as PDF</div></div><button class="btn-primary" onclick="exportHTMLReport()">Buka Laporan</button></div>
       <div class="settings-row"><div><div class="settings-label">Export Excel</div><div class="settings-sub">Download semua data: Transaksi · Project · Piutang · Kasbon · Cicilan · Saldo</div></div><button class="btn-primary" onclick="exportToExcel()">Export</button></div>
+      <div class="settings-row"><div><div class="settings-label">Download Template Import</div><div class="settings-sub">Template .xlsx berisi daftar rekening, project & kategori TERBARU — pakai ini supaya nama tidak salah</div></div><button class="btn-secondary" onclick="downloadImportTemplate()">Download</button></div>
       <div class="settings-row"><div><div class="settings-label">Import Excel</div><div class="settings-sub">Tambah banyak transaksi dari file .xlsx (template)</div></div><button class="btn-danger" onclick="document.getElementById('importFile').click()">Import</button></div>
       <input type="file" id="importFile" accept=".xlsx,.xls" style="display:none" onchange="handleImportFile(event)">
       <div class="settings-row"><div><div class="settings-label">Cache lokal</div><div class="settings-sub">${state.txns.length} txn cached</div></div><button class="btn-danger" onclick="if(confirm('Reset data lokal?')){localStorage.removeItem('fcc_data');location.reload()}">Reset</button></div>
@@ -5267,6 +5270,33 @@ async function forceRefresh(){
 }
 // ── IMPORT EXCEL ──────────────────────────────────────
 let importPayload=null;
+// ── v37: PEMBACA ANGKA KHUSUS IMPORT ──────────────────────────────────────
+// unfmtNum() global sengaja TIDAK dipakai di sini. Dia membuang semua non-digit
+// termasuk titik desimal: 367566.64 -> 36756664 (salah 100x, dan MASUK diam-diam
+// tanpa ditolak). unfmtNum JANGAN diubah — dipakai semua form input, dan format
+// ribuan Indonesia ("1.500.000") bikin logikanya ambigu kalau dibuat desimal-aware.
+// Sumber angka bersen yang rutin: bunga/pajak bank bulanan & QRIS lintas negara.
+// Return {n, asli, rounded, asliStr}
+function impNum(v){
+  var asli=null;
+  if(typeof v==='number' && isFinite(v)) asli=v;
+  else{
+    var s=String(v==null?'':v).trim().replace(/[^\d.,-]/g,'');
+    if(!s) return {n:0,asli:0,rounded:false,asliStr:'0'};
+    if(s.indexOf(',')>=0){
+      s=s.replace(/\./g,'').replace(',','.');            // "1.234,56" -> 1234.56
+    }else{
+      var p=s.split('.');
+      if(p.length>1 && p[p.length-1].length===3) s=p.join(''); // "1.500.000" -> ribuan
+      // selain itu titik dianggap desimal: "367566.64"
+    }
+    asli=parseFloat(s);
+    if(isNaN(asli)) asli=0;
+  }
+  var n=Math.round(asli);
+  return {n:n, asli:asli, rounded:(Math.abs(asli-n)>1e-9),
+          asliStr:asli.toLocaleString('id-ID',{minimumFractionDigits:2,maximumFractionDigits:2})};
+}
 function impDateISO(v){
   if(v instanceof Date && !isNaN(v)){const y=v.getFullYear(),m=String(v.getMonth()+1).padStart(2,'0'),d=String(v.getDate()).padStart(2,'0');return y+'-'+m+'-'+d;}
   if(typeof v==='number'){const dt=new Date(Math.round((v-25569)*86400*1000));if(!isNaN(dt)){return dt.toISOString().slice(0,10);}}
@@ -6295,6 +6325,117 @@ function exportHTMLReport() {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── v37: COCOKKAN SALDO APP DENGAN SALDO BANK ─────────────────────────────
+// Alat kontrol untuk pencatatan manual: kalau ada transaksi terlewat atau dobel,
+// langsung kelihatan. Murni tampilan — TIDAK menulis apa pun ke sheet.
+function saldoPerTanggal(rek,sampai){
+  const b=(state.banks||[]).find(x=>x.NAMA===rek);
+  let s=Number(b&&b.SALDO_AWAL)||0;
+  (state.txns||[]).forEach(t=>{
+    if(t.REKENING!==rek) return;
+    if(String(t.TANGGAL).slice(0,10)>sampai) return;
+    s += (t.JENIS==='Pemasukan'?1:-1)*(Number(t.NOMINAL)||0);
+  });
+  return s;
+}
+function openCocokSaldo(rek){
+  const key='fcc_cocok_'+rek;
+  let last={}; try{ last=JSON.parse(localStorage.getItem(key)||'{}'); }catch(e){}
+  document.getElementById('drawerTitle').textContent='Cocokkan Saldo — '+rek;
+  document.getElementById('drawerBody').innerHTML=`
+    <div class="settings-sub" style="margin-bottom:12px;line-height:1.6">Isi saldo yang tertera di mutasi/m-banking, lalu bandingkan dengan catatan FCC. Tidak ada data yang diubah.</div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Saldo di bank</label><input class="form-input" type="text" inputmode="numeric" id="cs_nom" value="${last.nom?fmtInput(last.nom):''}" placeholder="0" oninput="fmtMoneyInput(this);hitungCocokSaldo('${esc(rek).replace(/'/g,"\\'")}')"></div>
+      <div class="form-group"><label class="form-label">Per tanggal</label><input class="form-input" type="date" id="cs_tgl" value="${last.tgl||today()}" onchange="hitungCocokSaldo('${esc(rek).replace(/'/g,"\\'")}')"></div>
+    </div>
+    <div id="cs_hasil"></div>`;
+  drawerMode='cocoksaldo'; drawerEditId=null;
+  document.getElementById('drawerBg').classList.add('open');
+  hitungCocokSaldo(rek);
+}
+function hitungCocokSaldo(rek){
+  const el=document.getElementById('cs_hasil'); if(!el) return;
+  const nom=unfmtNum(document.getElementById('cs_nom').value);
+  const tgl=document.getElementById('cs_tgl').value||today();
+  try{ localStorage.setItem('fcc_cocok_'+rek,JSON.stringify({nom:nom,tgl:tgl})); }catch(e){}
+  if(!nom){ el.innerHTML='<div class="settings-sub">Isi saldo bank dulu.</div>'; return; }
+  const app=saldoPerTanggal(rek,tgl);
+  const selisih=nom-app;
+  const warna=selisih===0?'var(--green)':(Math.abs(selisih)<=5?'var(--amber)':'var(--red)');
+  const pesan=selisih===0
+    ? 'Cocok persis. Pencatatan Anda sehat sampai tanggal ini.'
+    : (Math.abs(selisih)<=5
+      ? 'Beda beberapa rupiah — biasanya dari pembulatan angka bersen. Aman.'
+      : (selisih>0
+        ? 'Saldo bank LEBIH BESAR. Kemungkinan ada pemasukan yang belum dicatat, atau pengeluaran tercatat dobel.'
+        : 'Saldo bank LEBIH KECIL. Kemungkinan ada pengeluaran yang belum dicatat, atau pemasukan tercatat dobel.'));
+  el.innerHTML=`
+    <div class="settings-row"><div class="settings-label">Catatan FCC per ${tgl}</div><div style="font-weight:600">${fmt(app)}</div></div>
+    <div class="settings-row"><div class="settings-label">Saldo di bank</div><div style="font-weight:600">${fmt(nom)}</div></div>
+    <div class="card" style="margin-top:10px;padding:11px 13px;text-align:center">
+      <div class="metric-label">Selisih</div>
+      <div style="font-size:22px;font-weight:700;color:${warna}">${selisih>0?'+':''}${fmt(selisih)}</div>
+      <div class="settings-sub" style="margin-top:6px;line-height:1.6">${pesan}</div>
+    </div>`;
+}
+// ── v37: TEMPLATE IMPORT DIBUAT ON-THE-FLY DARI MASTER TERBARU ────────────
+// Template file statis cepat basi: pernah menulis "PROJ ORTU WISHNU - ATAP RUMAH"
+// padahal nama asli "Wishnu Ortu - Atap" → project duplikat / baris ditolak.
+function downloadImportTemplate(){
+  try{
+    const tgl=today();
+    const bank=state.banks.map(b=>b.NAMA), cc=state.ccs.map(c=>c.NAMA);
+    const pAktif=state.projects.filter(p=>String(p.STATUS)==='Jalan').map(p=>p.NAMA);
+    const pLain=state.projects.filter(p=>String(p.STATUS)!=='Jalan').map(p=>p.NAMA);
+    const kats=state.kategori.slice().sort((a,b)=>String(a.KELOMPOK||'').localeCompare(String(b.KELOMPOK||''))||String(a.NAMA||'').localeCompare(String(b.NAMA||'')));
+
+    const wsT=XLSX.utils.aoa_to_sheet([
+      ['TANGGAL','JENIS','PROJECT','REKENING','KATEGORI','KELOMPOK','NOMINAL','NOTES'],
+      [tgl,'Pengeluaran',(pAktif[0]||''),(bank[0]||''),'Material','',150000,'Nama toko — hapus baris contoh ini']
+    ]);
+    if(wsT['A2']) wsT['A2'].t='s';
+    wsT['!cols']=[{wch:12},{wch:13},{wch:36},{wch:20},{wch:26},{wch:13},{wch:12},{wch:38}];
+
+    const ref=[['DAFTAR NILAI VALID — disalin dari master FCC pada '+tgl],[]];
+    ref.push(['REKENING BANK / KAS — harus PERSIS sama']); bank.forEach(n=>ref.push([n])); ref.push([]);
+    ref.push(['KARTU KREDIT — harus PERSIS sama']); cc.forEach(n=>ref.push([n])); ref.push([]);
+    ref.push(['PROJECT — status Jalan']); pAktif.forEach(n=>ref.push([n])); ref.push([]);
+    ref.push(['PROJECT — lainnya']); pLain.forEach(n=>ref.push([n])); ref.push([]);
+    ref.push(['KATEGORI','KELOMPOK','TIPE']); kats.forEach(k=>ref.push([k.NAMA,k.KELOMPOK,k.TIPE]));
+    const wsR=XLSX.utils.aoa_to_sheet(ref); wsR['!cols']=[{wch:40},{wch:15},{wch:13}];
+
+    const wsP=XLSX.utils.aoa_to_sheet([
+      ['CARA IMPORT TRANSAKSI KE FCC'],[],
+      ['1. Isi tab "Transaksi". Satu baris = satu transaksi. Hapus baris contoh.'],
+      ['2. Simpan .xlsx, lalu FCC → Settings → Import Excel → pilih file.'],
+      ['3. Cek layar PREVIEW, baru tekan Konfirmasi Import.'],[],
+      ['ATURAN KOLOM'],
+      ['TANGGAL  : wajib. Format YYYY-MM-DD, sel diset TEKS.'],
+      ['JENIS    : wajib. Persis "Pemasukan" atau "Pengeluaran".'],
+      ['PROJECT  : opsional. Belum ada di master -> DIBUAT OTOMATIS, jadi hati-hati salah ketik.'],
+      ['REKENING : wajib. HARUS PERSIS sama master (lihat tab Referensi). Tidak cocok = baris ditolak.'],
+      ['KATEGORI : wajib. Belum ada -> dibuat otomatis. Cek Referensi dulu supaya tidak dobel.'],
+      ['KELOMPOK : hanya diisi kalau KATEGORI-nya BARU. PEMASUKAN / PROJECT / OPERASIONAL / PRIBADI / FINANCIAL / TRAVELING / TITIPAN.'],
+      ['NOMINAL  : wajib, positif. Angka bersen otomatis DIBULATKAN ke rupiah penuh; nilai aslinya ditulis di NOTES.'],
+      ['NOTES    : opsional. Untuk kategori Material, isi NAMA TOKO.'],[],
+      ['JANGAN DI-IMPORT — pakai menu app supaya pasangannya ikut tercatat:'],
+      ['- Transfer antar rekening sendiri  -> menu Transfer'],
+      ['- Bayar tagihan kartu kredit       -> tombol Bayar di kartu'],
+      ['- Kasbon / talangan & pengembalian -> menu Kasbon'],
+      ['- Setoran reserve CC               -> menu Reserve'],[],
+      ['Import hanya MENAMBAH dan tidak menghapus. Import file yang sama 2x = data dobel.'],
+      ['PREVIEW akan memperingatkan kalau ada baris yang mirip transaksi lama.']
+    ]);
+    wsP['!cols']=[{wch:118}];
+
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,wsT,'Transaksi');
+    XLSX.utils.book_append_sheet(wb,wsR,'Referensi');
+    XLSX.utils.book_append_sheet(wb,wsP,'Petunjuk');
+    XLSX.writeFile(wb,'Template-Import-FCC-'+tgl+'.xlsx');
+    showToast('Template terbaru diunduh ('+bank.length+' bank · '+state.projects.length+' project · '+kats.length+' kategori) ✓','success');
+  }catch(e){ showToast('Gagal buat template: '+(e&&e.message||e),'error'); }
+}
 function handleImportFile(ev){
   const file=ev.target.files[0]; ev.target.value=''; if(!file)return;
   if(!API_URL){showToast('API URL belum diset','error');return;}
@@ -6318,7 +6459,9 @@ function parseImport(rows){
   const acctNames=new Set([...state.banks.map(b=>b.NAMA),...state.ccs.map(c=>c.NAMA)]);
   const projNames=new Set(state.projects.map(p=>p.NAMA));
   const katNames=new Set(state.kategori.map(k=>k.NAMA));
-  const valid=[],errors=[],newProjMap={},newKatMap={};
+  const valid=[],errors=[],newProjMap={},newKatMap={},rounded=[],dupes=[];
+  // v37: kunci deteksi dobel — tanggal + rekening + kategori + nominal
+  const existKey=new Set((state.txns||[]).map(t=>String(t.TANGGAL).slice(0,10)+'|'+t.REKENING+'|'+t.KATEGORI+'|'+Number(t.NOMINAL)));
   for(let r=1;r<rows.length;r++){
     const row=rows[r]; if(!row||row.every(c=>String(c||'').trim()===''))continue;
     const excelRow=r+1;
@@ -6328,7 +6471,8 @@ function parseImport(rows){
     const rek=String(row[iR]||'').trim();
     const kat=String(row[iK]||'').trim();
     const kel=String(iKel>=0?row[iKel]:'').trim().toUpperCase();
-    const nominal=unfmtNum(row[iN]);
+    const _num=impNum(row[iN]);
+    const nominal=_num.n;
     const notes=String(iNo>=0?row[iNo]:'').trim();
     const errs=[];
     if(!tgl)errs.push('tanggal tidak valid');
@@ -6339,13 +6483,22 @@ function parseImport(rows){
     if(errs.length){errors.push({row:excelRow,msg:errs.join(', ')});continue;}
     if(proj&&!projNames.has(proj)&&!newProjMap[proj])newProjMap[proj]={NAMA:proj,KLIEN:'',STATUS:'Jalan'};
     if(!katNames.has(kat)&&!newKatMap[kat])newKatMap[kat]={NAMA:kat,KELOMPOK:(kel||(jenis==='Pemasukan'?'PEMASUKAN':'OPERASIONAL')),TIPE:jenis};
-    valid.push({TANGGAL:tgl,JENIS:jenis,PROJECT:proj,REKENING:rek,KATEGORI:kat,NOMINAL:nominal,NOTES:notes});
+    // v37: angka bersen dibulatkan, nilai aslinya ditempel ke NOTES supaya bisa ditelusuri
+    let _notes=notes;
+    if(_num.rounded){
+      _notes=(notes?notes+' ':'')+'(asli Rp '+_num.asliStr+')';
+      rounded.push({row:excelRow,asli:_num.asli,bulat:nominal});
+    }
+    const _cand={TANGGAL:tgl,JENIS:jenis,PROJECT:proj,REKENING:rek,KATEGORI:kat,NOMINAL:nominal,NOTES:_notes};
+    if(existKey.has(tgl+'|'+rek+'|'+kat+'|'+nominal)) dupes.push({row:excelRow,t:_cand});
+    valid.push(_cand);
   }
   const newProjs=Object.values(newProjMap),newKats=Object.values(newKatMap);
   importPayload={txns:valid,newProjs,newKats};
-  showImportPreview(valid,errors,newProjs,newKats);
+  showImportPreview(valid,errors,newProjs,newKats,rounded,dupes);
 }
-function showImportPreview(valid,errors,newProjs,newKats){
+function showImportPreview(valid,errors,newProjs,newKats,rounded,dupes){
+  rounded=rounded||[]; dupes=dupes||[];
   const totMasuk=valid.filter(t=>t.JENIS==='Pemasukan').reduce((s,t)=>s+t.NOMINAL,0);
   const totKeluar=valid.filter(t=>t.JENIS==='Pengeluaran').reduce((s,t)=>s+t.NOMINAL,0);
   document.getElementById('drawerTitle').textContent='Preview Import';
@@ -6358,6 +6511,19 @@ function showImportPreview(valid,errors,newProjs,newKats){
     <div class="settings-row"><div class="settings-label">Total Pengeluaran</div><div style="color:var(--red);font-weight:600">${fmt(totKeluar)}</div></div>`;
   if(newProjs.length)html+=`<div style="margin-top:10px"><b>Project baru (${newProjs.length}) akan dibuat:</b><div class="settings-sub">${newProjs.map(p=>esc(p.NAMA)).join(', ')}</div></div>`;
   if(newKats.length)html+=`<div style="margin-top:10px"><b>Kategori baru (${newKats.length}) akan dibuat:</b><div class="settings-sub">${newKats.map(k=>esc(k.NAMA)+' ['+k.KELOMPOK+']').join(', ')}</div></div>`;
+  // v37: laporan pembulatan angka bersen
+  if(rounded.length){
+    const selisih=rounded.reduce((s,r)=>s+(r.bulat-r.asli),0);
+    html+=`<div class="card" style="margin-top:12px;padding:9px 11px;background:var(--hero-amber-bg);border:1px solid var(--hero-amber-bd);font-size:12px;line-height:1.6">
+      <b>${rounded.length} baris dibulatkan ke rupiah penuh</b><br>Selisih total ${selisih>=0?'+':''}${(Math.round(selisih*100)/100).toLocaleString('id-ID')} rupiah. Nilai asli ikut ditulis di NOTES.
+      <div class="settings-sub" style="margin-top:5px">${rounded.slice(0,6).map(r=>'Baris '+r.row+': '+r.asli.toLocaleString('id-ID',{minimumFractionDigits:2,maximumFractionDigits:2})+' → '+fmt(r.bulat)).join('<br>')}${rounded.length>6?'<br>…':''}</div></div>`;
+  }
+  // v37: peringatan kemungkinan dobel (tidak menolak — transaksi kembar yang sah memang ada)
+  if(dupes.length){
+    html+=`<div class="card" style="margin-top:12px;padding:9px 11px;background:var(--ic-red);border:1px solid var(--red);font-size:12px;line-height:1.6">
+      <b style="color:var(--red)">⚠️ ${dupes.length} baris mirip transaksi yang sudah ada</b><br>Periksa dulu — mungkin file ini sudah pernah diimport. Kalau memang transaksi berbeda, lanjutkan saja.
+      <div class="settings-sub" style="margin-top:5px">${dupes.slice(0,6).map(d=>'Baris '+d.row+': '+d.t.TANGGAL+' · '+esc(d.t.REKENING)+' · '+esc(d.t.KATEGORI)+' · '+fmt(d.t.NOMINAL)).join('<br>')}${dupes.length>6?'<br>…':''}</div></div>`;
+  }
   if(errors.length){
     html+=`<div style="margin-top:12px;color:var(--red)"><b>Baris ditolak — perbaiki di Excel lalu import ulang:</b></div>
       <div style="max-height:180px;overflow:auto;font-size:13px;margin-top:6px">${errors.map(e=>`<div style="padding:4px 0;border-bottom:1px solid #2a2a2a">Baris ${e.row}: ${esc(e.msg)}</div>`).join('')}</div>`;
