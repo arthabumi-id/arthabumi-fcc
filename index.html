@@ -501,10 +501,11 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v37.1';
+const APP_VERSION = 'v37.2';
 // Tampilkan versi di halaman login (sebelum masuk) — berguna utk cek deploy tanpa login.
 try{ var _lv=document.getElementById('loginVer'); if(_lv) _lv.textContent=APP_VERSION; }catch(e){}
 const CHANGELOG = [
+  { v:'v37.2', d:'1 Agu 2026', t:'"Sisa belum dibayar klien" kini mengabaikan refund barang/jaminan — hanya pembayaran klien (kategori kelompok PEMASUKAN) yang dihitung. Refund tetap tercatat masuk agar saldo bank benar, tapi tidak lagi mengurangi sisa tagihan.' },
   { v:'v37.1', d:'1 Agu 2026', t:'Kartu project kini menampilkan "Sisa belum dibayar klien" dalam rupiah (nilai kontrak − sudah diterima), tidak hanya persen. Hijau bila sudah lunas.' },
   { v:'v37', d:'1 Agu 2026', t:'Perbaikan besar di Import Excel. (1) FIX BUG PENTING: angka bersen dulu dibaca salah 100x — 367566,64 masuk jadi Rp 36.756.664 tanpa ditolak. Sekarang dibulatkan benar ke rupiah penuh, nilai aslinya ditulis di NOTES, dan pembulatannya dilaporkan di PREVIEW. (2) PREVIEW memperingatkan kalau ada baris mirip transaksi yang sudah ada — supaya tidak dobel; hanya peringatan, keputusan tetap di tangan Anda. (3) Tombol baru "Download Template Import" di Settings: template dibuat saat itu juga berisi daftar rekening, project & kategori TERBARU, jadi nama tidak pernah salah lagi. (4) Tombol "Cocokkan" di tiap rekening Master: isi saldo dari mutasi bank, app langsung menunjukkan selisihnya dengan catatan FCC.' },
   { v:'v36', d:'1 Agu 2026', t:'Tombol "Lunas" pada pengingat tagihan kartu kredit diganti jadi "Abaikan", dan peringatannya dibuat tegas: tombol itu HANYA menghapus pengingat — tidak mencatat pembayaran dan tidak memotong saldo bank. Untuk mencatat pembayaran tetap pakai tombol "Bayar" (hijau). Teks lama "Tandai tagihan ini lunas" menyesatkan dan pernah membuat 5 pembayaran CC tidak tercatat.' },
@@ -3419,6 +3420,17 @@ function filterTxn() {
 }
 
 // ── RENDER PROJECT ────────────────────────────────────
+// v37.2: pembayaran klien = TOTAL pemasukan project MINUS pemasukan yang kelompoknya bukan
+// PEMASUKAN (refund barang/jaminan dsb — dicatat Pemasukan agar saldo benar, tapi bukan tagihan klien).
+function projMasukKlien(nama){
+  const total=getProjCF(nama).masuk;
+  let bukanKlien=0;
+  (state.txns||[]).forEach(t=>{ if(t.PROJECT===nama && t.JENIS==='Pemasukan'){
+    const k=state.kategori.find(x=>x.NAMA===t.KATEGORI);
+    if(!k || k.KELOMPOK!=='PEMASUKAN') bukanKlien+=Number(t.NOMINAL)||0;
+  }});
+  return Math.max(0, total-bukanKlien);
+}
 function projCard(p){
     const cf = getProjCF(p.NAMA);
     const pr = projProfit(p.NAMA);
@@ -3443,7 +3455,7 @@ function projCard(p){
         <span style="font-size:9px;color:var(--text3);text-transform:uppercase">Laba Bersih</span>
         <span style="font-size:13px;font-weight:700;color:${pr.laba>=0?'var(--green)':'var(--red)'}">${pr.laba>=0?'+':'-'}${fmt(Math.abs(pr.laba))} <span style="font-size:11px;color:var(--text2)">(${pr.margin.toFixed(1)}%)</span></span>
       </div>
-      ${(()=>{const sisa=Math.max(0,eff-cf.masuk); return eff>0?`<div style="display:flex;align-items:center;justify-content:space-between;background:${sisa>0?'var(--ic-amber)':'var(--ic-green)'};border:1px solid ${sisa>0?'#f59e0b40':'#2EE6A640'};border-radius:8px;padding:6px 10px;margin-bottom:10px">
+      ${(()=>{const mk=projMasukKlien(p.NAMA); const sisa=Math.max(0,eff-mk); return eff>0?`<div style="display:flex;align-items:center;justify-content:space-between;background:${sisa>0?'var(--ic-amber)':'var(--ic-green)'};border:1px solid ${sisa>0?'#f59e0b40':'#2EE6A640'};border-radius:8px;padding:6px 10px;margin-bottom:10px">
         <span style="font-size:9px;color:var(--text3);text-transform:uppercase">${sisa>0?'Sisa belum dibayar klien':'Lunas — klien'}</span>
         <span style="font-size:13px;font-weight:700;color:${sisa>0?'var(--amber)':'var(--green)'}">${sisa>0?fmt(sisa):'✓ '+fmt(eff)}</span>
       </div>`:'';})()}
