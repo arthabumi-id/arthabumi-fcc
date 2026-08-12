@@ -501,10 +501,11 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v37.2';
+const APP_VERSION = 'v38';
 // Tampilkan versi di halaman login (sebelum masuk) — berguna utk cek deploy tanpa login.
 try{ var _lv=document.getElementById('loginVer'); if(_lv) _lv.textContent=APP_VERSION; }catch(e){}
 const CHANGELOG = [
+  { v:'v38', d:'12 Agu 2026', t:'Rekap Isi Tagihan Kartu Kredit. Baris yang Anda centang saat "Kunci ke Dashboard" kini ikut disimpan, jadi isi lembaran tagihan bisa dibuka lagi kapan saja lewat tombol "Isi Tagihan" — tampil sebagai dokumen A4 di jendela baru, siap Cetak/Simpan PDF, lengkap dengan subtotal belanja, angsuran cicilan, pembayaran, serta selisih terhadap total statement cetak. Tagihan yang sudah dibayar tidak lagi dihapus melainkan diarsipkan (tombol "Riwayat"), disimpan 3 bulan. Ditambah toggle "Tampilkan baris yang sudah masuk tagihan lain" di halaman Rincian. Perlu redeploy Code.gs.' },
   { v:'v37.2', d:'1 Agu 2026', t:'"Sisa belum dibayar klien" kini mengabaikan refund barang/jaminan — hanya pembayaran klien (kategori kelompok PEMASUKAN) yang dihitung. Refund tetap tercatat masuk agar saldo bank benar, tapi tidak lagi mengurangi sisa tagihan.' },
   { v:'v37.1', d:'1 Agu 2026', t:'Kartu project kini menampilkan "Sisa belum dibayar klien" dalam rupiah (nilai kontrak − sudah diterima), tidak hanya persen. Hijau bila sudah lunas.' },
   { v:'v37', d:'1 Agu 2026', t:'Perbaikan besar di Import Excel. (1) FIX BUG PENTING: angka bersen dulu dibaca salah 100x — 367566,64 masuk jadi Rp 36.756.664 tanpa ditolak. Sekarang dibulatkan benar ke rupiah penuh, nilai aslinya ditulis di NOTES, dan pembulatannya dilaporkan di PREVIEW. (2) PREVIEW memperingatkan kalau ada baris mirip transaksi yang sudah ada — supaya tidak dobel; hanya peringatan, keputusan tetap di tangan Anda. (3) Tombol baru "Download Template Import" di Settings: template dibuat saat itu juga berisi daftar rekening, project & kategori TERBARU, jadi nama tidak pernah salah lagi. (4) Tombol "Cocokkan" di tiap rekening Master: isi saldo dari mutasi bank, app langsung menunjukkan selisihnya dengan catatan FCC.' },
@@ -1427,7 +1428,7 @@ function renderDashboard() {
           const lbl = dd===null?'':(dd<0?`<span style="color:var(--red)">lewat ${Math.abs(dd)} hr</span>`:dd===0?`<span style="color:var(--red)">hari ini</span>`:`<span style="color:var(--amber)">${dd} hr lagi</span>`);
           const bHold=ccHoldingBank(c.NAMA), bGap=reserveGapBank(bHold);
           billStrip = `<div style="width:100%;margin-top:8px;padding:7px 9px;border-radius:8px;background:var(--ic-amber);border:1px solid #f59e0b40;display:flex;align-items:center;justify-content:space-between;gap:8px">
-            <div style="min-width:0"><div style="font-size:12px;font-weight:700;color:var(--amber)">Tagihan ${fmt(bill.NOMINAL)}</div><div style="font-size:10px;color:var(--text3)">jth tempo ${due||'—'} · ${lbl}</div><div style="font-size:10px;color:${bGap>0?'var(--red)':'var(--green)'}">${bGap>0?('dana di '+esc(bHold)+' kurang '+fmtS(bGap)):('dana di '+esc(bHold)+' siap ✓')}</div></div>
+            <div style="min-width:0"><div style="font-size:12px;font-weight:700;color:var(--amber)">Tagihan ${fmt(bill.NOMINAL)}</div><div style="font-size:10px;color:var(--text3)">jth tempo ${due||'—'} · ${lbl}</div><div style="font-size:10px;color:${bGap>0?'var(--red)':'var(--green)'}">${bGap>0?('dana di '+esc(bHold)+' kurang '+fmtS(bGap)):('dana di '+esc(bHold)+' siap ✓')}</div><div style="font-size:10px;margin-top:2px"><a href="javascript:void(0)" onclick="event.stopPropagation();openCCBillRecap('${bill.ID}')" style="color:var(--purple);text-decoration:underline">lihat isi tagihan</a></div></div>
             <div style="display:flex;gap:5px;flex-shrink:0"><button class="btn-danger" style="background:var(--ic-green);color:var(--green);border-color:#2EE6A640" onclick="event.stopPropagation();payCCFromReminder('${esc(c.NAMA)}')">Bayar</button><button class="btn-danger" onclick="event.stopPropagation();clearCCBill('${bill.ID}','${esc(bill.CC||c.NAMA||'')}')">Abaikan</button></div>
           </div>`;
         }
@@ -1981,40 +1982,247 @@ function clearCCBill(id,ccName){
   saveLocal(); renderCCBillReminder();
   showToast('Pengingat tagihan dihapus','success');
 }
+// v38: tagihan yang sudah dibayar TIDAK lagi dihapus — ditandai 'Lunas' supaya rekap isinya
+// masih bisa dibuka (arsip, dibersihkan server setelah 3 bulan). ccBillFor & renderCCBillReminder
+// sudah menyaring STATUS 'Lunas', jadi pengingatnya tetap hilang dari dashboard.
+// Fallback: kalau Code.gs belum di-redeploy, action settleCCBill ditolak → pakai cara lama
+// (hapus baris) agar pengingat tetap bersih. Tidak ada data rusak, hanya riwayat yang tak tersimpan.
+function settleCCBillLocal(bill, tgl){
+  if(!bill) return;
+  bill.STATUS='Lunas';
+  bill.TGL_BAYAR=String(tgl||today()).slice(0,10);
+  saveLocal();
+  if(!API_URL) return;
+  const payload={action:'settleCCBill',data:{ID:bill.ID,CC:bill.CC,TGL_BAYAR:bill.TGL_BAYAR,USER:state.user}};
+  apiPost(payload).then(function(res){
+    if(res && !res.error) return;                       // beres
+    if(!res){ bgPost(payload,'Tandai tagihan lunas'); return; }   // offline → masuk antrian, dicoba lagi
+    state.ccbills=(state.ccbills||[]).filter(function(x){ return x.ID!==bill.ID; });
+    saveLocal(); renderCCBillReminder();
+    bgPost({action:'deleteRow',data:{sheet:'CC_TAGIHAN',id:bill.ID}},'Hapus pengingat tagihan (fallback)');
+    showToast('Backend belum di-redeploy — pengingat dihapus, tapi riwayat statement tidak tersimpan','error');
+  }).catch(function(){});
+}
 async function lockCCBillUI(){
   const name=_ccBillName; if(!name)return;
   const stmtEl=document.getElementById('ccb_stmt');
   const stmt=stmtEl?unfmtNum(stmtEl.value):0;
-  let sum=0; document.querySelectorAll('.ccb-chk:checked').forEach(el=>sum+=Number(el.dataset.amt||0));
+  // v38: kumpulkan sekalian SNAPSHOT baris yg dicentang (lewat indeks _ccbRows) — inilah isi
+  // "lembaran tagihan" yg nanti bisa dibuka lagi & dicetak.
+  let sum=0; const lines=[];
+  document.querySelectorAll('.ccb-chk:checked').forEach(el=>{
+    sum+=Number(el.dataset.amt||0);
+    const r=_ccbRows[Number(el.dataset.i)];
+    if(r) lines.push({d:r.d,l:r.l,n:r.n,t:r.t});
+  });
   const amt = stmt>0?stmt:(sum>0?sum:0);
   if(amt<=0){showToast('Isi total statement atau centang baris dulu','error');return;}
   const due=document.getElementById('ccb_due').value;
   const from=(document.getElementById('ccb_from')||{}).value||'', to=(document.getElementById('ccb_to')||{}).value||'';
   // v30.8: bila sudah ada tagihan terkunci Aktif utk kartu ini → tawarkan TAMBAHKAN (gabung nominal,
   // tempo & periode-awal lama dipertahankan) atau GANTI. Dulu: selalu ganti diam-diam (nominal lama hilang).
-  const old=ccBillFor(name); let finalAmt=amt, finalDue=due, finalFrom=from;
+  const old=ccBillFor(name);
+  let finalAmt=amt, finalDue=due, finalFrom=from, finalLines=lines, finalStmt=stmt, finalSum=sum, partial=false;
   if(old){
     const oldAmt=Number(old.NOMINAL)||0, oldDue=String(old.JATUH_TEMPO||'').slice(0,10);
     if(confirm('Sudah ada tagihan terkunci '+name+' '+fmt(oldAmt)+' (jatuh tempo '+(oldDue||'—')+').\n\nOK = TAMBAHKAN ke tagihan itu → total '+fmt(oldAmt+amt)+'\nBatal = GANTI dengan nominal baru '+fmt(amt))){
+      // v38: rincian lama harus ikut digabung, kalau tidak snapshot-nya jadi separuh sementara
+      // nominalnya gabungan — itu lebih menyesatkan daripada tidak ada rekap sama sekali.
+      const prev=await ccBillLines(old);
+      if(prev===null){
+        alert('Rincian tagihan lama tidak bisa diambil (perangkat offline, atau backend belum di-redeploy).\n\nMode TAMBAHKAN dibatalkan supaya rekapnya tidak separuh. Coba lagi saat online, atau ulangi dan pilih GANTI.');
+        return;
+      }
       finalAmt=oldAmt+amt;
       finalDue=oldDue||due;
       finalFrom=String(old.PERIODE_DARI||'').slice(0,10)||from;
+      finalLines=(prev.lines||[]).concat(lines);
+      finalStmt=(Number(prev.stmt)||0)+stmt;
+      finalSum=(Number(prev.sum)||0)+sum;
+      partial=!!prev._none;   // tagihan lama dikunci sebelum v38 → sebagian isi memang tak terekam
     }
   }
   if(!confirm('Kunci tagihan '+name+' '+fmt(finalAmt)+' (jatuh tempo '+finalDue+') sebagai pengingat di dashboard?'))return;
+  const snap={v:1,cc:name,bill:finalAmt,stmt:finalStmt,sum:finalSum,dari:finalFrom,sampai:to,tempo:finalDue,lines:finalLines};
+  if(partial) snap.partial=true;
   // Cara 1 (v23.1): baris dicentang yg punya TXN_ID → tandai LUNAS, supaya tidak muncul lagi
   // di rekonsiliasi tagihan berikutnya (cicilan tak punya TXN_ID → dilewati).
   const paidIds=[]; document.querySelectorAll('.ccb-chk:checked').forEach(el=>{ const id=el.dataset.id; if(id) paidIds.push(id); });
-  state.ccbills=(state.ccbills||[]).filter(b=>b.CC!==name);
-  state.ccbills.push({ID:uid(),CC:name,NOMINAL:finalAmt,JATUH_TEMPO:finalDue,PERIODE_DARI:finalFrom,PERIODE_SAMPAI:to,STATUS:'Aktif'});
+  // v38: HANYA buang baris Aktif — baris STATUS 'Lunas' adalah arsip statement lama, jangan disentuh.
+  state.ccbills=(state.ccbills||[]).filter(b=>!(b.CC===name && String(b.STATUS||'Aktif')!=='Lunas'));
+  const localBill={ID:uid(),CC:name,NOMINAL:finalAmt,JATUH_TEMPO:finalDue,PERIODE_DARI:finalFrom,PERIODE_SAMPAI:to,STATUS:'Aktif',HAS_RINCIAN:finalLines.length>0};
+  localBill._rincian=snap;   // cache memori: rekap langsung bisa dibuka walau belum sync
+  state.ccbills.push(localBill);
   if(paidIds.length){ state.paidMarks=state.paidMarks||[]; paidIds.forEach(id=>{ if(!isPaid(id)) state.paidMarks.push({TXN_ID:id}); }); }
   saveLocal(); closeDrawer(); renderCCBillReminder(); renderDashboard();
-  showToast('Tagihan '+name+' dikunci ke dashboard ✓'+(paidIds.length?' · '+paidIds.length+' baris ditandai lunas':''),'success');
+  showToast('Tagihan '+name+' dikunci ✓'+(finalLines.length?' · '+finalLines.length+' baris tersimpan di rekap':' · tanpa rincian (tak ada baris dicentang)'),'success');
   if(API_URL){
     if(paidIds.length) bgPost({action:'markPaidBatch',data:{TXN_IDS:paidIds, USER:state.user}},'Tandai lunas '+paidIds.length+' baris tagihan');
-    const res=await apiPost({action:'lockCCBill',data:{CC:name,NOMINAL:finalAmt,JATUH_TEMPO:finalDue,PERIODE_DARI:finalFrom,PERIODE_SAMPAI:to,USER:state.user}}); if(res&&!res.error) await syncAll();
+    const res=await apiPost({action:'lockCCBill',data:{CC:name,NOMINAL:finalAmt,JATUH_TEMPO:finalDue,PERIODE_DARI:finalFrom,PERIODE_SAMPAI:to,RINCIAN:JSON.stringify(snap),USER:state.user}});
+    if(res&&!res.error) await syncAll();
   }
 }
+// ── v38: REKAP ISI TAGIHAN CC (snapshot "lembaran tagihan") ───────────────
+// Kenapa ada: baris yg dicentang saat mengunci langsung ditandai PAID_MARK, sementara daftar
+// Rincian memfilter isPaid → justru SESUDAH dikunci isi tagihannya hilang dari layar, dan
+// CC_TAGIHAN tidak pernah menyimpan daftar barisnya. Sejak v38 isinya disimpan sbg snapshot JSON
+// di kolom RINCIAN dan bisa dibuka/dicetak kapan saja selama masa simpan (3 bulan, di-prune server).
+const CCB_BULAN=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+function _ccbBulanLabel(iso){
+  const s=String(iso||'').slice(0,10); const p=s.split('-');
+  if(p.length<2) return '';
+  const m=Number(p[1])-1; return (CCB_BULAN[m]||'')+' '+p[0];
+}
+// Format rupiah utk DOKUMEN CETAK. Sengaja tidak memakai fmt() — fmt menghormati "mode mata"
+// (nominal jadi ••••), dan hasil cetakan tidak boleh ikut tersamar.
+function _ccbRp(n){ return 'Rp '+Math.round(Math.abs(Number(n)||0)).toLocaleString('id-ID'); }
+function _ccbEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// Ambil snapshot rincian sebuah tagihan.
+//   → object snapshot  = ada datanya (atau {_none:true} bila tagihan itu dikunci sebelum v38)
+//   → null             = GAGAL ambil (offline / backend belum di-redeploy). Pemanggil wajib
+//                        membedakan ini dari "tidak ada isi", jangan diam-diam dianggap kosong.
+async function ccBillLines(bill){
+  if(!bill) return null;
+  if(bill._rincian) return bill._rincian;
+  if(!API_URL) return null;
+  const res=await apiGet({action:'getCCBillDetail', id:bill.ID});
+  if(!res || res.error) return null;
+  let o=null;
+  try{ o=JSON.parse(res.RINCIAN||'null'); }catch(e){ o=null; }
+  if(!o || !Array.isArray(o.lines)) o={v:1,bill:Number(bill.NOMINAL)||0,stmt:0,sum:0,lines:[],_none:true};
+  bill._rincian=o;
+  return o;
+}
+// Kartu info di atas drawer Rincian: tagihan yg sedang terkunci + pintu ke rekap & riwayat.
+function ccbLockedInfoHTML(name){
+  const b=ccBillFor(name);
+  const nHist=(state.ccbills||[]).filter(x=>x.CC===name && String(x.STATUS||'Aktif')==='Lunas').length;
+  if(!b && !nHist) return '';
+  const histBtn=nHist?`<button class="btn-danger" onclick="openCCBillHistory('${esc(name)}')"><i class="ti ti-history"></i> Riwayat (${nHist})</button>`:'';
+  if(!b) return `<div class="card" style="padding:8px 10px;margin:0 0 10px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span style="font-size:11px;color:var(--text2)">Tidak ada tagihan terkunci saat ini.</span>${histBtn}</div></div>`;
+  const due=String(b.JATUH_TEMPO||'').slice(0,10);
+  return `<div class="card" style="padding:9px 11px;margin:0 0 10px;background:var(--ic-amber);border:1px solid #f59e0b40">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+      <div style="min-width:0"><div style="font-size:12px;font-weight:700;color:var(--amber)">Tagihan terkunci ${fmt(b.NOMINAL)}</div>
+      <div style="font-size:10px;color:var(--text3)">${_ccbBulanLabel(b.PERIODE_SAMPAI||due)||'—'} · jth tempo ${due||'—'}</div></div>
+      <div style="display:flex;gap:5px;flex-shrink:0"><button class="btn-danger" style="background:var(--ic-green);color:var(--green);border-color:#2EE6A640" onclick="openCCBillRecap('${b.ID}')"><i class="ti ti-file-text"></i> Isi Tagihan</button>${histBtn}</div>
+    </div></div>`;
+}
+// Buka rekap dalam jendela baru (A4, siap Cetak/Simpan PDF, bisa ditutup).
+async function openCCBillRecap(billId){
+  const b=(state.ccbills||[]).find(x=>String(x.ID)===String(billId));
+  if(!b){ showToast('Tagihan tidak ditemukan','error'); return; }
+  showToast('Menyiapkan rekap…','success');
+  const snap=await ccBillLines(b);
+  if(snap===null){ showToast('Rincian tak bisa diambil — perangkat offline atau backend belum di-redeploy','error'); return; }
+  const w=window.open('','_blank');
+  if(!w){ showToast('Popup diblokir — izinkan popup untuk membuka rekap.','error'); return; }
+  w.document.open(); w.document.write(ccbRecapHTML(b,snap)); w.document.close();
+}
+function ccbRecapHTML(b,snap){
+  const lines=(snap&&snap.lines)||[];
+  const grup=[
+    {t:'belanja', judul:'BELANJA', arah:1},
+    {t:'cicilan', judul:'ANGSURAN CICILAN', arah:1},
+    {t:'kredit',  judul:'PEMBAYARAN / KREDIT', arah:-1},
+  ];
+  let no=0, body='', adaIsi=false;
+  grup.forEach(function(g){
+    const rows=lines.filter(function(l){ return (l.t||'belanja')===g.t; });
+    if(!rows.length) return;
+    adaIsi=true;
+    const sub=rows.reduce(function(s,l){ return s+Math.abs(Number(l.n)||0); },0);
+    body+='<tr class="grp"><td colspan="4">'+g.judul+'</td></tr>';
+    rows.forEach(function(l){
+      no++;
+      body+='<tr><td class="no">'+no+'</td><td class="tgl">'+_ccbEsc(String(l.d||'').slice(0,10))+'</td>'
+          + '<td>'+_ccbEsc(l.l||'')+'</td>'
+          + '<td class="rp">'+(g.arah<0?'(':'')+_ccbRp(l.n)+(g.arah<0?')':'')+'</td></tr>';
+    });
+    body+='<tr class="sub"><td colspan="3">Subtotal '+g.judul.toLowerCase()+' ('+rows.length+' baris)</td><td class="rp">'+(g.arah<0?'(':'')+_ccbRp(sub)+(g.arah<0?')':'')+'</td></tr>';
+  });
+  const sum=Number(snap&&snap.sum)||lines.reduce(function(s,l){ return s+(Number(l.n)||0); },0);
+  const stmt=Number(snap&&snap.stmt)||0;
+  const selisih=stmt>0?(stmt-sum):null;
+  const lunas=String(b.STATUS||'Aktif')==='Lunas';
+  const periode=(String(b.PERIODE_DARI||'').slice(0,10)||'—')+' s/d '+(String(b.PERIODE_SAMPAI||'').slice(0,10)||'—');
+  const judulBulan=_ccbBulanLabel(b.PERIODE_SAMPAI||b.JATUH_TEMPO);
+  const catatan=[];
+  if(!adaIsi) catatan.push('Tagihan ini dikunci tanpa mencentang baris mana pun, atau dikunci sebelum fitur rekap ada (v38). Rincian isinya tidak tersedia — yang tercatat hanya nominal totalnya.');
+  if(snap&&snap.partial) catatan.push('Sebagian isi tagihan ini berasal dari penguncian sebelum v38, jadi daftar di atas belum lengkap.');
+  if(snap&&snap.truncated) catatan.push('Daftar dipotong karena terlalu panjang untuk disimpan penuh.');
+  if(selisih!==null&&selisih!==0) catatan.push('Ada selisih '+_ccbRp(selisih)+' antara total statement cetak dan jumlah baris yang dicentang — kemungkinan ada transaksi di lembaran tagihan yang belum tercatat di app.');
+  return '<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><title>Rincian Tagihan '+_ccbEsc(b.CC)+(judulBulan?' — '+judulBulan:'')+'</title><style>'
+  + '*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+  + 'body{margin:0;background:#e9e9ee;font-family:"Segoe UI",Arial,Helvetica,sans-serif;color:#111}'
+  + '.page{width:210mm;min-height:297mm;margin:0 auto;background:#fff;padding:16mm 14mm}'
+  + '@page{size:A4;margin:0}'
+  + '@media print{body{background:#fff}.page{width:auto;min-height:auto;margin:0}.noprint{display:none!important}}'
+  + '.bar{position:fixed;top:10px;right:12px;display:flex;gap:8px;z-index:9}'
+  + '.bar button{font:600 13px/1 "Segoe UI",Arial;padding:9px 14px;border-radius:7px;border:1px solid #0002;cursor:pointer}'
+  + '.b1{background:#0f7b52;color:#fff;border-color:#0f7b52}.b2{background:#fff;color:#333}'
+  + 'h1{font-size:17px;margin:0 0 2px;letter-spacing:.5px}'
+  + '.sub1{font-size:12px;color:#555;margin:0 0 14px}'
+  + '.meta{width:100%;border-collapse:collapse;font-size:11.5px;margin-bottom:14px}'
+  + '.meta td{padding:3px 0;vertical-align:top}.meta td:first-child{width:38mm;color:#666}'
+  + 'table.it{width:100%;border-collapse:collapse;font-size:11.5px}'
+  + 'table.it th{background:#f0f0f4;border-top:1px solid #333;border-bottom:1px solid #333;padding:7px 6px;text-align:left;font-size:10.5px;letter-spacing:.4px}'
+  + 'table.it td{padding:6px;border-bottom:1px solid #e6e6ec;line-height:1.45}'
+  + 'td.no{width:9mm;color:#888}td.tgl{width:24mm;white-space:nowrap;color:#555}td.rp{width:34mm;text-align:right;white-space:nowrap}'
+  + 'tr.grp td{background:#fafafc;font-weight:700;font-size:10.5px;letter-spacing:.5px;color:#333;padding-top:9px}'
+  + 'tr.sub td{font-weight:700;background:#fff;border-bottom:1px solid #333}'
+  + '.tot{margin-top:14px;border:1px solid #333;padding:10px 12px;break-inside:avoid;page-break-inside:avoid}'
+  + '.tot div{display:flex;justify-content:space-between;font-size:12px;padding:3px 0}'
+  + '.tot .big{font-size:14px;font-weight:700;border-top:1px solid #333;margin-top:5px;padding-top:7px}'
+  + '.note{margin-top:12px;font-size:10.5px;color:#444;border-left:3px solid #999;padding:6px 10px;background:#f7f7fa;break-inside:avoid}'
+  + '.foot{margin-top:16px;font-size:9.5px;color:#888;text-align:center}'
+  + '</style></head><body>'
+  + '<div class="bar noprint"><button class="b1" onclick="window.print()">Cetak / Simpan PDF</button><button class="b2" onclick="window.close()">Tutup</button></div>'
+  + '<div class="page">'
+  + '<h1>RINCIAN TAGIHAN KARTU KREDIT</h1>'
+  + '<p class="sub1">'+_ccbEsc(b.CC)+(judulBulan?' &middot; statement '+judulBulan:'')+'</p>'
+  + '<table class="meta">'
+  + '<tr><td>Kartu</td><td><b>'+_ccbEsc(b.CC)+'</b></td></tr>'
+  + '<tr><td>Periode statement</td><td>'+_ccbEsc(periode)+'</td></tr>'
+  + '<tr><td>Jatuh tempo</td><td>'+_ccbEsc(String(b.JATUH_TEMPO||'').slice(0,10)||'—')+'</td></tr>'
+  + '<tr><td>Status</td><td>'+(lunas?('SUDAH DIBAYAR'+(b.TGL_BAYAR?' &middot; '+_ccbEsc(String(b.TGL_BAYAR).slice(0,10)):'')):'BELUM DIBAYAR')+'</td></tr>'
+  + '</table>'
+  + (adaIsi?('<table class="it"><thead><tr><th>No</th><th>Tanggal</th><th>Keterangan</th><th style="text-align:right">Nominal</th></tr></thead><tbody>'+body+'</tbody></table>'):'')
+  + '<div class="tot">'
+  + '<div><span>Jumlah baris yang dicentang ('+lines.length+' baris)</span><span>'+(sum<0?'-':'')+_ccbRp(sum)+'</span></div>'
+  + (stmt>0?'<div><span>Total di lembaran statement</span><span>'+_ccbRp(stmt)+'</span></div>':'')
+  + (selisih!==null?'<div><span>Selisih</span><span>'+(selisih===0?'Rp 0 (cocok)':_ccbRp(selisih)+(selisih>0?' (kurang)':' (lebih)'))+'</span></div>':'')
+  + '<div class="big"><span>NOMINAL TAGIHAN TERKUNCI</span><span>'+_ccbRp(b.NOMINAL)+'</span></div>'
+  + '</div>'
+  + catatan.map(function(c){ return '<div class="note">'+_ccbEsc(c)+'</div>'; }).join('')
+  + '<div class="foot">Dokumen internal Arthabumi &middot; dibuat dari FCC '+APP_VERSION+' &middot; dicetak '+_ccbEsc(today())+'</div>'
+  + '</div></body></html>';
+}
+// Drawer: daftar statement per kartu (aktif + arsip yg masih tersimpan).
+function openCCBillHistory(ccName){
+  const list=(state.ccbills||[]).filter(x=>x.CC===ccName)
+    .sort((a,b)=>String(b.JATUH_TEMPO||'').localeCompare(String(a.JATUH_TEMPO||'')));
+  document.getElementById('drawerTitle').textContent='Riwayat Tagihan · '+ccName;
+  drawerMode='ccbhist'; drawerEditId=null;
+  document.getElementById('drawerBody').innerHTML=
+    (list.length?list.map(b=>{
+      const lunas=String(b.STATUS||'Aktif')==='Lunas';
+      const bl=_ccbBulanLabel(b.PERIODE_SAMPAI||b.JATUH_TEMPO);
+      const ada=(b.HAS_RINCIAN!==false);
+      return `<div class="card" style="padding:10px 12px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+          <div style="min-width:0">
+            <div style="font-size:13px;font-weight:700">${fmt(b.NOMINAL)} <span class="badge ${lunas?'badge-green':'badge-red'}" style="margin-left:4px">${lunas?'Dibayar':'Aktif'}</span></div>
+            <div style="font-size:10px;color:var(--text3)">${bl||'—'} · jth tempo ${String(b.JATUH_TEMPO||'').slice(0,10)||'—'}${lunas&&b.TGL_BAYAR?' · dibayar '+String(b.TGL_BAYAR).slice(0,10):''}</div>
+          </div>
+          <button class="btn-danger" style="background:var(--ic-green);color:var(--green);border-color:#2EE6A640;flex-shrink:0" onclick="openCCBillRecap('${b.ID}')"><i class="ti ti-file-text"></i> ${ada?'Lihat isi':'Lihat'}</button>
+        </div></div>`;
+    }).join(''):'<div class="empty">Belum ada tagihan tercatat untuk kartu ini.</div>')
+    + `<div class="settings-sub" style="margin-top:10px">Arsip tagihan yang sudah dibayar disimpan ${'3'} bulan, lalu dihapus otomatis dari daftar ini. Transaksi aslinya tidak ikut terhapus.</div>`;
+  document.getElementById('drawerBg').classList.add('open');
+}
+
 // ── v34: INPUT MASSAL BUNGA HARIAN BANK (Seabank dkk) ─────────────────────
 // Tempel angka bunga per baris (baris 1 = tanggal mulai, baris berikut +1 hari).
 // Format baris: "bunga" ATAU "bunga pajak" (pemisah spasi/tab/;). Kalau kolom pajak kosong
@@ -3077,11 +3285,7 @@ async function doPayCicilanExec(id){
     // Jika cicilan lunas, clear juga ccbill reminder
     if(terbayar+1>=(+c.TENOR||0)){
       var bill2=(state.ccbills||[]).find(function(b){return b.CC===c.CC&&String(b.STATUS||'Aktif')!=='Lunas';});
-      if(bill2){
-        state.ccbills=(state.ccbills||[]).filter(function(x){return x.ID!==bill2.ID;});
-        if(API_URL)bgPost({action:'deleteRow',data:{sheet:'CC_TAGIHAN',id:bill2.ID}},'Auto-hapus pengingat cicilan lunas');
-        saveLocal();
-      }
+      if(bill2) settleCCBillLocal(bill2, today());   // v38: arsipkan, jangan hapus
     }
   } else {
     c.TENOR_TERBAYAR=terbayar+1; if(c.TENOR_TERBAYAR>=tenor)c.STATUS='Lunas';
@@ -3199,9 +3403,14 @@ function openReserveDetail(){
 }
 // ── RINCIAN TAGIHAN CC (rekonsiliasi vs statement) ────
 let _ccBillName=null, _ccBillTxns=null;
+// v38: buffer baris yg sedang ditampilkan di drawer Rincian. Checkbox menyimpan INDEKS ke array ini
+// (data-i), bukan teks labelnya — esc() tidak meng-escape tanda kutip, jadi menaruh NOTES ke dalam
+// atribut HTML gampang merusak markup. _ccbShowPaid = tampilkan baris yg sudah masuk tagihan lain.
+let _ccbRows=[], _ccbShowPaid=false;
+function ccbTogglePaid(el){ _ccbShowPaid=!!(el&&el.checked); ccbApply(); }
 function openCCBill(ccId){
   const cc=state.ccs.find(x=>x.ID===ccId); if(!cc)return;
-  _ccBillName=cc.NAMA; _ccBillTxns=null;
+  _ccBillName=cc.NAMA; _ccBillTxns=null; _ccbShowPaid=false;
   const to=today(), from=_addDaysISO(to,-31);
   document.getElementById('drawerTitle').textContent='Rincian Tagihan · '+cc.NAMA;
   drawerMode='ccbill'; drawerEditId=null;
@@ -3253,13 +3462,23 @@ function renderCCBill(from,to){
   const src=_ccBillTxns || state.txns.filter(t=>t.REKENING===name);
   const inP=t=>{const d=String(t.TANGGAL).slice(0,10); return d>=from && d<=to;};
   // v23.1: kecualikan baris yg sudah ditandai LUNAS (sudah masuk tagihan terkunci sebelumnya) → tak muncul lagi.
-  const charges=src.filter(t=>t.REKENING===name && t.JENIS==='Pengeluaran' && inP(t) && !isPaid(t.ID)).sort((a,b)=>String(a.TANGGAL).localeCompare(String(b.TANGGAL)));
-  const pays=src.filter(t=>t.REKENING===name && t.JENIS==='Pemasukan' && inP(t) && !isPaid(t.ID)).sort((a,b)=>String(a.TANGGAL).localeCompare(String(b.TANGGAL)));
+  // v38: bisa ditampilkan lagi lewat toggle "Tampilkan baris yg sudah masuk tagihan" — tampil abu,
+  // TIDAK bisa dicentang, dan TIDAK ikut subtotal (baris itu milik statement lain).
+  const keep=t=>t.REKENING===name && inP(t) && (_ccbShowPaid || !isPaid(t.ID));
+  const charges=src.filter(t=>keep(t) && t.JENIS==='Pengeluaran').sort((a,b)=>String(a.TANGGAL).localeCompare(String(b.TANGGAL)));
+  const pays=src.filter(t=>keep(t) && t.JENIS==='Pemasukan').sort((a,b)=>String(a.TANGGAL).localeCompare(String(b.TANGGAL)));
   const cics=cicilanInstallmentsInPeriod(name,from,to).sort((a,b)=>a.date.localeCompare(b.date));
-  const sumCharge=charges.reduce((s,t)=>s+Number(t.NOMINAL||0),0);
-  const sumPay=pays.reduce((s,t)=>s+Number(t.NOMINAL||0),0);
+  const sumCharge=charges.filter(t=>!isPaid(t.ID)).reduce((s,t)=>s+Number(t.NOMINAL||0),0);
+  const sumPay=pays.filter(t=>!isPaid(t.ID)).reduce((s,t)=>s+Number(t.NOMINAL||0),0);
   const sumCic=cics.reduce((s,c)=>s+c.amt,0);
-  const row=(tgl,label,amt,color,chkAmt,txnId)=>{const ca=(chkAmt===undefined?amt:chkAmt);return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid #ffffff10"><input type="checkbox" class="ccb-chk" data-amt="${ca}" data-id="${txnId||''}" onchange="ccbTick(this)" style="width:18px;height:18px;flex-shrink:0;accent-color:#7c5cff"><div style="flex:1;min-width:0"><div style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(label)}</div><div style="font-size:10px;color:var(--text3)">${tgl}</div></div><div style="font-size:13px;font-weight:600;color:${color};flex-shrink:0">${ca<0?'−':''}${fmt(amt)}</div></div>`;};
+  const nPaidHidden=_ccbShowPaid?0:src.filter(t=>t.REKENING===name && inP(t) && isPaid(t.ID)).length;
+  _ccbRows=[];
+  const row=(tgl,label,amt,color,chkAmt,txnId,typ,done)=>{
+    const ca=(chkAmt===undefined?amt:chkAmt);
+    const i=_ccbRows.length;
+    _ccbRows.push({d:tgl,l:String(label||''),n:ca,t:typ||'belanja'});
+    const dis=done?' disabled':'';
+    return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid #ffffff10${done?';opacity:.5':''}"><input type="checkbox" class="ccb-chk" data-amt="${ca}" data-id="${txnId||''}" data-i="${i}"${dis} onchange="ccbTick(this)" style="width:18px;height:18px;flex-shrink:0;accent-color:#7c5cff"><div style="flex:1;min-width:0"><div style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(label)}${done?' <span style="font-size:9px;color:var(--text3)">· sudah masuk tagihan lain</span>':''}</div><div style="font-size:10px;color:var(--text3)">${tgl}</div></div><div style="font-size:13px;font-weight:600;color:${color};flex-shrink:0">${ca<0?'−':''}${fmt(amt)}</div></div>`;};
   document.getElementById('drawerBody').innerHTML=`
     <div id="ccb_topbar" style="position:sticky;top:0;z-index:6;background:#12121c;padding:8px 10px;margin-bottom:10px;border-radius:8px;border:1px solid #7c5cff55;display:flex;justify-content:space-between;align-items:center;gap:8px">
       <span style="font-size:11px;color:var(--text2)"><i class="ti ti-checkbox" style="font-size:13px;vertical-align:middle;color:var(--purple)"></i> Dicentang sekarang · <span id="ccb_topCnt">0</span> baris</span>
@@ -3269,12 +3488,17 @@ function renderCCBill(from,to){
       <div class="form-group" style="flex:1;margin:0"><label class="form-label">Dari</label><input type="date" class="form-input" id="ccb_from" value="${from}" onchange="ccbApply()"></div>
       <div class="form-group" style="flex:1;margin:0"><label class="form-label">Sampai</label><input type="date" class="form-input" id="ccb_to" value="${to}" onchange="ccbApply()"></div>
     </div>
+    <label style="display:flex;align-items:center;gap:7px;margin:0 0 10px;font-size:11px;color:var(--text2);cursor:pointer">
+      <input type="checkbox" id="ccb_showpaid" ${_ccbShowPaid?'checked':''} onchange="ccbTogglePaid(this)" style="width:16px;height:16px;accent-color:#7c5cff">
+      Tampilkan baris yang sudah masuk tagihan lain${nPaidHidden?` <b style="color:var(--text3)">(${nPaidHidden} disembunyikan)</b>`:''}
+    </label>
+    ${ccbLockedInfoHTML(name)}
     <div class="card" style="padding:8px 10px;margin:0 0 12px"><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Total tagihan berjalan (kumulatif, semua waktu)</div><div style="font-size:16px;font-weight:700;color:var(--red)">${fmt(getCCOut(name))}</div><div style="font-size:10px;color:var(--text3)">termasuk cicilan jatuh tempo ${fmt(cicilanDueAmt(name))}</div></div>
     <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">Belanja periode ini · <b style="color:var(--red)">${fmt(sumCharge)}</b></div>
-    ${charges.length?charges.map(t=>row(String(t.TANGGAL).slice(0,10),(t.KATEGORI||'')+(t.NOTES?' · '+t.NOTES:''),Number(t.NOMINAL),'var(--red)',undefined,t.ID)).join(''):'<div class="settings-sub" style="margin:4px 0">Tidak ada belanja di periode ini.</div>'}
+    ${charges.length?charges.map(t=>row(String(t.TANGGAL).slice(0,10),(t.KATEGORI||'')+(t.NOTES?' · '+t.NOTES:''),Number(t.NOMINAL),'var(--red)',undefined,t.ID,'belanja',isPaid(t.ID))).join(''):'<div class="settings-sub" style="margin:4px 0">Tidak ada belanja di periode ini.</div>'}
     <div style="font-size:11px;color:var(--purple);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 2px">Angsuran cicilan periode ini · <b style="color:var(--purple)">${fmt(sumCic)}</b></div>
-    ${cics.length?cics.map(c=>row(c.date,'Cicilan '+c.ke+'/'+c.tenor+' · '+c.desk+(c.paid?' (sdh dibayar)':''),c.amt,'var(--purple)')).join(''):'<div class="settings-sub" style="margin:4px 0">Tidak ada angsuran jatuh tempo di periode ini.</div>'}
-    ${pays.length?`<div style="font-size:11px;color:var(--green);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 2px">Pembayaran/kredit periode ini · <b style="color:var(--green)">${fmt(sumPay)}</b></div>${pays.map(t=>row(String(t.TANGGAL).slice(0,10),(t.KATEGORI||'')+(t.NOTES?' · '+t.NOTES:''),Number(t.NOMINAL),'var(--green)',-Number(t.NOMINAL),t.ID)).join('')}`:''}
+    ${cics.length?cics.map(c=>row(c.date,'Cicilan '+c.ke+'/'+c.tenor+' · '+c.desk+(c.paid?' (sdh dibayar)':''),c.amt,'var(--purple)',undefined,'','cicilan',false)).join(''):'<div class="settings-sub" style="margin:4px 0">Tidak ada angsuran jatuh tempo di periode ini.</div>'}
+    ${pays.length?`<div style="font-size:11px;color:var(--green);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 2px">Pembayaran/kredit periode ini · <b style="color:var(--green)">${fmt(sumPay)}</b></div>${pays.map(t=>row(String(t.TANGGAL).slice(0,10),(t.KATEGORI||'')+(t.NOTES?' · '+t.NOTES:''),Number(t.NOMINAL),'var(--green)',-Number(t.NOMINAL),t.ID,'kredit',isPaid(t.ID))).join('')}`:''}
     <div class="card" style="padding:8px 10px;margin:12px 0 0;background:#140d24;border:1px solid #7c5cff40">
       <div style="display:flex;justify-content:space-between"><span style="font-size:12px">Belanja + Cicilan periode</span><span style="font-weight:700;color:var(--red)">${fmt(sumCharge+sumCic)}</span></div>
       ${sumPay>0?`<div style="display:flex;justify-content:space-between;margin-top:3px"><span style="font-size:12px">− Pembayaran</span><span style="font-weight:700;color:var(--green)">${fmt(sumPay)}</span></div>`:''}
@@ -3289,7 +3513,7 @@ function renderCCBill(from,to){
       <div class="form-group" style="flex:1;margin:0"><label class="form-label">Jatuh tempo</label><input type="date" class="form-input" id="ccb_due" value="${dueDateThisMonth(ccObj.JATUH_TEMPO)}"></div>
       <button class="btn-primary" style="flex:1.2" onclick="lockCCBillUI()"><i class="ti ti-lock"></i> Kunci ke Dashboard</button>
     </div>
-    <div class="settings-sub" style="margin-top:8px">Centang baris yg cocok & isi total cetakan → app hitung selisih (cocok bila 0). Lalu "Kunci ke Dashboard" → tagihan ini jadi pengingat jatuh tempo (pakai total statement bila diisi, atau jumlah yg dicentang). Cicilan tampil meski tak ada di daftar transaksi CC. Ganti rentang tanggal me-reset centang.</div>`;
+    <div class="settings-sub" style="margin-top:8px">Centang baris yg cocok & isi total cetakan → app hitung selisih (cocok bila 0). Lalu "Kunci ke Dashboard" → tagihan ini jadi pengingat jatuh tempo (pakai total statement bila diisi, atau jumlah yg dicentang). Cicilan tampil meski tak ada di daftar transaksi CC. Ganti rentang tanggal me-reset centang.<br><b style="color:var(--purple)">v38:</b> baris yang kamu centang ikut disimpan sebagai rekap — nanti bisa dibuka lagi & dicetak lewat tombol <b>Isi Tagihan</b>. Kalau kamu hanya mengetik total statement tanpa mencentang, tagihannya tetap terkunci tapi <b>tanpa rincian</b>.</div>`;
 }
 
 // ── RENDER TRANSAKSI ──────────────────────────────────
@@ -3780,6 +4004,8 @@ function renderMaster() {
               ${res>0?`<div style="font-size:10px;color:var(--blue)">res: ${fmtS(res)}</div>`:''}
               <div style="display:flex;gap:5px;margin-top:6px;justify-content:flex-end;flex-wrap:wrap" onclick="event.stopPropagation()">
                 <button class="btn-danger" style="background:var(--ic-amber);color:var(--amber);border-color:#f59e0b40" onclick="openCCBill('${c.ID}')">Rincian</button>
+                ${ccBillFor(c.NAMA)?`<button class="btn-danger" style="background:#140d24;color:var(--purple);border-color:#7c5cff55" onclick="openCCBillRecap('${ccBillFor(c.NAMA).ID}')"><i class="ti ti-file-text"></i> Isi Tagihan</button>`:''}
+                ${(state.ccbills||[]).some(x=>x.CC===c.NAMA&&String(x.STATUS||'Aktif')==='Lunas')?`<button class="btn-danger" onclick="openCCBillHistory('${esc(c.NAMA)}')"><i class="ti ti-history"></i> Riwayat</button>`:''}
                 <button class="btn-danger" style="background:var(--ic-green);color:var(--green);border-color:#2EE6A640" onclick="openDrawer('paycc','${c.ID}')">Bayar</button>
                 <button class="btn-danger" onclick="editCC('${c.ID}')">Edit</button>
                 <button class="btn-danger" onclick="deleteItem('ccs','${c.ID}','MASTER_CC')">Hapus</button>
@@ -5097,14 +5323,11 @@ async function saveDrawer() {
         showToast('Centangan reserve dilepas s/d '+relCutoff+(relAdv?(' · '+relAdv+' angsuran ditandai terbayar'):''),'success');
       }
     }catch(relErr){ console.error('release v31', relErr); }
-    // Auto-clear ccbill reminder untuk CC ini
+    // v38: tagihan diarsipkan (STATUS 'Lunas'), bukan dihapus — pengingat tetap hilang dari
+    // dashboard, tapi rekap isinya masih bisa dibuka lewat Riwayat Tagihan.
     (function(){
       var bill=(state.ccbills||[]).find(function(b){return b.CC===ccName&&String(b.STATUS||'Aktif')!=='Lunas';});
-      if(bill){
-        state.ccbills=(state.ccbills||[]).filter(function(x){return x.ID!==bill.ID;});
-        if(API_URL)bgPost({action:'deleteRow',data:{sheet:'CC_TAGIHAN',id:bill.ID}},'Auto-hapus pengingat tagihan CC');
-        saveLocal();
-      }
+      if(bill) settleCCBillLocal(bill, tgl||today());
     })();
     closeDrawer();
     if(API_URL)await syncAll(); else { renderMaster(); renderDashboard(); renderCCBillReminder(); }

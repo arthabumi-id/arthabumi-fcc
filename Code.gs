@@ -9,6 +9,7 @@ const SHEET_ID   = SpreadsheetApp.getActiveSpreadsheet().getId();
 const VALID_PINS = ['1234', '5678', '9999'];
 
 const RECENT_DAYS = 120;        // txn terakhir yg dikirim saat sync
+const CCBILL_KEEP_MONTHS = 3;   // v38: arsip tagihan CC yg sudah Lunas disimpan 3 bulan (keputusan Eddy 12 Agu 2026)
 const SUMMARY_TTL = 21600;      // cache summary 6 jam (detik)
 const SUMMARY_KEY = 'fcc_summary_v3';
 
@@ -49,8 +50,11 @@ const HEADERS = {
   // tiap bulan = release reserve + TENOR_TERBAYAR++. STATUS: 'Jalan'/'Lunas'.
   [S.CICILAN]:  ['ID','TANGGAL_BELI','CC','DESKRIPSI','NOMINAL_POKOK','BUNGA_TOTAL','TENOR','NOMINAL_PER_BULAN','TGL_MULAI','TENOR_TERBAYAR','STATUS','PROJECT','KATEGORI','REF_ID','NOTES','CREATED_BY','CREATED_AT'],
   // CC_TAGIHAN = tagihan CC terkunci dari rekonsiliasi statement (pengingat jatuh tempo di dashboard).
-  // 1 baris aktif per kartu (lock baru menggantikan yg lama). STATUS='Aktif'/'Lunas'.
-  [S.CCBILL]:   ['ID','CC','NOMINAL','JATUH_TEMPO','PERIODE_DARI','PERIODE_SAMPAI','STATUS','CREATED_BY','CREATED_AT'],
+  // 1 baris AKTIF per kartu (lock baru menggantikan yg Aktif saja). STATUS='Aktif'/'Lunas'.
+  // v38: RINCIAN = snapshot JSON baris yg dicentang saat mengunci ({v,stmt,sum,lines:[{d,l,n,t}]}) —
+  //      dipakai popup "Isi Tagihan". TGL_BAYAR diisi saat settleCCBill (STATUS→'Lunas', baris jadi
+  //      ARSIP, tidak dihapus). Arsip di-prune otomatis setelah CCBILL_KEEP_MONTHS bulan.
+  [S.CCBILL]:   ['ID','CC','NOMINAL','JATUH_TEMPO','PERIODE_DARI','PERIODE_SAMPAI','STATUS','CREATED_BY','CREATED_AT','RINCIAN','TGL_BAYAR'],
   // RESERVE_MARK (v20) = penanda manual Eddy: transaksi CC mana yg sudah dia buatkan reserve
   // (dia transfer reserve secara akumulasi). Lepas dari pot reserve (RESERVE_LOG) — murni penanda
   // ingat-ingatan. 1 baris = 1 TXN dicentang. Lepas centang = hapus baris (by TXN_ID).
@@ -182,6 +186,7 @@ function doGet(e) {
       case 'getPiutang':   return json(getSheet(ss, S.PIUTANG));
       case 'getCicilan':   return json(getSheet(ss, S.CICILAN));
       case 'getCCBills':   return json(getSheet(ss, S.CCBILL));
+      case 'getCCBillDetail': return json(getCCBillDetail(ss, e.parameter)); // v38: rincian 1 tagihan (on demand)
       case 'getMarks':     return json(getSheet(ss, S.MARK));
       case 'getPaidMarks': return json(getSheet(ss, S.PAIDMARK));
       case 'getInvest':    return json({ investAkun: getSheet(ss, S.INVEST), investLog: getSheet(ss, S.INVESTLOG), investValue: getSheet(ss, S.INVESTVAL) });
@@ -236,6 +241,7 @@ function doPost(e) {
       case 'addInvestValue':  res = addInvestValue(ss, data); break;
       case 'deleteInvestFlow':res = deleteInvestFlow(ss, data); break;
       case 'lockCCBill':  res = lockCCBill(ss, data); break;
+      case 'settleCCBill': res = settleCCBill(ss, data); break; // v38: tandai Lunas (arsip), bukan hapus
       case 'fetchKurs':   res = fetchKursBCA(); break;
       case 'addForexConvert': res = addForexConvert(ss, data); break;
       case 'deleteForex':     res = deleteForex(ss, data); break;
@@ -266,7 +272,7 @@ function getBundle(ss, params) {
     jadwal:    getSheet(ss, S.JADWAL),
     piutang:   getSheet(ss, S.PIUTANG),
     cicilan:   getSheet(ss, S.CICILAN),
-    ccbills:   getSheet(ss, S.CCBILL),
+    ccbills:   _ccbLite(ss),   // v38: TANPA kolom RINCIAN (lihat catatan di _ccbLite)
     marks:     getSheet(ss, S.MARK),
     paidMarks: getSheet(ss, S.PAIDMARK),
     investAkun:  getSheet(ss, S.INVEST),
@@ -744,28 +750,132 @@ function payCicilan(ss, data) {
 // Kunci tagihan CC hasil rekonsiliasi → pengingat jatuh tempo di dashboard.
 // 1 baris AKTIF per kartu (lock baru menghapus yg lama utk kartu itu). Clear = deleteRow generik.
 function lockCCBill(ss, data) {
+  const sh = _ccbSheet(ss);
+  const cc = String(data.CC || '');
+  if (!cc) return { error: 'CC wajib' };
+  // hapus baris lama utk kartu yg sama — v38: HANYA yg masih Aktif. Baris STATUS='Lunas' adalah
+  // ARSIP statement yg sudah dibayar; dulu ikut terhapus sehingga riwayat hilang.
+  if (sh.getLastRow() > 1) {
+    const all = sh.getRange(1,1,sh.getLastRow(),sh.getLastColumn()).getValues();
+    const iCC = all[0].indexOf('CC'), iSt = all[0].indexOf('STATUS');
+    for (let i = all.length - 1; i >= 1; i--) {
+      if (String(all[i][iCC]) !== cc) continue;
+      if (iSt >= 0 && String(all[i][iSt]) === 'Lunas') continue;
+      sh.deleteRow(i + 1);
+    }
+  }
+  const now = new Date().toISOString();
+  const id = 'CCB' + Date.now();
+  const o = { ID:id, CC:cc, NOMINAL:Math.abs(Number(data.NOMINAL)||0), JATUH_TEMPO:data.JATUH_TEMPO||'',
+              PERIODE_DARI:data.PERIODE_DARI||'', PERIODE_SAMPAI:data.PERIODE_SAMPAI||'',
+              STATUS:'Aktif', CREATED_BY:data.USER||'', CREATED_AT:now,
+              RINCIAN:_ccbClampRincian(data.RINCIAN), TGL_BAYAR:'' };
+  sh.appendRow(HEADERS[S.CCBILL].map(h => o[h] !== undefined ? o[h] : ''));
+  const pruned = _pruneCCBills(ss);
+  return { ok:true, id:id, pruned:pruned };
+}
+
+// ── v38: helper CC_TAGIHAN ────────────────────────────────────────────────
+// Buat sheet bila belum ada + migrasi kolom baru (idempoten). WAJIB dipanggil sebelum appendRow,
+// kalau tidak appendRow menulis melewati header → getSheet menghasilkan key kosong.
+function _ccbSheet(ss) {
   let sh = ss.getSheetByName(S.CCBILL);
   if (!sh) {
     sh = ss.insertSheet(S.CCBILL);
     sh.appendRow(HEADERS[S.CCBILL]);
     sh.getRange(1,1,1,HEADERS[S.CCBILL].length).setFontWeight('bold').setBackground('#1a1a2e').setFontColor('#ffffff');
     sh.setFrozenRows(1);
+    return sh;
   }
-  const cc = String(data.CC || '');
-  if (!cc) return { error: 'CC wajib' };
-  // hapus baris lama utk kartu yg sama (dari bawah)
-  if (sh.getLastRow() > 1) {
-    const all = sh.getRange(1,1,sh.getLastRow(),sh.getLastColumn()).getValues();
-    const iCC = all[0].indexOf('CC');
-    for (let i = all.length - 1; i >= 1; i--) if (String(all[i][iCC]) === cc) sh.deleteRow(i + 1);
+  ensureCol(ss, S.CCBILL, 'RINCIAN');
+  ensureCol(ss, S.CCBILL, 'TGL_BAYAR');
+  return sh;
+}
+// ⚠️ PENTING (v38): daftar tagihan utk sync — kolom RINCIAN DIBUANG, diganti penanda HAS_RINCIAN.
+// Alasan: arsip statement menumpuk (±6 kartu × 12/tahun) dan tiap snapshot beberapa KB. Kalau ikut
+// getBundle, payload sync membengkak terus-menerus dan app makin lambat tiap bulan. Isi rincian
+// diambil satu per satu lewat getCCBillDetail hanya saat popup dibuka.
+function _ccbLite(ss) {
+  ensureCol(ss, S.CCBILL, 'RINCIAN');   // migrasi idempoten, jalan walau belum pernah lock v38
+  ensureCol(ss, S.CCBILL, 'TGL_BAYAR');
+  return getSheet(ss, S.CCBILL).map(function(r){
+    const o = {}; Object.keys(r).forEach(function(k){ if (k !== 'RINCIAN') o[k] = r[k]; });
+    o.HAS_RINCIAN = !!(r.RINCIAN && String(r.RINCIAN).length > 2);
+    return o;
+  });
+}
+// Batas 1 sel Google Sheets = 50.000 karakter. Kalau snapshot kelewat besar: buang label dulu
+// (bagian terpanjang), kalau masih besar potong barisnya & tandai truncated — jangan sampai
+// appendRow gagal dan seluruh penguncian tagihan ikut batal.
+function _ccbClampRincian(r) {
+  if (!r) return '';
+  let s = String(r);
+  if (s.length <= 45000) return s;
+  try {
+    const o = JSON.parse(s);
+    (o.lines || []).forEach(function(l){ if (l.l && l.l.length > 40) l.l = l.l.slice(0,40); });
+    s = JSON.stringify(o);
+    while (s.length > 45000 && o.lines && o.lines.length > 1) {
+      o.lines = o.lines.slice(0, Math.floor(o.lines.length * 0.8));
+      o.truncated = true;
+      s = JSON.stringify(o);
+    }
+    return s.slice(0, 45000);
+  } catch (e) { return s.slice(0, 45000); }
+}
+// Arsip tagihan Lunas hanya disimpan CCBILL_KEEP_MONTHS bulan (Eddy: 3 bulan).
+// Yang dihapus HANYA baris pengingat/arsip — transaksi asli di sheet TRANSAKSI tidak disentuh.
+function _pruneCCBills(ss) {
+  const sh = ss.getSheetByName(S.CCBILL);
+  if (!sh || sh.getLastRow() <= 1) return 0;
+  const tz = ss.getSpreadsheetTimeZone() || 'Asia/Jakarta';
+  const cut = new Date(); cut.setMonth(cut.getMonth() - CCBILL_KEEP_MONTHS);
+  const cutISO = Utilities.formatDate(cut, tz, 'yyyy-MM-dd');
+  const all = sh.getRange(1,1,sh.getLastRow(),sh.getLastColumn()).getValues();
+  const iSt = all[0].indexOf('STATUS'), iDue = all[0].indexOf('JATUH_TEMPO'), iPay = all[0].indexOf('TGL_BAYAR');
+  if (iSt < 0) return 0;
+  let n = 0;
+  for (let i = all.length - 1; i >= 1; i--) {
+    if (String(all[i][iSt]) !== 'Lunas') continue;                 // yang Aktif tidak pernah di-prune
+    const raw = (iPay >= 0 && all[i][iPay]) ? all[i][iPay] : (iDue >= 0 ? all[i][iDue] : '');
+    const d = (raw instanceof Date) ? Utilities.formatDate(raw, tz, 'yyyy-MM-dd') : String(raw || '').slice(0,10);
+    if (!d) continue;                                              // tanpa tanggal → jangan tebak, biarkan
+    if (d < cutISO) { sh.deleteRow(i + 1); n++; }
   }
-  const now = new Date().toISOString();
-  const id = 'CCB' + Date.now();
-  const o = { ID:id, CC:cc, NOMINAL:Math.abs(Number(data.NOMINAL)||0), JATUH_TEMPO:data.JATUH_TEMPO||'',
-              PERIODE_DARI:data.PERIODE_DARI||'', PERIODE_SAMPAI:data.PERIODE_SAMPAI||'',
-              STATUS:'Aktif', CREATED_BY:data.USER||'', CREATED_AT:now };
-  sh.appendRow(HEADERS[S.CCBILL].map(h => o[h] !== undefined ? o[h] : ''));
-  return { ok:true, id:id };
+  return n;
+}
+// v38: tandai tagihan LUNAS (arsip) — menggantikan deleteRow saat pembayaran CC dicatat.
+// Riwayat statement tetap bisa dibuka selama masa simpan.
+function settleCCBill(ss, data) {
+  const sh = _ccbSheet(ss);
+  if (sh.getLastRow() <= 1) return { ok:true, found:0 };
+  const all = sh.getRange(1,1,sh.getLastRow(),sh.getLastColumn()).getValues();
+  const iID = all[0].indexOf('ID'), iCC = all[0].indexOf('CC'), iSt = all[0].indexOf('STATUS'), iPay = all[0].indexOf('TGL_BAYAR');
+  const id = String(data.ID || ''), cc = String(data.CC || '');
+  const tz = ss.getSpreadsheetTimeZone() || 'Asia/Jakarta';
+  const tgl = String(data.TGL_BAYAR || Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd')).slice(0,10);
+  let n = 0;
+  for (let i = 1; i < all.length; i++) {
+    const hit = id ? (String(all[i][iID]) === id) : (cc && String(all[i][iCC]) === cc && String(all[i][iSt]) !== 'Lunas');
+    if (!hit) continue;
+    if (iSt >= 0) sh.getRange(i+1, iSt+1).setValue('Lunas');
+    if (iPay >= 0) sh.getRange(i+1, iPay+1).setValue(tgl);
+    n++;
+    if (id) break;
+  }
+  _pruneCCBills(ss);
+  return { ok:true, found:n };
+}
+// v38: ambil RINCIAN satu tagihan ON DEMAND. Sengaja TIDAK ikut getBundle — snapshot beberapa KB
+// per statement × puluhan baris akan memperlambat setiap sync selamanya.
+function getCCBillDetail(ss, params) {
+  const rows = getSheet(ss, S.CCBILL);
+  const id = String((params && params.id) || '');
+  const cc = String((params && params.cc) || '');
+  const hit = id ? rows.filter(function(r){ return String(r.ID) === id; })
+                 : rows.filter(function(r){ return String(r.CC) === cc && String(r.STATUS||'Aktif') !== 'Lunas'; });
+  if (!hit.length) return { error: 'Tagihan tidak ditemukan' };
+  return hit[0];
 }
 
 // Pindahkan bank sumber reserve sebuah cicilan (atau reserve apa pun ber-REF) ke bank lain.
