@@ -501,10 +501,11 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v39';
+const APP_VERSION = 'v39.1';
 // Tampilkan versi di halaman login (sebelum masuk) — berguna utk cek deploy tanpa login.
 try{ var _lv=document.getElementById('loginVer'); if(_lv) _lv.textContent=APP_VERSION; }catch(e){}
 const CHANGELOG = [
+  { v:'v39.1', d:'13 Agu 2026', t:'Simpan jadi lebih jarang gagal. Pengukuran menunjukkan penyimpanan pertama setelah app menganggur bisa menunggu sampai 53 detik — server Google butuh waktu "bangun", padahal pemrosesannya sendiri di bawah 3 detik. Sekarang app membangunkan server begitu Anda membuka form dan begitu Anda kembali ke app, jadi saat Anda menekan Simpan servernya sudah siap. Selain itu penyimpanan yang gagal karena gangguan koneksi kini dicoba ulang sendiri (15 detik, lalu 30 detik) — aman karena sejak v39 server menolak mencatat operasi yang sama dua kali. Tidak perlu redeploy.' },
   { v:'v39', d:'13 Agu 2026', t:'Pengaman anti-dobel. Tanggal 13 Agu satu termin piutang tercatat 6 kali: server Google sempat gagal mengantar respons, sehingga app mengira gagal padahal datanya sudah tersimpan, lalu mengirim ulang berkali-kali. Sekarang setiap operasi simpan membawa penanda unik dan server menolak menjalankan operasi yang sama dua kali — kiriman ulang dibalas hasil aslinya tanpa menulis lagi. Berlaku untuk SEMUA penyimpanan, termasuk transaksi, transfer, dan pembayaran. Ditambah tombol "Buang" di bar antrean (dulu hanya ada "Kirim ulang" sehingga operasi yang mentok tidak bisa dilepas), dan pesan diperjelas jadi "belum terkonfirmasi" karena "gagal tersimpan" ternyata menyesatkan. Perlu redeploy Code.gs.' },
   { v:'v38', d:'12 Agu 2026', t:'Rekap Isi Tagihan Kartu Kredit. Baris yang Anda centang saat "Kunci ke Dashboard" kini ikut disimpan, jadi isi lembaran tagihan bisa dibuka lagi kapan saja lewat tombol "Isi Tagihan" — tampil sebagai dokumen A4 di jendela baru, siap Cetak/Simpan PDF, lengkap dengan subtotal belanja, angsuran cicilan, pembayaran, serta selisih terhadap total statement cetak. Tagihan yang sudah dibayar tidak lagi dihapus melainkan diarsipkan (tombol "Riwayat"), disimpan 3 bulan. Ditambah toggle "Tampilkan baris yang sudah masuk tagihan lain" di halaman Rincian. Perlu redeploy Code.gs.' },
   { v:'v37.2', d:'1 Agu 2026', t:'"Sisa belum dibayar klien" kini mengabaikan refund barang/jaminan — hanya pembayaran klien (kategori kelompok PEMASUKAN) yang dihitung. Refund tetap tercatat masuk agar saldo bank benar, tapi tidak lagi mengurangi sisa tagihan.' },
@@ -1192,6 +1193,23 @@ async function apiPost(body, opId) {
   } catch { return null; }
 }
 
+// ── v39.1: PEMANASAN BACKEND ──────────────────────────
+// Ukuran 13 Agu 2026: permintaan PERTAMA sesudah app menganggur makan 53,7 dtk (lalu 8,2 dtk),
+// padahal script-nya sendiri selesai <3 dtk — itu cold start di sisi Google. Kalau lapisan
+// pengantarnya menyerah duluan, user melihat "gagal" padahal datanya tertulis.
+// Solusi: bangunkan container SEBELUM user menekan simpan. Dipanggil saat form dibuka & saat
+// user kembali ke app, jadi selama dia mengetik backend-nya sudah panas.
+// Aksi '__warm__' sengaja tidak dikenal: doGet membalasnya seketika TANPA membaca sheet apa pun.
+let _warmTs = 0;
+function warmBackend(){
+  if(!API_URL || !state.pin) return;
+  const now = Date.now();
+  if(now - _warmTs < 180000) return;   // maksimal sekali per 3 menit — jangan boros kuota
+  _warmTs = now;
+  try{ apiGet({action:'__warm__'}); }catch(e){}   // sengaja tidak di-await: jalan di latar
+}
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) warmBackend(); });
+
 // ── OPTIMISTIC SAVE / ANTRIAN BACKGROUND ──────────────
 // Pola: state lokal sudah di-update duluan (applySummaryDelta + push ke array),
 // drawer ditutup & UI dirender SEKETIKA, lalu POST ke server jalan di latar.
@@ -1204,6 +1222,20 @@ function bgPost(body, label){
   state.pending.push(op); savePending(); renderPendingBar();
   sendOp(op);
 }
+// v39.1: kegagalan kirim MENYEMBUHKAN DIRI. Dulu op yang gagal hanya duduk diam sampai user
+// menekan tombol atau Sync berikutnya — padahal penyebab tersering cuma cold start sesaat.
+// Aman dilakukan HANYA karena penjaga idempoten v39 sudah aktif: kirim ulang tidak bisa menulis
+// dua kali. Dibatasi 2 percobaan otomatis supaya tidak menghantam server saat gangguan panjang.
+const OP_AUTO_RETRY_MAX = 2;
+function scheduleRetry(op){
+  op.tries = (op.tries||0) + 1;
+  if(op.tries > OP_AUTO_RETRY_MAX) return;          // selebihnya serahkan ke user (tombol Kirim ulang / Buang)
+  const jeda = 15000 * op.tries;                    // 15 dtk, lalu 30 dtk
+  setTimeout(()=>{
+    const masih = state.pending.find(p=>p.id===op.id);
+    if(masih && masih.status==='failed'){ warmBackend(); sendOp(masih); }
+  }, jeda);
+}
 async function sendOp(op){
   op.status='sending'; renderPendingBar();
   try{
@@ -1212,11 +1244,15 @@ async function sendOp(op){
     const res = await fetch(API_URL, { method:'POST', body: JSON.stringify({...op.body, OP_ID: op.id, pin: state.pin, USER: state.user}) });
     const j = await res.json();
     if(j && !j.error){ state.pending = state.pending.filter(p=>p.id!==op.id); savePending(); renderPendingBar(); }
-    else { op.status='failed'; op.err=(j&&j.error)||'ditolak server'; savePending(); renderPendingBar(); }
+    else {
+      op.status='failed'; op.err=(j&&j.error)||'ditolak server'; savePending(); renderPendingBar();
+      // Ditolak server (mis. data tidak valid) — mengulang tidak akan menolong, jadi TIDAK auto-retry.
+    }
   }catch(e){
     // Insiden 13 Agu 2026: respons hilang di jalan (404 dari lapisan pengantar Google) PADAHAL
     // script sudah selesai & data tertulis. Jadi jangan bilang "koneksi" — itu menyesatkan.
     op.status='failed'; op.err='respons tidak kembali'; savePending(); renderPendingBar();
+    scheduleRetry(op);   // hanya kegagalan transport yang dicoba ulang otomatis
   }
 }
 function retryPending(){
@@ -5089,6 +5125,7 @@ function unlockSystemTxn(){
 // ──────────────────────────────────────────────────────────────────────────
 function openDrawer(mode, editId = null, preset = null) {
   drawerMode = mode; drawerEditId = editId;
+  warmBackend();   // v39.1: panaskan backend selagi user mengisi form
   closeFabMenu();
   const titleMap = { txn: editId?'Edit Transaksi':'Tambah Transaksi', proj: editId?'Edit Project':'Tambah Project', bank: editId?'Edit Rekening':'Tambah Rekening', cc: editId?'Edit Kartu Kredit':'Tambah Kartu Kredit', kat: editId?'Edit Kategori':'Tambah Kategori', paycc:'Bayar Kartu Kredit', settings: 'Settings' };
   document.getElementById('drawerTitle').textContent = titleMap[mode] || 'Form';
