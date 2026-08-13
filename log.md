@@ -3,6 +3,19 @@
 
 ---
 
+## SESSION — 2026-08-13 (v40 Peringatan Transaksi Kembar + Dropdown Project Ringkas) — CLIENT-ONLY, sw.js v83
+- PRD: `PRD-v40.md` (sign-off Eddy: OQ1 **jendela 5 menit**, OQ2 form Cicilan/Jadwal **tidak** ikut, OQ3 Kasbon/Transfer **belum**).
+- **(a) Peringatan transaksi kembar** — menutup **celah user-redo** yang tidak bisa ditangkap penjaga idempoten v39: kalau Eddy sendiri mengulang input, itu dua operasi ber-OP_ID berbeda → sah bagi server. **Sudah memakan uang:** 12 Agu "Sinar Aluminium" Rp 300.000 (Jakarta Taipei School, BCA 082, Material) tercatat 2× — TRANSAKSI baris 1282 & 1286, ID `IDMSRLNB8E` vs `IDMSRMQ4GR`; baris 1286 dihapus lewat Sheets setelah Eddy konfirmasi.
+  - `cariTxnKembar(d)` + `konfirmasiTxnKembar(d)`; kunci **5 kolom sama persis** (TANGGAL, REKENING, KATEGORI, NOMINAL, NOTES ter-trim & lowercase) + `CREATED_AT` dalam **`DUP_WINDOW_MS` = 5 menit**. Sumber banding **`state.txns` di memori — tanpa panggilan server**, jadi nol beban & tetap jalan offline.
+  - **MEMPERINGATKAN, bukan memblokir** (preseden warn-not-block: preview import v37). Kunci sengaja ketat + jendela pendek: peringatan yang terlalu sering muncul akan direfleks-OK dan kehilangan gunanya.
+  - Dipasang di `saveDrawer` mode `txn`, **hanya bila `!eid`** — transaksi yang diedit tentu "mirip" dirinya sendiri. `CREATED_AT` kosong/rusak (import/offline) → baris dilewati, jangan menebak.
+  - ⚠️ Ini **koreksi penilaian sesi sebelumnya** yang menyimpulkan celah ini dibiarkan saja karena "obatnya lebih berbahaya dari penyakitnya". Kejadian nyata membuktikan penyakitnya lebih mahal.
+- **(b) Dropdown project ringkas** — `f_proj` dulu menarik SELURUH `state.projects`. Kini `projOptsTxn(sel)` hanya **STATUS 'Jalan' & 'Hold'**. Dua pengaman: **STATUS kosong dianggap Jalan** (lebih aman salah menampilkan daripada menyembunyikan) dan **project transaksi yang sedang diedit selalu disertakan** walau Selesai/Abaikan — kalau tidak, buka-form-lalu-simpan bisa menghapus project-nya diam-diam. Tautan `expandProjOptions()` "tampilkan semua project" untuk biaya susulan. Sekalian `esc()` dipasang di nama project (sebelumnya `${p.NAMA}` mentah). **Hanya form Transaksi**; `ci_proj` (Cicilan) & `jd_proj` (Jadwal) sengaja dibiarkan.
+- **Verifikasi:** `vm.Script` parse penuh OK; **harness 18 test PASS** — dropdown (Jalan/Hold tampil, Selesai/Abaikan hilang, status kosong tampil, project Selesai tetap tampil **dan terpilih** saat edit, project yang hilang dari master tetap tampil) dan peringatan (kembar persis terdeteksi & pesan menyebut nominal+catatan, Batal mengurungkan simpan, beda salah satu dari 5 kolom → tidak diganggu, catatan beda spasi/kapital tetap terdeteksi, >5 menit → tidak diganggu, CREATED_AT kosong → tidak menebak).
+- APP_VERSION→**v40**, sw.js → **v83**, CHANGELOG +1. **Deploy: push index.html + sw.js saja (sekalian v39.1 yang belum ke-push). TIDAK perlu redeploy Code.gs.**
+
+---
+
 ## SESSION — 2026-08-13 (v39.1 Pemanasan Backend + Retry Sembuh Sendiri) — CLIENT-ONLY, sw.js v82
 - **Dasar pengukuran (bukan tebakan):** probe lewat `apiPost` app sendiri → permintaan **pertama** sesudah app menganggur **53,7 dtk**, kedua **8,2 dtk**, sisanya **1,3–1,5 dtk**. Log Executions: semua `Completed` **0,4–2,9 dtk**. Jadi seluruh keterlambatan ada di **lapisan pengantar Google (cold start)**, bukan di script. Kalau lapisan itu menyerah → 404 padahal data sudah tertulis ("tercatat di Sheet, gagal di web").
 - **(a) `warmBackend()`** — membangunkan container SEBELUM user menekan simpan. Dipanggil di **`openDrawer`** (selagi user mengetik) dan pada **`visibilitychange`** (user kembali ke app). Throttle **3 menit**; tidak menembak bila `!API_URL` atau belum login. Memakai aksi **`__warm__` yang sengaja TIDAK dikenal** — `doGet` membalas seketika **tanpa membaca sheet apa pun**, jadi biayanya nyaris nol. Sengaja tidak di-`await`.

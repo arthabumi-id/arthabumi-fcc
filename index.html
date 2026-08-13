@@ -501,10 +501,11 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v39.1';
+const APP_VERSION = 'v40';
 // Tampilkan versi di halaman login (sebelum masuk) — berguna utk cek deploy tanpa login.
 try{ var _lv=document.getElementById('loginVer'); if(_lv) _lv.textContent=APP_VERSION; }catch(e){}
 const CHANGELOG = [
+  { v:'v40', d:'13 Agu 2026', t:'(1) Peringatan transaksi kembar. Kalau Anda menyimpan transaksi yang isinya sama persis dengan yang baru saja tercatat (tanggal, rekening, kategori, nominal, dan catatan sama, dalam 5 menit terakhir), app bertanya dulu — bukan menolak. Ini menutup kasus 12 Agu: satu belanja "Sinar Aluminium" Rp 300.000 tercatat dua kali karena layar sempat bilang gagal padahal datanya sudah masuk. Belanja kembar yang memang benar-benar dua kali tetap bisa disimpan dengan satu ketukan. (2) Daftar Project di form Transaksi kini hanya menampilkan project berstatus Jalan dan Hold, jadi tidak lagi kepanjangan. Ada tautan "tampilkan semua project" bila perlu mencatat biaya susulan, dan project pada transaksi lama yang sudah Selesai tetap muncul saat diedit supaya tidak hilang tanpa sengaja.' },
   { v:'v39.1', d:'13 Agu 2026', t:'Simpan jadi lebih jarang gagal. Pengukuran menunjukkan penyimpanan pertama setelah app menganggur bisa menunggu sampai 53 detik — server Google butuh waktu "bangun", padahal pemrosesannya sendiri di bawah 3 detik. Sekarang app membangunkan server begitu Anda membuka form dan begitu Anda kembali ke app, jadi saat Anda menekan Simpan servernya sudah siap. Selain itu penyimpanan yang gagal karena gangguan koneksi kini dicoba ulang sendiri (15 detik, lalu 30 detik) — aman karena sejak v39 server menolak mencatat operasi yang sama dua kali. Tidak perlu redeploy.' },
   { v:'v39', d:'13 Agu 2026', t:'Pengaman anti-dobel. Tanggal 13 Agu satu termin piutang tercatat 6 kali: server Google sempat gagal mengantar respons, sehingga app mengira gagal padahal datanya sudah tersimpan, lalu mengirim ulang berkali-kali. Sekarang setiap operasi simpan membawa penanda unik dan server menolak menjalankan operasi yang sama dua kali — kiriman ulang dibalas hasil aslinya tanpa menulis lagi. Berlaku untuk SEMUA penyimpanan, termasuk transaksi, transfer, dan pembayaran. Ditambah tombol "Buang" di bar antrean (dulu hanya ada "Kirim ulang" sehingga operasi yang mentok tidak bisa dilepas), dan pesan diperjelas jadi "belum terkonfirmasi" karena "gagal tersimpan" ternyata menyesatkan. Perlu redeploy Code.gs.' },
   { v:'v38', d:'12 Agu 2026', t:'Rekap Isi Tagihan Kartu Kredit. Baris yang Anda centang saat "Kunci ke Dashboard" kini ikut disimpan, jadi isi lembaran tagihan bisa dibuka lagi kapan saja lewat tombol "Isi Tagihan" — tampil sebagai dokumen A4 di jendela baru, siap Cetak/Simpan PDF, lengkap dengan subtotal belanja, angsuran cicilan, pembayaran, serta selisih terhadap total statement cetak. Tagihan yang sudah dibayar tidak lagi dihapus melainkan diarsipkan (tombol "Riwayat"), disimpan 3 bulan. Ditambah toggle "Tampilkan baris yang sudah masuk tagihan lain" di halaman Rincian. Perlu redeploy Code.gs.' },
@@ -1191,6 +1192,69 @@ async function apiPost(body, opId) {
     });
     return await res.json();
   } catch { return null; }
+}
+
+// ── v40: DROPDOWN PROJECT RINGKAS (form Transaksi) ────
+// Dulu menarik SELURUH state.projects → daftar kepanjangan karena project lama ikut semua.
+// Sekarang hanya STATUS 'Jalan' & 'Hold' (keputusan Eddy 13 Agu 2026).
+// Dua pengaman: (1) STATUS kosong dianggap Jalan — lebih aman salah menampilkan daripada
+// menyembunyikan; (2) project transaksi yang SEDANG DIEDIT selalu disertakan walau sudah
+// Selesai/Abaikan, kalau tidak, buka-form-lalu-simpan bisa menghapus project-nya diam-diam.
+function projAktifTxn(){
+  return (state.projects||[]).filter(p=>{
+    const s=String(p.STATUS||'').trim();
+    return s==='' || s==='Jalan' || s==='Hold';
+  });
+}
+function projOptsTxn(sel){
+  const list = projAktifTxn().slice();
+  if(sel && !list.some(p=>p.NAMA===sel)){
+    const cur=(state.projects||[]).find(p=>p.NAMA===sel);
+    list.unshift(cur || {NAMA:sel});   // project sudah selesai / sudah dihapus dari master
+  }
+  return `<option value="">— Tidak ada —</option>`+
+    list.map(p=>`<option ${p.NAMA===sel?'selected':''}>${esc(p.NAMA)}</option>`).join('');
+}
+function expandProjOptions(){
+  const el=document.getElementById('f_proj'); if(!el)return;
+  const sel=el.value;
+  el.innerHTML = `<option value="">— Tidak ada —</option>`+
+    (state.projects||[]).map(p=>`<option ${p.NAMA===sel?'selected':''}>${esc(p.NAMA)}</option>`).join('');
+  el.value=sel;
+  const lnk=document.getElementById('f_projAll'); if(lnk) lnk.style.display='none';
+}
+
+// ── v40: PERINGATAN TRANSAKSI KEMBAR ──────────────────
+// Penjaga idempoten v39 hanya menutup SATU operasi yang terkirim ulang. Kalau Eddy sendiri
+// mengulang input (karena layar bilang gagal padahal sudah tersimpan), itu dua operasi berbeda
+// → lolos. Sudah memakan uang: 12 Agu 2026 "Sinar Aluminium" Rp 300.000 tercatat 2×.
+// Sengaja MEMPERINGATKAN, bukan memblokir — belanja kembar yang sah harus tetap bisa disimpan.
+// Kunci dibuat ketat (5 kolom sama persis) + jendela 5 menit supaya tidak cerewet; peringatan
+// yang terlalu sering muncul akan direfleks-OK dan kehilangan gunanya.
+const DUP_WINDOW_MS = 5*60*1000;   // 5 menit (keputusan Eddy)
+function cariTxnKembar(d){
+  const kunciNotes = String(d.NOTES||'').trim().toLowerCase();
+  const batas = Date.now() - DUP_WINDOW_MS;
+  return (state.txns||[]).find(t=>{
+    if(String(t.TANGGAL).slice(0,10) !== String(d.TANGGAL).slice(0,10)) return false;
+    if(String(t.REKENING||'') !== String(d.REKENING||'')) return false;
+    if(String(t.KATEGORI||'') !== String(d.KATEGORI||'')) return false;
+    if(Number(t.NOMINAL||0) !== Number(d.NOMINAL||0)) return false;
+    if(String(t.NOTES||'').trim().toLowerCase() !== kunciNotes) return false;
+    const ca = t.CREATED_AT ? Date.parse(t.CREATED_AT) : NaN;
+    if(isNaN(ca)) return false;      // CREATED_AT kosong (import/offline) → jangan menebak
+    return ca >= batas;
+  });
+}
+function konfirmasiTxnKembar(d){
+  const k = cariTxnKembar(d);
+  if(!k) return true;
+  return confirm('Sepertinya transaksi ini SUDAH tercatat:\n\n'+
+    String(k.TANGGAL).slice(0,10)+' · '+(k.KATEGORI||'')+' · '+fmt(k.NOMINAL)+
+    (k.NOTES?'\n"'+k.NOTES+'"':'')+'\n\n'+
+    'Baris di atas baru saja disimpan dengan isi yang sama persis.\n'+
+    'Kalau tadi layar sempat bilang gagal — datanya kemungkinan besar sudah masuk.\n\n'+
+    'OK = tetap simpan (jadi dua baris)\nBatal = urungkan');
 }
 
 // ── v39.1: PEMANASAN BACKEND ──────────────────────────
@@ -5139,7 +5203,8 @@ function openDrawer(mode, editId = null, preset = null) {
         <div class="form-group"><label class="form-label">Tanggal</label><input class="form-input" type="date" id="f_tgl" value="${t?String(t.TANGGAL).slice(0,10):today()}"></div>
         <div class="form-group"><label class="form-label">Jenis</label><select class="form-input" id="f_jenis" onchange="fillKatGroup()"><option ${jpre==='Pemasukan'?'selected':''}>Pemasukan</option><option ${jpre==='Pengeluaran'?'selected':''}>Pengeluaran</option></select></div>
       </div>
-      <div class="form-group"><label class="form-label">Project</label><select class="form-input" id="f_proj"><option value="">— Tidak ada —</option>${state.projects.map(p=>`<option ${t&&t.PROJECT===p.NAMA?'selected':''}>${p.NAMA}</option>`).join('')}</select></div>
+      <div class="form-group"><label class="form-label">Project</label><select class="form-input" id="f_proj">${projOptsTxn(t?String(t.PROJECT||''):'')}</select>
+        <div id="f_projAll" style="margin-top:4px"><a href="javascript:void(0)" onclick="expandProjOptions()" style="font-size:10px;color:var(--text3);text-decoration:underline">tampilkan semua project</a></div></div>
       <div class="form-group"><label class="form-label">Rekening</label><select class="form-input" id="f_rek">${allRek.map(n=>`<option ${t&&t.REKENING===n?'selected':''}>${n}</option>`).join('')}</select></div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Kelompok</label><select class="form-input" id="f_kat_grp" onchange="fillKatList()"></select></div>
@@ -5303,6 +5368,8 @@ async function saveDrawer() {
     // sehingga baris kasbon/transfer ikut terhitung ke laba. Penyebab kerusakan data Ajis & Tego.
     const _prevT = eid ? state.txns.find(x=>x.ID===eid) : null;
     const _sysLog = (_prevT && _prevT.TIPE_LOG && _prevT.TIPE_LOG!=='Pemasukan' && _prevT.TIPE_LOG!=='Pengeluaran') ? _prevT.TIPE_LOG : null;
+    // v40: hanya untuk transaksi BARU — mengedit transaksi lama tentu saja "mirip" dirinya sendiri.
+    if(!eid && !konfirmasiTxnKembar({TANGGAL:tgl,REKENING:rek,KATEGORI:kat,NOMINAL:nominal,NOTES:notes})) return;
     const obj={ID:eid||uid(),TANGGAL:tgl,JENIS:jenis,PROJECT:proj,REKENING:rek,KATEGORI:kat,NOMINAL:nominal,NOTES:notes,TIPE_LOG:_sysLog||jenis,CREATED_BY:state.user,CREATED_AT:now};
     let oldT=null;
     if(eid){const i=state.txns.findIndex(x=>x.ID===eid);if(i>=0){oldT=state.txns[i];state.txns[i]=obj;}else state.txns.unshift(obj);}else state.txns.unshift(obj);
