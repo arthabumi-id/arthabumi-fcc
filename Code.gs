@@ -10,6 +10,7 @@ const VALID_PINS = ['1234', '5678', '9999'];
 
 const RECENT_DAYS = 120;        // txn terakhir yg dikirim saat sync
 const CCBILL_KEEP_MONTHS = 3;   // v38: arsip tagihan CC yg sudah Lunas disimpan 3 bulan (keputusan Eddy 12 Agu 2026)
+const OPLOG_KEEP_DAYS = 60;     // v39: umur catatan OP_LOG (penjaga anti-dobel). Keputusan Eddy 13 Agu 2026.
 const SUMMARY_TTL = 21600;      // cache summary 6 jam (detik)
 const SUMMARY_KEY = 'fcc_summary_v3';
 
@@ -19,6 +20,7 @@ const S = {
   JADWAL: 'JADWAL', PIUTANG: 'PIUTANG', CICILAN: 'CICILAN', CCBILL: 'CC_TAGIHAN',
   MARK: 'RESERVE_MARK',
   PAIDMARK: 'PAID_MARK',   // v23: penanda manual "tagihan sudah dibayar/lunas" per transaksi CC
+  OPLOG: 'OP_LOG',         // v39: penjaga anti-dobel — 1 baris per operasi tulis yg sudah dieksekusi
   INVEST: 'MASTER_INVEST', INVESTLOG: 'INVEST_LOG', INVESTVAL: 'INVEST_VALUE',  // v21 investasi (terpisah dari bisnis)
   ADD: 'ADDENDUM',  // v24: kerja tambah/kurang (addendum) per project — ubah nilai kontrak efektif
   KURS: 'KURS',     // v25: kurs valas BCA (e-Rate) — di-fetch otomatis harian via trigger
@@ -62,6 +64,11 @@ const HEADERS = {
   // PAID_MARK (v23) = penanda manual "lunas" per transaksi CC. Murni filter tampilan rincian CC,
   // LEPAS dari perhitungan tagihan/saldo/reserve. 1 baris = 1 TXN ditandai lunas. Lepas = hapus baris.
   [S.PAIDMARK]: ['ID','TXN_ID','CREATED_BY','CREATED_AT'],
+  // OP_LOG (v39) = penjaga idempotensi. 1 baris = 1 operasi tulis yang SUDAH dieksekusi.
+  // Sebab: lapisan pengantar respons Google kadang gagal (13 Agu 2026) — script selesai & data
+  // tertulis, tapi client dapat 404 lalu mengirim ulang → baris dobel. Dengan log ini, kiriman
+  // kedua dikenali dan dibalas respons aslinya TANPA dieksekusi lagi. RESULT = respons pertama.
+  [S.OPLOG]:    ['OP_ID','ACTION','RESULT','CREATED_AT'],
   // ── v21 INVESTASI (pribadi, DIPISAH TOTAL dari metrik bisnis) ──
   // MASTER_INVEST = daftar akun investasi (Stockbit/Pluang/Indo Premier/dll).
   //   MODAL_AWAL = modal yg sudah tertanam sebelum mulai catat di FCC.
@@ -199,11 +206,23 @@ function doGet(e) {
 }
 
 function doPost(e) {
+  let _lock = null;
   try {
     const body = JSON.parse(e.postData.contents);
     const { action, pin, data } = body;
     if (!VALID_PINS.includes(pin)) return json({ error: 'Unauthorized', code: 401 });
     const ss = SpreadsheetApp.openById(SHEET_ID);
+    // ── v39 PENJAGA ANTI-DOBEL ────────────────────────────────────────────
+    // Kalau client mengirim OP_ID dan OP_ID itu sudah pernah dieksekusi, balas respons
+    // aslinya TANPA menjalankan apa pun. Ini menutup SEMUA aksi sekaligus — termasuk yang
+    // menulis banyak baris (addTransfer, payPiutang) yang tak bisa dilindungi dedup per-baris.
+    // Lock dipakai supaya dua kiriman kembar yang balapan tidak dua-duanya lolos pengecekan.
+    const opId = String(body.OP_ID || '');
+    if (opId) {
+      try { _lock = LockService.getScriptLock(); if (!_lock.tryLock(20000)) _lock = null; } catch (eLock) { _lock = null; }
+      const prev = _opLogFind(ss, opId);   // gagal dapat lock → tetap cek (usaha terbaik), jangan matikan request
+      if (prev !== null) return json(_opLogReplay(prev));
+    }
     let res;
     switch (action) {
       case 'addTxn':      res = addRow(ss, S.TXN, data); break;
@@ -252,8 +271,67 @@ function doPost(e) {
       default:            return json({ error: 'Unknown action' });
     }
     invalidateSummary();
+    if (opId) { try { _opLogWrite(ss, opId, action, res); } catch (eLog) {} }  // gagal mencatat ≠ gagal operasi
     return json(res);
   } catch (err) { return json({ error: err.message }); }
+  finally { if (_lock) { try { _lock.releaseLock(); } catch (eRel) {} } }
+}
+
+// ── v39: PENJAGA IDEMPOTENSI (OP_LOG) ────────────────────────
+function _opSheet(ss) {
+  let sh = ss.getSheetByName(S.OPLOG);
+  if (!sh) {
+    sh = ss.insertSheet(S.OPLOG);
+    sh.appendRow(HEADERS[S.OPLOG]);
+    sh.getRange(1,1,1,HEADERS[S.OPLOG].length).setFontWeight('bold').setBackground('#1a1a2e').setFontColor('#ffffff');
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+// Cari OP_ID. Sengaja membaca KOLOM OP_ID SAJA (bukan seluruh sheet) supaya tetap ringan
+// walau log panjang; baris RESULT-nya baru diambil kalau ketemu. Telusur dari bawah = yg terbaru.
+function _opLogFind(ss, opId) {
+  const sh = _opSheet(ss);
+  const last = sh.getLastRow();
+  if (last <= 1) return null;
+  const ids = sh.getRange(2, 1, last - 1, 1).getValues();
+  for (let i = ids.length - 1; i >= 0; i--) {
+    if (String(ids[i][0]) === String(opId)) return String(sh.getRange(i + 2, 3).getValue() || '');
+  }
+  return null;
+}
+function _opLogReplay(raw) {
+  let o = null;
+  try { o = JSON.parse(raw); } catch (err) { o = null; }
+  if (!o || typeof o !== 'object') o = { ok: true };
+  o.dup = true;   // penanda: ini pemutaran ulang, bukan eksekusi baru
+  return o;
+}
+function _opLogWrite(ss, opId, action, res) {
+  const sh = _opSheet(ss);
+  let s = '{"ok":true}';
+  try { s = JSON.stringify(res === undefined ? { ok: true } : res); } catch (err) { s = '{"ok":true}'; }
+  if (s.length > 5000) s = '{"ok":true,"trimmed":true}';   // respons aksi tulis normalnya {ok,id} — kecil
+  sh.appendRow([String(opId), String(action || ''), s, new Date().toISOString()]);
+  if (sh.getLastRow() > 1000) { try { _pruneOpLog(ss, sh); } catch (err) {} }
+}
+// Baris OP_LOG selalu bertambah kronologis → yang kedaluwarsa pasti blok paling atas,
+// jadi bisa dibuang sekali panggil deleteRows (jauh lebih murah daripada hapus satu-satu).
+function _pruneOpLog(ss, sh) {
+  sh = sh || _opSheet(ss);
+  const last = sh.getLastRow();
+  if (last <= 1) return 0;
+  const cut = new Date(); cut.setDate(cut.getDate() - OPLOG_KEEP_DAYS);
+  const cutISO = cut.toISOString();
+  const ts = sh.getRange(2, 4, last - 1, 1).getValues();
+  let n = 0;
+  while (n < ts.length) {
+    const v = String(ts[n][0] || '');
+    if (!v || v >= cutISO) break;
+    n++;
+  }
+  if (n > 0) sh.deleteRows(2, n);
+  return n;
 }
 
 // ── BUNDLE: 1 round-trip ─────────────────────────────────────

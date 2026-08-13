@@ -501,10 +501,11 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v38';
+const APP_VERSION = 'v39';
 // Tampilkan versi di halaman login (sebelum masuk) — berguna utk cek deploy tanpa login.
 try{ var _lv=document.getElementById('loginVer'); if(_lv) _lv.textContent=APP_VERSION; }catch(e){}
 const CHANGELOG = [
+  { v:'v39', d:'13 Agu 2026', t:'Pengaman anti-dobel. Tanggal 13 Agu satu termin piutang tercatat 6 kali: server Google sempat gagal mengantar respons, sehingga app mengira gagal padahal datanya sudah tersimpan, lalu mengirim ulang berkali-kali. Sekarang setiap operasi simpan membawa penanda unik dan server menolak menjalankan operasi yang sama dua kali — kiriman ulang dibalas hasil aslinya tanpa menulis lagi. Berlaku untuk SEMUA penyimpanan, termasuk transaksi, transfer, dan pembayaran. Ditambah tombol "Buang" di bar antrean (dulu hanya ada "Kirim ulang" sehingga operasi yang mentok tidak bisa dilepas), dan pesan diperjelas jadi "belum terkonfirmasi" karena "gagal tersimpan" ternyata menyesatkan. Perlu redeploy Code.gs.' },
   { v:'v38', d:'12 Agu 2026', t:'Rekap Isi Tagihan Kartu Kredit. Baris yang Anda centang saat "Kunci ke Dashboard" kini ikut disimpan, jadi isi lembaran tagihan bisa dibuka lagi kapan saja lewat tombol "Isi Tagihan" — tampil sebagai dokumen A4 di jendela baru, siap Cetak/Simpan PDF, lengkap dengan subtotal belanja, angsuran cicilan, pembayaran, serta selisih terhadap total statement cetak. Tagihan yang sudah dibayar tidak lagi dihapus melainkan diarsipkan (tombol "Riwayat"), disimpan 3 bulan. Ditambah toggle "Tampilkan baris yang sudah masuk tagihan lain" di halaman Rincian. Perlu redeploy Code.gs.' },
   { v:'v37.2', d:'1 Agu 2026', t:'"Sisa belum dibayar klien" kini mengabaikan refund barang/jaminan — hanya pembayaran klien (kategori kelompok PEMASUKAN) yang dihitung. Refund tetap tercatat masuk agar saldo bank benar, tapi tidak lagi mengurangi sisa tagihan.' },
   { v:'v37.1', d:'1 Agu 2026', t:'Kartu project kini menampilkan "Sisa belum dibayar klien" dalam rupiah (nilai kontrak − sudah diterima), tidak hanya persen. Hijau bila sudah lunas.' },
@@ -1176,12 +1177,16 @@ async function apiGet(params) {
   } catch { return null; }
 }
 
-async function apiPost(body) {
+// v39: opId opsional. Kalau pemanggil mengoper opId yang SAMA saat mencoba lagi, backend
+// mengenalinya lewat OP_LOG dan tidak akan mengeksekusi dua kali. Tanpa opId tetap dikirimi
+// penanda sekali-pakai — itu tidak men-dedup apa pun, tapi membuat setiap operasi tulis
+// tercatat di OP_LOG (jejak audit kalau nanti ada dugaan dobel lagi).
+async function apiPost(body, opId) {
   if (!API_URL) return null;
   try {
     const res = await fetch(API_URL, {
       method: 'POST',
-      body: JSON.stringify({...body, pin: state.pin, USER: state.user})
+      body: JSON.stringify({...body, OP_ID: opId || ('AP'+uid()), pin: state.pin, USER: state.user})
     });
     return await res.json();
   } catch { return null; }
@@ -1202,15 +1207,33 @@ function bgPost(body, label){
 async function sendOp(op){
   op.status='sending'; renderPendingBar();
   try{
-    const res = await fetch(API_URL, { method:'POST', body: JSON.stringify({...op.body, pin: state.pin, USER: state.user}) });
+    // v39: OP_ID = op.id, dan TETAP SAMA setiap kali dikirim ulang. Backend memakainya untuk
+    // mengenali kiriman kembar (OP_LOG) sehingga retry tidak pernah menulis dua kali.
+    const res = await fetch(API_URL, { method:'POST', body: JSON.stringify({...op.body, OP_ID: op.id, pin: state.pin, USER: state.user}) });
     const j = await res.json();
     if(j && !j.error){ state.pending = state.pending.filter(p=>p.id!==op.id); savePending(); renderPendingBar(); }
     else { op.status='failed'; op.err=(j&&j.error)||'ditolak server'; savePending(); renderPendingBar(); }
-  }catch(e){ op.status='failed'; op.err='koneksi'; savePending(); renderPendingBar(); }
+  }catch(e){
+    // Insiden 13 Agu 2026: respons hilang di jalan (404 dari lapisan pengantar Google) PADAHAL
+    // script sudah selesai & data tertulis. Jadi jangan bilang "koneksi" — itu menyesatkan.
+    op.status='failed'; op.err='respons tidak kembali'; savePending(); renderPendingBar();
+  }
 }
 function retryPending(){
   if(!API_URL){ showToast('API URL belum diset','error'); return; }
   state.pending.filter(p=>p.status==='failed').forEach(sendOp);
+}
+// v39: jalan keluar kalau sebuah op mentok. Dulu bar hanya punya "Kirim ulang" sehingga
+// satu-satunya cara keluar adalah lewat Console browser.
+function discardPending(){
+  const failed = state.pending.filter(p=>p.status==='failed');
+  if(!failed.length) return;
+  const daftar = failed.map(p=>'• '+(p.label||p.body.action)).join('\n');
+  if(!confirm('Buang '+failed.length+' operasi dari antrean?\n\n'+daftar+
+    '\n\n⚠️ Operasi ini TIDAK akan dikirim lagi.\nCatatan: kalau server ternyata sudah menerimanya, datanya tetap tersimpan di server — Sync untuk memastikan.'))return;
+  state.pending = state.pending.filter(p=>p.status!=='failed');
+  savePending(); renderPendingBar();
+  showToast(failed.length+' operasi dibuang dari antrean','success');
 }
 function renderPendingBar(){
   const bar = document.getElementById('pendingBar'); if(!bar) return;
@@ -1220,8 +1243,9 @@ function renderPendingBar(){
   bar.style.display='flex';
   if(failed.length){
     bar.style.background='#3a1010'; bar.style.border='1px solid var(--red)'; bar.style.color='var(--red)';
-    bar.innerHTML = `<i class="ti ti-alert-triangle"></i> ${failed.length} gagal tersimpan`+
-      `<button onclick="retryPending()" style="margin-left:4px;background:var(--red);color:#fff;border:none;border-radius:14px;padding:4px 12px;font-size:12px;font-weight:700;cursor:pointer">Kirim ulang</button>`;
+    bar.innerHTML = `<i class="ti ti-alert-triangle"></i> ${failed.length} belum terkonfirmasi`+
+      `<button onclick="retryPending()" style="margin-left:4px;background:var(--red);color:#fff;border:none;border-radius:14px;padding:4px 12px;font-size:12px;font-weight:700;cursor:pointer">Kirim ulang</button>`+
+      `<button onclick="discardPending()" style="margin-left:4px;background:transparent;color:var(--red);border:1px solid var(--red);border-radius:14px;padding:4px 12px;font-size:12px;font-weight:700;cursor:pointer">Buang</button>`;
   } else {
     bar.style.background='#0a2233'; bar.style.border='1px solid #5b9cf6'; bar.style.color='#9ccbff';
     bar.innerHTML = `<div class="spin" style="width:11px;height:11px;border-width:2px"></div> Menyimpan ${sending.length}…`;
