@@ -3,6 +3,15 @@
 
 ---
 
+## SESSION — 2026-08-13 (v40.1 Fix kursor lompat saat mengetik tanggal) — CLIENT-ONLY, sw.js v84
+- **Keluhan Eddy:** di Master → Kartu Kredit → Rincian, mengetik tanggal bikin kursor lompat.
+- **Akar:** `onchange` pada `<input type="date">` dipicu Chrome **begitu ketiga segmen terisi** — user masih mengetik tahun — dan `ccbApply()` me-render ulang **seluruh `drawerBody.innerHTML`** → elemen yang sedang diketik dihancurkan & dibuat ulang → fokus hilang. **Sumber kedua yang tak disadari user:** `openCCBill` menarik `getTxns` di latar lalu `renderCCBill` LAGI beberapa detik kemudian, tepat saat user mungkin sedang mengetik.
+- **Fix:** helper baru **`ccbRenderKeepFocus(from,to)`** — simpan `document.activeElement.id` + nilai `ccb_stmt` sebelum render, kembalikan sesudahnya (+`ccbTick()` agar selisih ikut dihitung ulang). `ccbApply()` kini: **debounce 350 ms**, batal bila salah satu tanggal kosong, batal bila `from>to` (ketikan setengah jalan), dan batal bila `from|to|showPaid` sama dengan `_ccbLastRange` (variabel baru, di-set di dalam `renderCCBill`) supaya tidak merebut fokus percuma. Callback async di `openCCBill` ikut dialihkan ke `ccbRenderKeepFocus`.
+- **Verifikasi:** parse penuh OK; **harness 9 test PASS** (tanggal belum lengkap → tak render; rentang terbalik → tak render; rentang sama → tak render; 2 pemicu beruntun → 1 render; fokus kembali ke kolom yang diketik; nilai `ccb_stmt` dipertahankan; tanpa elemen aktif → tidak melempar).
+- APP_VERSION→**v40.1**, sw.js → **v84**, CHANGELOG +1. **Deploy: push index.html + sw.js.**
+
+---
+
 ## SESSION — 2026-08-13 (v40 Peringatan Transaksi Kembar + Dropdown Project Ringkas) — CLIENT-ONLY, sw.js v83
 - PRD: `PRD-v40.md` (sign-off Eddy: OQ1 **jendela 5 menit**, OQ2 form Cicilan/Jadwal **tidak** ikut, OQ3 Kasbon/Transfer **belum**).
 - **(a) Peringatan transaksi kembar** — menutup **celah user-redo** yang tidak bisa ditangkap penjaga idempoten v39: kalau Eddy sendiri mengulang input, itu dua operasi ber-OP_ID berbeda → sah bagi server. **Sudah memakan uang:** 12 Agu "Sinar Aluminium" Rp 300.000 (Jakarta Taipei School, BCA 082, Material) tercatat 2× — TRANSAKSI baris 1282 & 1286, ID `IDMSRLNB8E` vs `IDMSRMQ4GR`; baris 1286 dihapus lewat Sheets setelah Eddy konfirmasi.

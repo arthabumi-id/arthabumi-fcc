@@ -501,10 +501,11 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v40';
+const APP_VERSION = 'v40.1';
 // Tampilkan versi di halaman login (sebelum masuk) — berguna utk cek deploy tanpa login.
 try{ var _lv=document.getElementById('loginVer'); if(_lv) _lv.textContent=APP_VERSION; }catch(e){}
 const CHANGELOG = [
+  { v:'v40.1', d:'13 Agu 2026', t:'Fix kursor lompat saat mengetik tanggal di Master → Kartu Kredit → Rincian. Penyebabnya: browser menganggap tanggal sudah "selesai diisi" begitu hari, bulan, dan tahun terisi — padahal Anda biasanya masih mengetik — lalu isi halaman dimuat ulang di tengah ketikan sehingga kolomnya dibuat ulang dan kursor berpindah. Sekarang pemuatan ulang ditunda sampai ketikan berhenti, dilewati bila tanggalnya belum lengkap atau rentangnya terbalik, dan fokus dikembalikan ke kolom yang sedang Anda isi. Angka "Total tagihan di statement" yang sudah diketik juga tidak hilang lagi saat daftar dimuat ulang.' },
   { v:'v40', d:'13 Agu 2026', t:'(1) Peringatan transaksi kembar. Kalau Anda menyimpan transaksi yang isinya sama persis dengan yang baru saja tercatat (tanggal, rekening, kategori, nominal, dan catatan sama, dalam 5 menit terakhir), app bertanya dulu — bukan menolak. Ini menutup kasus 12 Agu: satu belanja "Sinar Aluminium" Rp 300.000 tercatat dua kali karena layar sempat bilang gagal padahal datanya sudah masuk. Belanja kembar yang memang benar-benar dua kali tetap bisa disimpan dengan satu ketukan. (2) Daftar Project di form Transaksi kini hanya menampilkan project berstatus Jalan dan Hold, jadi tidak lagi kepanjangan. Ada tautan "tampilkan semua project" bila perlu mencatat biaya susulan, dan project pada transaksi lama yang sudah Selesai tetap muncul saat diedit supaya tidak hilang tanpa sengaja.' },
   { v:'v39.1', d:'13 Agu 2026', t:'Simpan jadi lebih jarang gagal. Pengukuran menunjukkan penyimpanan pertama setelah app menganggur bisa menunggu sampai 53 detik — server Google butuh waktu "bangun", padahal pemrosesannya sendiri di bawah 3 detik. Sekarang app membangunkan server begitu Anda membuka form dan begitu Anda kembali ke app, jadi saat Anda menekan Simpan servernya sudah siap. Selain itu penyimpanan yang gagal karena gangguan koneksi kini dicoba ulang sendiri (15 detik, lalu 30 detik) — aman karena sejak v39 server menolak mencatat operasi yang sama dua kali. Tidak perlu redeploy.' },
   { v:'v39', d:'13 Agu 2026', t:'Pengaman anti-dobel. Tanggal 13 Agu satu termin piutang tercatat 6 kali: server Google sempat gagal mengantar respons, sehingga app mengira gagal padahal datanya sudah tersimpan, lalu mengirim ulang berkali-kali. Sekarang setiap operasi simpan membawa penanda unik dan server menolak menjalankan operasi yang sama dua kali — kiriman ulang dibalas hasil aslinya tanpa menulis lagi. Berlaku untuk SEMUA penyimpanan, termasuk transaksi, transfer, dan pembayaran. Ditambah tombol "Buang" di bar antrean (dulu hanya ada "Kirim ulang" sehingga operasi yang mentok tidak bisa dilepas), dan pesan diperjelas jadi "belum terkonfirmasi" karena "gagal tersimpan" ternyata menyesatkan. Perlu redeploy Code.gs.' },
@@ -3530,7 +3531,7 @@ let _ccBillName=null, _ccBillTxns=null;
 // v38: buffer baris yg sedang ditampilkan di drawer Rincian. Checkbox menyimpan INDEKS ke array ini
 // (data-i), bukan teks labelnya — esc() tidak meng-escape tanda kutip, jadi menaruh NOTES ke dalam
 // atribut HTML gampang merusak markup. _ccbShowPaid = tampilkan baris yg sudah masuk tagihan lain.
-let _ccbRows=[], _ccbShowPaid=false;
+let _ccbRows=[], _ccbShowPaid=false, _ccbLastRange='';
 function ccbTogglePaid(el){ _ccbShowPaid=!!(el&&el.checked); ccbApply(); }
 function openCCBill(ccId){
   const cc=state.ccs.find(x=>x.ID===ccId); if(!cc)return;
@@ -3544,10 +3545,44 @@ function openCCBill(ccId){
   if(API_URL){ apiGet({action:'getTxns',rekening:cc.NAMA}).then(res=>{
     if(Array.isArray(res)){ _ccBillTxns=res.filter(t=>t.REKENING===cc.NAMA);
       const f=document.getElementById('ccb_from'), t2=document.getElementById('ccb_to');
-      if(f&&t2) renderCCBill(f.value,t2.value); }
+      // v40.1: lewat ccbRenderKeepFocus — render ulang ini datang beberapa detik sesudah drawer
+      // dibuka, tepat saat user mungkin sedang mengetik tanggal. Jangan rebut fokusnya.
+      if(f&&t2) ccbRenderKeepFocus(f.value,t2.value); }
   }); }
 }
-function ccbApply(){ renderCCBill(document.getElementById('ccb_from').value, document.getElementById('ccb_to').value); }
+// ── v40.1: FIX KURSOR LOMPAT SAAT MENGETIK TANGGAL ────────────────────────
+// Keluhan Eddy 13 Agu 2026. Akar: `onchange` pada <input type="date"> dipicu Chrome BEGITU
+// ketiga segmen terisi — padahal user biasanya masih mengetik tahunnya. ccbApply lalu
+// me-render ulang SELURUH isi drawer → elemen yang sedang diketik dihancurkan & dibuat ulang
+// → fokus hilang, kursor lompat. Sumber kedua: openCCBill menarik riwayat kartu di latar lalu
+// render ulang lagi beberapa detik kemudian, tepat saat user mungkin sedang mengetik.
+// Perbaikan: (a) tunda 350 ms supaya ketikan selesai dulu; (b) jangan render kalau tanggal
+// belum lengkap; (c) jangan render kalau rentangnya tidak benar-benar berubah;
+// (d) kembalikan fokus & nilai yang sedang diketik sesudah render.
+function ccbRenderKeepFocus(from,to){
+  const aktif=document.activeElement;
+  const fokusId=(aktif&&aktif.id)?aktif.id:'';
+  const stmtEl=document.getElementById('ccb_stmt');
+  const stmtVal=stmtEl?stmtEl.value:'';
+  renderCCBill(from,to);
+  const s2=document.getElementById('ccb_stmt');
+  if(s2 && stmtVal){ s2.value=stmtVal; try{ ccbTick(); }catch(e){} }   // total statement yg sudah diketik jangan hilang
+  if(fokusId){ const e2=document.getElementById(fokusId); if(e2){ try{ e2.focus(); }catch(e){} } }
+}
+let _ccbApplyTimer=null;
+function ccbApply(){
+  clearTimeout(_ccbApplyTimer);
+  _ccbApplyTimer=setTimeout(()=>{
+    const f=document.getElementById('ccb_from'), t=document.getElementById('ccb_to');
+    if(!f||!t) return;
+    const from=f.value, to=t.value;
+    if(!from||!to) return;                       // tanggal belum lengkap → tunggu, jangan render
+    if(from>to) return;                          // rentang terbalik (biasanya ketikan setengah jalan)
+    const kunci=from+'|'+to+'|'+(_ccbShowPaid?1:0);
+    if(kunci===_ccbLastRange) return;            // tidak ada yang berubah → jangan buang fokus percuma
+    ccbRenderKeepFocus(from,to);
+  }, 350);
+}
 // Centang baris → jumlahkan & bandingkan dgn total statement cetak.
 function ccbTick(){
   let sum=0, cnt=0;
@@ -3581,6 +3616,7 @@ function cicilanInstallmentsInPeriod(name, from, to){
   return out;
 }
 function renderCCBill(from,to){
+  _ccbLastRange = from+'|'+to+'|'+(_ccbShowPaid?1:0);   // v40.1: patokan "sudah dirender" utk ccbApply
   const name=_ccBillName;
   const ccObj=state.ccs.find(c=>c.NAMA===name)||{};
   const src=_ccBillTxns || state.txns.filter(t=>t.REKENING===name);
