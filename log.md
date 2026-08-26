@@ -3,6 +3,18 @@
 
 ---
 
+## SESSION — 2026-08-13 (v41 Daftar baris di Preview Import) — CLIENT-ONLY, sw.js v85
+- **Permintaan Eddy:** sesudah pilih file Excel, ingin melihat daftar transaksi yang akan masuk beserta **kelompok, kategori, nominal**. Sign-off: tampil **di layar Preview SEBELUM Konfirmasi** (bukan sesudah import), **tanpa** subtotal per kelompok.
+- **Temuan:** `showImportPreview` selama ini HANYA menampilkan ringkasan (jumlah valid/error, total masuk/keluar, project & kategori baru, laporan pembulatan v37, peringatan dobel v37). Isi barisnya tidak pernah ditampilkan — padahal di situlah salah kelompok/kategori/nominal ketahuan, dan sesudah dikonfirmasi membatalkannya berarti menghapus baris satu per satu.
+- **Implementasi:** `impRowsHTML(valid,newKats,dupes)` disisipkan tepat sebelum tombol Konfirmasi. Tiap baris: badge **KELOMPOK** + KATEGORI, sub-baris `TANGGAL · REKENING · PROJECT`, nominal berwarna dengan tanda `+`/`−`. Baris yang cocok dengan daftar `dupes` ditandai "⚠ mirip yg sudah ada"; baris yang NOTES-nya memuat `(asli Rp` ditandai "dibulatkan".
+- **`_impKelompok(nama,newKats)`** — cari di `state.kategori` dulu, lalu di `newKats` (kategori yang baru akan DIBUAT oleh import ini, jadi belum ada di master), fallback `—`. Tanpa fallback ini semua kategori baru akan tampil tanpa kelompok.
+- **Tidak menyentuh `_cand`/`importPayload`** — flag dup/bulat dideteksi dari data yang sudah ada (Set kunci dari `dupes`, string `(asli Rp` di NOTES). Menambah field ke `_cand` berarti field itu ikut terkirim ke `addTxnBatch`; sengaja dihindari.
+- Impor besar: dipangkas **150 baris** + tautan `impToggleAllRows()`; `_impShowAllRows` di-reset saat file baru diparsing.
+- **Verifikasi:** parse penuh OK; **harness 15 test PASS** (kelompok dari master & dari kategori baru, kategori tak dikenal → `—` bukan error, badge/kategori/nominal tampil, tanda +/−, penanda dup & bulat, daftar kosong → tidak render, pemangkasan 150 + tautan sisanya, "tampilkan semua" → 200 baris & tautan hilang, nama kategori ber-HTML di-escape). ⚠️ Catatan harness: stub `esc` sempat bolong (passthrough) sehingga test escape keliru gagal — **stub helper harus meniru implementasi asli**, kalau tidak hasil test menyesatkan.
+- APP_VERSION→**v41**, sw.js → **v85**, CHANGELOG +1. **Deploy: push index.html + sw.js.**
+
+---
+
 ## SESSION — 2026-08-13 (v40.1 Fix kursor lompat saat mengetik tanggal) — CLIENT-ONLY, sw.js v84
 - **Keluhan Eddy:** di Master → Kartu Kredit → Rincian, mengetik tanggal bikin kursor lompat.
 - **Akar:** `onchange` pada `<input type="date">` dipicu Chrome **begitu ketiga segmen terisi** — user masih mengetik tahun — dan `ccbApply()` me-render ulang **seluruh `drawerBody.innerHTML`** → elemen yang sedang diketik dihancurkan & dibuat ulang → fokus hilang. **Sumber kedua yang tak disadari user:** `openCCBill` menarik `getTxns` di latar lalu `renderCCBill` LAGI beberapa detik kemudian, tepat saat user mungkin sedang mengetik.

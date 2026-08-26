@@ -501,10 +501,11 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v40.1';
+const APP_VERSION = 'v41';
 // Tampilkan versi di halaman login (sebelum masuk) — berguna utk cek deploy tanpa login.
 try{ var _lv=document.getElementById('loginVer'); if(_lv) _lv.textContent=APP_VERSION; }catch(e){}
 const CHANGELOG = [
+  { v:'v41', d:'13 Agu 2026', t:'Preview Import kini menampilkan daftar transaksinya, bukan cuma ringkasan. Sebelum Anda menekan Konfirmasi Import, setiap baris terlihat lengkap dengan kelompok, kategori, nominal, tanggal, rekening, dan project — jadi salah kelompok atau salah nominal ketahuan selagi masih bisa dibatalkan. Baris yang mirip transaksi lama dan baris yang nominalnya dibulatkan diberi tanda langsung di daftarnya. Untuk file besar, 150 baris pertama ditampilkan dulu dengan tautan untuk melihat sisanya.' },
   { v:'v40.1', d:'13 Agu 2026', t:'Fix kursor lompat saat mengetik tanggal di Master → Kartu Kredit → Rincian. Penyebabnya: browser menganggap tanggal sudah "selesai diisi" begitu hari, bulan, dan tahun terisi — padahal Anda biasanya masih mengetik — lalu isi halaman dimuat ulang di tengah ketikan sehingga kolomnya dibuat ulang dan kursor berpindah. Sekarang pemuatan ulang ditunda sampai ketikan berhenti, dilewati bila tanggalnya belum lengkap atau rentangnya terbalik, dan fokus dikembalikan ke kolom yang sedang Anda isi. Angka "Total tagihan di statement" yang sudah diketik juga tidak hilang lagi saat daftar dimuat ulang.' },
   { v:'v40', d:'13 Agu 2026', t:'(1) Peringatan transaksi kembar. Kalau Anda menyimpan transaksi yang isinya sama persis dengan yang baru saja tercatat (tanggal, rekening, kategori, nominal, dan catatan sama, dalam 5 menit terakhir), app bertanya dulu — bukan menolak. Ini menutup kasus 12 Agu: satu belanja "Sinar Aluminium" Rp 300.000 tercatat dua kali karena layar sempat bilang gagal padahal datanya sudah masuk. Belanja kembar yang memang benar-benar dua kali tetap bisa disimpan dengan satu ketukan. (2) Daftar Project di form Transaksi kini hanya menampilkan project berstatus Jalan dan Hold, jadi tidak lagi kepanjangan. Ada tautan "tampilkan semua project" bila perlu mencatat biaya susulan, dan project pada transaksi lama yang sudah Selesai tetap muncul saat diedit supaya tidak hilang tanpa sengaja.' },
   { v:'v39.1', d:'13 Agu 2026', t:'Simpan jadi lebih jarang gagal. Pengukuran menunjukkan penyimpanan pertama setelah app menganggur bisa menunggu sampai 53 detik — server Google butuh waktu "bangun", padahal pemrosesannya sendiri di bawah 3 detik. Sekarang app membangunkan server begitu Anda membuka form dan begitu Anda kembali ke app, jadi saat Anda menekan Simpan servernya sudah siap. Selain itu penyimpanan yang gagal karena gangguan koneksi kini dicoba ulang sendiri (15 detik, lalu 30 detik) — aman karena sejak v39 server menolak mencatat operasi yang sama dua kali. Tidak perlu redeploy.' },
@@ -6899,10 +6900,56 @@ function parseImport(rows){
   }
   const newProjs=Object.values(newProjMap),newKats=Object.values(newKatMap);
   importPayload={txns:valid,newProjs,newKats};
+  _impShowAllRows=false;   // v41: file baru → daftar kembali dipangkas dari awal
   showImportPreview(valid,errors,newProjs,newKats,rounded,dupes);
+}
+// ── v41: DAFTAR BARIS DI PREVIEW IMPORT ───────────────────────────────────
+// Sebelumnya preview hanya menampilkan RINGKASAN (jumlah baris, total masuk/keluar, project &
+// kategori baru). Isi transaksinya sendiri tidak pernah terlihat, padahal justru di situ
+// kesalahan kelompok/kategori/nominal ketahuan — dan setelah dikonfirmasi, membatalkannya
+// berarti menghapus baris satu per satu. (Permintaan Eddy 13 Agu 2026.)
+let _impShowAllRows=false, _impArgs=null;
+function _impKelompok(namaKat,newKats){
+  const k=(state.kategori||[]).find(x=>x.NAMA===namaKat);
+  if(k&&k.KELOMPOK) return k.KELOMPOK;
+  const nk=(newKats||[]).find(x=>x.NAMA===namaKat);   // kategori yang baru akan dibuat oleh import ini
+  return (nk&&nk.KELOMPOK)||'—';
+}
+function impToggleAllRows(){
+  if(!_impArgs)return;
+  _impShowAllRows=true;
+  showImportPreview(_impArgs.valid,_impArgs.errors,_impArgs.newProjs,_impArgs.newKats,_impArgs.rounded,_impArgs.dupes);
+}
+function impRowsHTML(valid,newKats,dupes){
+  if(!valid.length) return '';
+  const dupKey=new Set((dupes||[]).map(d=>d.t.TANGGAL+'|'+d.t.REKENING+'|'+d.t.KATEGORI+'|'+d.t.NOMINAL));
+  const BATAS=150;   // impor besar: batasi DOM dulu supaya tidak berat di HP
+  const tampil=_impShowAllRows?valid:valid.slice(0,BATAS);
+  const baris=tampil.map(t=>{
+    const grp=_impKelompok(t.KATEGORI,newKats);
+    const masuk=t.JENIS==='Pemasukan';
+    const isDup=dupKey.has(t.TANGGAL+'|'+t.REKENING+'|'+t.KATEGORI+'|'+t.NOMINAL);
+    const isBulat=String(t.NOTES||'').indexOf('(asli Rp')>=0;
+    const sub=[t.TANGGAL,t.REKENING,t.PROJECT].filter(Boolean).map(esc).join(' · ');
+    return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid #ffffff10">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+          <span style="font-size:9px;padding:1px 5px;border-radius:8px;background:#ffffff12;color:var(--text2);margin-right:5px">${esc(grp)}</span>${esc(t.KATEGORI)}
+          ${isDup?'<span style="font-size:9px;color:var(--red);margin-left:4px">⚠ mirip yg sudah ada</span>':''}
+          ${isBulat?'<span style="font-size:9px;color:var(--amber);margin-left:4px">dibulatkan</span>':''}
+        </div>
+        <div style="font-size:10px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sub}</div>
+      </div>
+      <div style="font-size:13px;font-weight:600;flex-shrink:0;color:${masuk?'var(--green)':'var(--red)'}">${masuk?'+':'−'}${fmt(t.NOMINAL)}</div>
+    </div>`;}).join('');
+  const sisa=valid.length-tampil.length;
+  return `<div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 2px">Transaksi yang akan diimport (${valid.length})</div>
+    <div style="max-height:300px;overflow:auto">${baris}</div>
+    ${sisa>0?`<div style="margin-top:6px"><a href="javascript:void(0)" onclick="impToggleAllRows()" style="font-size:11px;color:var(--purple);text-decoration:underline">tampilkan ${sisa} baris lainnya</a></div>`:''}`;
 }
 function showImportPreview(valid,errors,newProjs,newKats,rounded,dupes){
   rounded=rounded||[]; dupes=dupes||[];
+  _impArgs={valid,errors,newProjs,newKats,rounded,dupes};
   const totMasuk=valid.filter(t=>t.JENIS==='Pemasukan').reduce((s,t)=>s+t.NOMINAL,0);
   const totKeluar=valid.filter(t=>t.JENIS==='Pengeluaran').reduce((s,t)=>s+t.NOMINAL,0);
   document.getElementById('drawerTitle').textContent='Preview Import';
@@ -6932,6 +6979,7 @@ function showImportPreview(valid,errors,newProjs,newKats,rounded,dupes){
     html+=`<div style="margin-top:12px;color:var(--red)"><b>Baris ditolak — perbaiki di Excel lalu import ulang:</b></div>
       <div style="max-height:180px;overflow:auto;font-size:13px;margin-top:6px">${errors.map(e=>`<div style="padding:4px 0;border-bottom:1px solid #2a2a2a">Baris ${e.row}: ${esc(e.msg)}</div>`).join('')}</div>`;
   }
+  html+=impRowsHTML(valid,newKats,dupes);   // v41: daftar barisnya, sebelum tombol konfirmasi
   html+=`<div style="margin-top:16px;display:flex;gap:8px">
       <button class="btn-primary" style="flex:1" onclick="confirmImport()" ${valid.length?'':'disabled'}><i class="ti ti-database-import"></i> Konfirmasi Import (${valid.length})</button>
       <button class="btn-secondary" onclick="closeDrawer()">Batal</button></div>`;
