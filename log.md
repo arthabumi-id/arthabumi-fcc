@@ -3,6 +3,17 @@
 
 ---
 
+## ⚠️ INSIDEN DEPLOY — 26 Agu 2026: Pages `startup_failure` (v41 tidak tersaji)
+- **Gejala:** app tetap v40.1 padahal commit "V41" (26 Agu 15:22 UTC) sudah ke-push.
+- **Cara membedakan 3 kemungkinan (pakai ini lagi kalau versi tidak naik):**
+  1. `raw.githubusercontent.com/.../main/index.html` → **v41** = push MENDARAT.
+  2. `arthabumi-id.github.io/arthabumi-fcc/index.html?cb=…` (cache:'no-store') → **v40.1** = GitHub Pages BELUM menyajikan versi baru. Kalau nomor 1 dan 2 sama-sama versi baru tapi app masih lama → barulah itu cache PWA (tutup-buka app / hard refresh).
+- **Akar:** workflow `pages build and deployment` run **#193** untuk commit itu berakhir **`startup_failure`** — workflow gagal *dimulai*, bukan gagal build. Run sebelumnya (#192, v40.1) sukses. **`.nojekyll` ADA** → bukan penyakit Jekyll 2 Juli, dan bukan pula deploy-timeout 2 Juli. Hampir selalu gangguan sesaat sisi GitHub.
+- **Obat (paling ringan dulu):** (1) **push apa saja lagi ke main** — tiap push memicu build baru dari commit terbaru; tidak perlu menyentuh kode. (2) Kalau masih gagal: Actions → run yang merah → **Re-run all jobs** (butuh login GitHub di browser). (3) Kalau tetap gagal berulang: Settings → Pages → unpublish (Branch=None, Save) → **tunggu 2–3 menit** → set balik main /(root), Save.
+- Cek status tanpa login: `api.github.com/repos/arthabumi-id/arthabumi-fcc/actions/runs?per_page=5` → lihat `conclusion`.
+
+---
+
 ## SESSION — 2026-08-13 (v41 Daftar baris di Preview Import) — CLIENT-ONLY, sw.js v85
 - **Permintaan Eddy:** sesudah pilih file Excel, ingin melihat daftar transaksi yang akan masuk beserta **kelompok, kategori, nominal**. Sign-off: tampil **di layar Preview SEBELUM Konfirmasi** (bukan sesudah import), **tanpa** subtotal per kelompok.
 - **Temuan:** `showImportPreview` selama ini HANYA menampilkan ringkasan (jumlah valid/error, total masuk/keluar, project & kategori baru, laporan pembulatan v37, peringatan dobel v37). Isi barisnya tidak pernah ditampilkan — padahal di situlah salah kelompok/kategori/nominal ketahuan, dan sesudah dikonfirmasi membatalkannya berarti menghapus baris satu per satu.
