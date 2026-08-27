@@ -11,6 +11,8 @@
 - **Akar:** workflow `pages build and deployment` run **#193** untuk commit itu berakhir **`startup_failure`** — workflow gagal *dimulai*, bukan gagal build. Run sebelumnya (#192, v40.1) sukses. **`.nojekyll` ADA** → bukan penyakit Jekyll 2 Juli, dan bukan pula deploy-timeout 2 Juli. Hampir selalu gangguan sesaat sisi GitHub.
 - **Obat (paling ringan dulu):** (1) **push apa saja lagi ke main** — tiap push memicu build baru dari commit terbaru; tidak perlu menyentuh kode. (2) Kalau masih gagal: Actions → run yang merah → **Re-run all jobs** (butuh login GitHub di browser). (3) Kalau tetap gagal berulang: Settings → Pages → unpublish (Branch=None, Save) → **tunggu 2–3 menit** → set balik main /(root), Save.
 - Cek status tanpa login: `api.github.com/repos/arthabumi-id/arthabumi-fcc/actions/runs?per_page=5` → lihat `conclusion`.
+- **Lanjutan (10 jam kemudian):** status GitHub sudah **Actions: operational, Pages: operational**, tapi run #193 & #194 TETAP `queued` — run "yatim" yang dibuat saat outage, tak pernah kebagian pekerja dan **tidak ikut pulih**. Tombol Cancel menjawab *"failed to cancel"* karena run itu memang tidak dipegang pekerja mana pun. **Jangan diurus** — GitHub membatalkannya sendiri setelah ±24 jam. Obatnya: **picu run BARU** (push kecil). Kalau run baru ikut `queued` >10–15 menit, berarti antrean/environment `github-pages` terkunci → pakai obat unpublish/republish (Settings → Pages → Branch None → tunggu 2–3 mnt → set balik main /(root)).
+- **Pelajaran:** cek `githubstatus.com/api/v2/summary.json` **lebih dulu** sebelum menuduh repo/kode. Dan `queued` berjam-jam ≠ "tunggu sebentar lagi" — itu run yatim yang harus digantikan run baru, bukan ditunggu.
 
 ---
 
