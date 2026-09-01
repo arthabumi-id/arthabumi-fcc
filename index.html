@@ -510,10 +510,11 @@ let state = {
 
 // ── UTILS ─────────────────────────────────────────────
 // ── VERSI & CHANGELOG (update tiap rilis: bump APP_VERSION + tambah entri paling atas) ──
-const APP_VERSION = 'v42';
+const APP_VERSION = 'v42.1';
 // Tampilkan versi di halaman login (sebelum masuk) — berguna utk cek deploy tanpa login.
 try{ var _lv=document.getElementById('loginVer'); if(_lv) _lv.textContent=APP_VERSION; }catch(e){}
 const CHANGELOG = [
+  { v:'v42.1', d:'1 Sep 2026', t:'Tombol Uji di Settings > Token API. Sampai 8 Sep 2026 server masih menerima PIN lama, jadi kalau token salah ketik app tetap jalan seperti biasa dan Anda tidak akan sadar - sampai PIN dicabut dan perangkat itu mendadak tidak bisa dipakai. Tombol Uji bertanya ke server tanpa memakai PIN sama sekali, jadi jawabannya pasti: token benar atau belum. Tekan sekali di setiap perangkat.' },
   { v:'v42', d:'1 Sep 2026', t:'Pengamanan. (1) PIN 4 digit tidak lagi jadi kunci ke server. Sebelumnya PIN ditulis di dalam file app yang disajikan publik oleh GitHub Pages, jadi siapa pun yang membuka kode halaman bisa membacanya. Sekarang kuncinya token panjang yang Anda isi sekali di Settings > Token API, dan token itu tidak pernah ditulis di file mana pun. PIN 4 digit tetap ada sebagai kunci layar supaya app tidak langsung terbuka kalau HP dipinjam orang. (2) Tanda tangan invoice tidak lagi ditanam di dalam app - dulu siapa pun bisa mengunduhnya dan memakainya untuk memalsukan dokumen. Sekarang Anda set sendiri lewat Settings > Tanda Tangan Invoice, tersimpan di perangkat masing-masing. Sampai 8 Sep 2026 PIN lama masih diterima server supaya tidak ada perangkat yang mendadak tidak bisa dipakai.' },
   { v:'v41', d:'13 Agu 2026', t:'Preview Import kini menampilkan daftar transaksinya, bukan cuma ringkasan. Sebelum Anda menekan Konfirmasi Import, setiap baris terlihat lengkap dengan kelompok, kategori, nominal, tanggal, rekening, dan project — jadi salah kelompok atau salah nominal ketahuan selagi masih bisa dibatalkan. Baris yang mirip transaksi lama dan baris yang nominalnya dibulatkan diberi tanda langsung di daftarnya. Untuk file besar, 150 baris pertama ditampilkan dulu dengan tautan untuk melihat sisanya.' },
   { v:'v40.1', d:'13 Agu 2026', t:'Fix kursor lompat saat mengetik tanggal di Master → Kartu Kredit → Rincian. Penyebabnya: browser menganggap tanggal sudah "selesai diisi" begitu hari, bulan, dan tahun terisi — padahal Anda biasanya masih mengetik — lalu isi halaman dimuat ulang di tengah ketikan sehingga kolomnya dibuat ulang dan kursor berpindah. Sekarang pemuatan ulang ditunda sampai ketikan berhenti, dilewati bila tanggalnya belum lengkap atau rentangnya terbalik, dan fokus dikembalikan ke kolom yang sedang Anda isi. Angka "Total tagihan di statement" yang sudah diketik juga tidak hilang lagi saat daftar dimuat ulang.' },
@@ -5375,7 +5376,7 @@ function openDrawer(mode, editId = null, preset = null) {
   } else if (mode === 'settings') {
     document.getElementById('drawerBody').innerHTML = `
       <div class="settings-row"><div><div class="settings-label">API URL</div><div class="settings-sub">${API_URL?'Tersimpan':'Belum diset'}</div></div><button class="btn-danger" onclick="setApiUrl()">Ubah</button></div>
-      <div class="settings-row"><div><div class="settings-label">Token API</div><div class="settings-sub">${maskToken(FCC_TOKEN)}</div></div><button class="btn-danger" onclick="setToken()">Ubah</button></div>
+      <div class="settings-row"><div><div class="settings-label">Token API</div><div class="settings-sub">${maskToken(FCC_TOKEN)}</div></div><div style="display:flex;gap:6px"><button class="btn-primary" onclick="ujiToken()">Uji</button><button class="btn-danger" onclick="setToken()">Ubah</button></div></div>
       <div class="settings-row"><div><div class="settings-label">Tanda Tangan Invoice</div><div class="settings-sub">${getInvTtd()?'Tersimpan di perangkat ini':'Belum diset \u2014 invoice tercetak tanpa ttd'}</div></div><div style="display:flex;gap:6px">${getInvTtd()?'<button class="btn-danger" onclick="clearInvTtd()">Hapus</button>':''}<button class="btn-danger" onclick="setInvTtd()">${getInvTtd()?'Ganti':'Set'}</button></div></div>
       <div class="settings-row"><div><div class="settings-label">Sheet ID</div><div class="settings-sub">${SHEET_ID.slice(0,16)}...</div></div></div>
       <div class="settings-row"><div><div class="settings-label">Ambang Aman Kas (Forecast)</div><div class="settings-sub">${state.safeThreshold?fmt(state.safeThreshold):'Rp 0 — peringatan saat kas ≤ 0'}</div></div><button class="btn-danger" onclick="setSafeThreshold()">Ubah</button></div>
@@ -5689,6 +5690,29 @@ function setToken(){
     try{ localStorage.setItem('fcc_token', FCC_TOKEN); }catch(e){}
     showToast(FCC_TOKEN?'Token disimpan':'Token dikosongkan','success');
     closeDrawer(); syncAll();
+  }
+}
+// ── v42.1 UJI TOKEN ────────────────────────────────────────────────────
+// Masalah yang ditutup: selama masa transisi (s/d 8 Sep 2026) server MASIH menerima
+// PIN lama, jadi perangkat dengan token SALAH KETIK tetap jalan normal — salahnya baru
+// ketahuan saat PIN dicabut, ketika sudah terlambat. Fungsi ini bertanya ke server
+// dengan pin SENGAJA DIKOSONGKAN: kalau lolos, berarti yang diterima memang tokennya.
+async function ujiToken(){
+  if(!API_URL){ showToast('API URL belum diset','error'); return; }
+  if(!FCC_TOKEN){ showToast('Token belum diisi - isi dulu di Settings > Token API','error'); return; }
+  showToast('Menguji token...','success');
+  let j=null, gagalKoneksi=false;
+  try{
+    const url = API_URL + '?' + new URLSearchParams({action:'getBanks', pin:'', token:FCC_TOKEN});
+    const r = await fetch(url, {cache:'no-store'});
+    j = await r.json();
+  }catch(e){ gagalKoneksi = true; }
+  if(gagalKoneksi || j===null){
+    alert('TIDAK ADA JAWABAN DARI SERVER\n\nCek koneksi lalu coba lagi.\nIni BUKAN berarti tokennya salah.');
+  } else if(j && j.error){
+    alert('TOKEN BELUM BENAR\n\nServer menolak: '+j.error+'\n\nPerangkat ini sekarang masih jalan, tapi itu karena PIN lama -- dan PIN lama dicabut 8 Sep 2026. Sesudah itu perangkat ini BERHENTI berfungsi.\n\nBuka Settings > Token API dan isi ulang tokennya.');
+  } else {
+    alert('TOKEN BENAR\n\nPerangkat ini sudah memakai token, bukan PIN.\nAman untuk pencabutan PIN lama pada 8 Sep 2026.');
   }
 }
 function setInvTtd(){
