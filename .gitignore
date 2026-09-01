@@ -1,0 +1,16 @@
+# ── Fase 1 pengamanan FCC, 1 Sep 2026 ─────────────────────────────
+# GitHub Pages menyajikan SEMUA file di repo, bukan cuma index.html.
+# File di bawah ini tetap ada di disk lokal — hanya berhenti ikut ter-publish.
+
+# Catatan pengembangan: memuat nama klien, nominal, saldo bank
+log.md
+ASETPRO-PORT-NOTES.md
+
+# Backend: memuat SHEET_ID dan kredensial
+Code.gs
+
+# Tanda tangan (tidak dipakai app — ttd invoice di-embed base64 di index.html)
+Ttd Ko Eddy2.png
+
+# Backup versi lama & file kerja
+archive/
